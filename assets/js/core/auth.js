@@ -26,7 +26,26 @@
 
   function showApp() {
     document.body.classList.add('is-auth');
-    document.getElementById('currentUser').textContent = (AppState.get('user') || {}).displayName || '';
+    renderCurrentUser(AppState.get('user') || {});
+  }
+
+  function renderCurrentUser(user) {
+    var name = user.displayName || user.username || 'Người dùng';
+    var id = user.userId || user.user_id || user.id || '';
+    document.getElementById('currentUser').innerHTML =
+      '<div class="user-text"><strong>' + API.esc(name) + '</strong><span>' + API.esc(maskId(id)) + '</span></div>' +
+      '<span class="avatar">' + API.esc(initials(name)) + '</span>';
+  }
+
+  function maskId(id) {
+    var value = String(id || '');
+    return value ? '***' + value.slice(-4) : '';
+  }
+
+  function initials(name) {
+    return String(name || 'U').trim().split(/\s+/).slice(0, 2).map(function (part) {
+      return part.charAt(0).toUpperCase();
+    }).join('') || 'U';
   }
 
   function applyRoleUI() {
