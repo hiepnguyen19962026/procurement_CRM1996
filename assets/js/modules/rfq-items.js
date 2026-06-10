@@ -116,8 +116,11 @@
   function technicalSummary(r) {
     var count = Number(r.clarification_count || 0);
     var finalText = [r.quy_cach_final, r.hang_final].filter(Boolean).join(' - ');
+    var techStatus = r.clarification_status || r.trang_thai_ky_thuat;
+    var badge = '<span class="badge badge-clickable" title="Xem lịch sử xác nhận kỹ thuật" onclick="RfqItemsModule.openClarificationTimeline(\'' + API.esc(r.rfq_item_id) + '\')">'
+      + API.esc(technicalStatusLabel(techStatus)) + '</span>';
     return '<div class="tech-summary">'
-      + '<span class="badge">' + API.esc(technicalStatusLabel(r.clarification_status || r.trang_thai_ky_thuat)) + '</span>'
+      + badge
       + '<span>' + API.esc(count + ' lần trao đổi') + '</span>'
       + (finalText ? '<strong>' + API.esc(finalText) + '</strong>' : '')
       + '</div>';
@@ -204,6 +207,29 @@
     }).catch(API.error);
   }
 
+  function openClarificationTimeline(rfqItemId) {
+    var item = (state.rows || []).find(function (r) { return r.rfq_item_id === rfqItemId; }) || {};
+    API.get('getTechnicalClarifications', { rfqItemId: rfqItemId }).then(function (data) {
+      var rows = data.rows || [];
+      var canWrite = Utils.roleCanWrite();
+      var html = '<div style="grid-column:1/-1">'
+        + '<div class="section-head" style="margin-bottom:10px">'
+        + '<div><strong>' + API.esc(item.ten_vat_tu || rfqItemId) + '</strong>'
+        + (item.ma_vat_tu ? ' <span class="badge">' + API.esc(item.ma_vat_tu) + '</span>' : '')
+        + '</div>'
+        + (canWrite
+          ? '<button type="button" data-write onclick="RfqItemsModule.openClarificationForm(\'' + API.esc(rfqItemId) + '\')">+ Thêm trao đổi</button>'
+          : '')
+        + '</div>'
+        + (rows.length
+          ? rows.map(function (r) { return timelineItem(rfqItemId, r); }).join('')
+          : '<div class="empty-state small">Chưa có trao đổi kỹ thuật.</div>')
+        + '</div>';
+      Utils.openModal('Xác nhận kỹ thuật', html, null);
+      Auth.applyRoleUI();
+    }).catch(API.error);
+  }
+
   function option(value, label, current) {
     return '<option value="' + API.esc(value) + '"' + (value === current ? ' selected' : '') + '>' + API.esc(label) + '</option>';
   }
@@ -220,7 +246,7 @@
     var status = r.trang_thai_dong || 'chua_xu_ly';
     var latestDecision = (pricingDecisions || [])[0] || null;
     return ''
-      + input('rfqId', 'RFQ ID', r.rfq_id, 'required')
+      + '<label>RFQ ID<input name="rfqId" value="' + API.esc(r.rfq_id || '') + '" class="field-ro" readonly tabindex="-1"></label>'
       + input('sttGoc', 'STT', r.stt_goc)
       + input('maMuaSam', 'Mã mua sắm', r.ma_mua_sam)
       + input('maVatTu', 'Mã vật tư', r.ma_vat_tu)
@@ -241,14 +267,10 @@
       + input('thanhTienSauThue', 'Thành tiền', r.thanh_tien_sau_thue, 'inputmode="numeric"')
       + input('deliveryTime', 'Thời gian giao hàng', r.delivery_time)
       + textarea('note', 'Ghi chú', r.note)
-      + '<label>Trạng thái dòng<select name="trangThaiDong">'
-      + option('chua_xu_ly', 'Chưa xử lý', status)
-      + option('dang_hoi_gia', 'Đang hỏi giá', status)
-      + option('du_gia', 'Đủ giá', status)
-      + option('da_bao_cdt', 'Đã báo CĐT', status)
-      + option('can_xac_nhan_ky_thuat', 'Cần xác nhận kỹ thuật', status)
-      + option('da_final', 'Đã final', status)
-      + '</select></label>'
+      + '<label>Trạng thái gói <small style="font-weight:400;color:var(--text-muted)">(kế thừa từ RFQ)</small>'
+      + '<input value="' + API.esc(statusLabel(status)) + '" class="field-ro" readonly tabindex="-1">'
+      + '<input type="hidden" name="trangThaiDong" value="' + API.esc(status) + '">'
+      + '</label>'
       + textarea('originFullText', 'Cột tổng hợp gốc để đối chiếu/export', r.origin_full_text)
       + masterItemSection(r, state.currentMaster || {})
       + itemAttachmentSection(r, (state.currentMedia && state.currentMedia.itemFiles) || [])
@@ -1825,6 +1847,7 @@
     openCreate: openCreate,
     openEdit: openEdit,
     openClarificationForm: openClarificationForm,
+    openClarificationTimeline: openClarificationTimeline,
     openQuoteForm: openQuoteForm,
     archiveQuote: archiveQuote,
     openPricingForm: openPricingForm,

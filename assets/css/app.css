@@ -133,12 +133,18 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .empty-state { min-height: 150px; display: grid; place-items: center; color: var(--text-muted); border: 1px dashed var(--border-mid); border-radius: 10px; background: #fcfcfd; font-size: 13px; text-align: center; padding: 18px; }
 
 .modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.48); display: grid; place-items: center; padding: 18px; z-index: 20; }
-.modal { width: min(780px, 100%); max-height: 88vh; overflow: auto; background: white; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-md); }
+.modal { width: min(78vw, 1400px); max-height: 88vh; overflow: auto; background: white; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-md); }
 .modal-head, .modal-actions { display: flex; justify-content: space-between; align-items: center; padding: 15px 18px; border-bottom: 1px solid var(--border); }
 .modal-head { background: #fffaf5; }
 .modal-actions { border-top: 1px solid var(--border); border-bottom: 0; justify-content: flex-end; gap: 8px; background: #fafafa; }
-.modal-body { padding: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
-.modal-body label:has(textarea), .modal-body .check { grid-column: 1 / -1; }
+.modal-body { padding: 14px 18px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 10px; overflow-x: hidden; }
+.modal-body label { margin-bottom: 8px; }
+.modal-body label:has(textarea) { grid-column: span 2; }
+.modal-body .check { grid-column: 1 / -1; }
+.modal-body textarea { min-height: 58px; }
+.field-ro { background: var(--bg) !important; cursor: not-allowed !important; color: var(--text-muted); }
+.badge-clickable { cursor: pointer; }
+.badge-clickable:hover { opacity: 0.82; text-decoration: underline; }
 .modal-head h3 { margin: 0; font-size: 18px; font-weight: 600; }
 .icon-btn { width: 34px; height: 34px; padding: 0; display: inline-grid; place-items: center; box-shadow: none; }
 .toast { position: fixed; right: 16px; bottom: 16px; max-width: 360px; padding: 12px 14px; border-radius: var(--radius); background: #111827; color: white; opacity: 0; pointer-events: none; transform: translateY(8px); transition: .18s ease; z-index: 30; }
