@@ -177,6 +177,12 @@
     rfqContacts    = rfqContacts    || [];
     clientContacts = clientContacts || [];
     Utils.openModal(r.rfq_id ? 'Sửa RFQ: ' + (r.rfq_id) : 'Thêm RFQ', fields(r, rfqContacts, clientContacts), async function (data) {
+      // Guard: text in picker but no client selected from suggestions
+      var cacTxt = document.getElementById('rfq-cac-txt');
+      if (cacTxt && cacTxt.value.trim() && !data.clientId) {
+        API.toast('Vui lòng chọn CĐT từ danh sách gợi ý', 'error');
+        return;
+      }
       try {
         if (r.rfq_id) data.rfqId = r.rfq_id;
         await API.call(r.rfq_id ? 'updateRfq' : 'createRfq', data);
@@ -198,23 +204,26 @@
       return '<option value="' + s + '"' + ((r.trang_thai_goi || 'dang_khao_gia') === s ? ' selected' : '') + '>' + STATUS_LABELS[s] + '</option>';
     }).join('') + '</select>';
 
-    // Client autocomplete widget (hidden id input + search text input + dropdown + clear btn)
-    var clientDisplayVal = r.client_name || (r.client_id && !r.nha_may_cdt ? r.client_id : '') || '';
+    // Client autocomplete widget — one picker, no internal ID visible
+    var clientDisplayVal = r.client_name || r.nha_may_cdt || '';
     var hasClient = !!(r.client_id);
+    var initHelper = hasClient && r.nha_may_cdt && r.nha_may_cdt !== r.client_name
+      ? 'Nhà máy/alias: ' + API.esc(r.nha_may_cdt)
+      : '';
     var clientAc = '<div class="ac-wrap">'
       + '<input type="hidden" name="clientId" id="rfq-cac-id" value="' + API.esc(r.client_id || '') + '">'
+      + '<input type="hidden" name="nhaMayCdt" id="rfq-nha-may" value="' + API.esc(r.nha_may_cdt || '') + '">'
       + '<div style="display:flex;gap:4px;align-items:center">'
-      + '<input class="ac-input" id="rfq-cac-txt" data-client-autocomplete="true" autocomplete="off" placeholder="Gõ tên, MST, hoặc nhà máy..." value="' + API.esc(clientDisplayVal) + '"' + (hasClient ? ' readonly style="background:var(--bg);flex:1"' : ' style="flex:1"') + '>'
+      + '<input class="ac-input" id="rfq-cac-txt" data-client-autocomplete="true" autocomplete="off" placeholder="Gõ tên CĐT, MST, nhà máy/alias..." value="' + API.esc(clientDisplayVal) + '"' + (hasClient ? ' readonly style="background:var(--bg);flex:1"' : ' style="flex:1"') + '>'
       + (hasClient ? '<button type="button" id="rfq-cac-clear" title="Đổi khách hàng" style="min-width:30px;padding:0 8px;font-size:13px;box-shadow:none">✕</button>' : '')
       + '</div>'
       + '<div class="ac-drop dp-hidden" id="rfq-cac-drop"></div>'
-      + (hasClient ? '<small style="color:var(--text-muted);display:block;margin-top:2px">ID: ' + API.esc(r.client_id || '') + '</small>' : '')
+      + '<small id="rfq-cac-helper" style="color:var(--text-muted);display:block;margin-top:2px">' + initHelper + '</small>'
       + '</div>';
 
     var base = '<label>Tên gói *<input name="tenGoi" required value="' + API.esc(r.ten_goi || '') + '"></label>'
       + '<label>Mã gói / TBMT<input name="maGoiTbmt" value="' + API.esc(r.ma_goi_tbmt || '') + '"></label>'
-      + '<label>Khách hàng / CĐT' + clientAc + '</label>'
-      + '<label>Nhà máy / Tên gọi tắt<input name="nhaMayCdt" id="rfq-nha-may" value="' + API.esc(r.nha_may_cdt || '') + '"></label>'
+      + '<label>CĐT / pháp nhân phát thầu' + clientAc + '</label>'
       + '<label>Ngày nhận / đăng tải<input name="ngayNhanHoacDangTai" type="date" value="' + API.esc(r.ngay_nhan_hoac_dang_tai || '') + '"></label>'
       + '<label>Ngày hết hạn<input name="ngayHetHan" type="date" value="' + API.esc(r.ngay_het_han || '') + '"></label>'
       + '<label>Dự toán (VNĐ)<input name="duToan" inputmode="numeric" value="' + API.esc(r.du_toan || '') + '"></label>'
@@ -227,11 +236,21 @@
 
   // ─── client autocomplete ───────────────────────────────────────────────────
 
+  function buildClientHelper(c) {
+    var parts = [];
+    if (c.plant_name) parts.push('Nhà máy/alias: ' + c.plant_name);
+    if (c.tax_code)   parts.push('MST: ' + c.tax_code);
+    if (c.province)   parts.push('Tỉnh: ' + c.province);
+    if (c.client_type) parts.push(c.client_type);
+    return parts.map(function (p) { return API.esc(p); }).join(' · ');
+  }
+
   function bindClientAc(r) {
     var inp    = document.getElementById('rfq-cac-txt');
     var hidden = document.getElementById('rfq-cac-id');
     var drop   = document.getElementById('rfq-cac-drop');
     var nhaMay = document.getElementById('rfq-nha-may');
+    var helper = document.getElementById('rfq-cac-helper');
     if (!inp) return;
 
     var _t = null;
@@ -239,6 +258,20 @@
     // Wire clear button if already rendered (client pre-selected on open)
     var existingClear = document.getElementById('rfq-cac-clear');
     if (existingClear) existingClear.addEventListener('click', clearSelection);
+
+    // Async pre-load full client data when editing existing RFQ
+    if (r.client_id && inp.readOnly) {
+      API.get('getClients', { q: r.client_id, limit: 5 }).then(function (data) {
+        var match = (data.rows || []).find(function (c) { return c.client_id === r.client_id; });
+        if (match) {
+          inp.value = match.legal_name || match.client_name || inp.value;
+          if (nhaMay) nhaMay.value = match.plant_name || match.client_name || '';
+          if (helper) helper.innerHTML = buildClientHelper(match);
+        } else if (helper && !helper.textContent.trim()) {
+          helper.innerHTML = '<span style="color:var(--red)">Chưa khớp CĐT trong danh mục</span>';
+        }
+      }).catch(function () {});
+    }
 
     inp.addEventListener('input', function () {
       clearTimeout(_t);
@@ -256,11 +289,17 @@
     function renderDrop(rows) {
       if (!rows.length) { drop.classList.add('dp-hidden'); return; }
       drop.innerHTML = rows.map(function (c) {
-        return '<div class="ac-item" tabindex="0" data-id="' + API.esc(c.client_id) + '" data-name="' + API.esc(c.client_name || '') + '" data-plant="' + API.esc(c.plant_name || '') + '">'
-          + '<strong>' + API.esc(c.client_name || c.client_id) + '</strong>'
-          + (c.plant_name || c.tax_code || c.province
-              ? '<br><small>' + [c.plant_name, c.tax_code ? 'MST: ' + c.tax_code : '', c.province].filter(Boolean).map(function (x) { return API.esc(x); }).join(' · ') + '</small>'
-              : '')
+        var primary = c.legal_name || c.client_name || c.client_id;
+        var secondary = [c.plant_name, c.tax_code ? 'MST: ' + c.tax_code : '', c.province, c.client_type].filter(Boolean);
+        return '<div class="ac-item" tabindex="0"'
+          + ' data-id="' + API.esc(c.client_id) + '"'
+          + ' data-name="' + API.esc(primary) + '"'
+          + ' data-plant="' + API.esc(c.plant_name || '') + '"'
+          + ' data-taxcode="' + API.esc(c.tax_code || '') + '"'
+          + ' data-province="' + API.esc(c.province || '') + '"'
+          + ' data-ctype="' + API.esc(c.client_type || '') + '">'
+          + '<strong>' + API.esc(primary) + '</strong>'
+          + (secondary.length ? '<br><small>' + secondary.map(function (x) { return API.esc(x); }).join(' · ') + '</small>' : '')
           + '</div>';
       }).join('');
       drop.classList.remove('dp-hidden');
@@ -272,12 +311,18 @@
       e.preventDefault();
       hidden.value = item.getAttribute('data-id');
       inp.value    = item.getAttribute('data-name');
-      if (nhaMay) nhaMay.value = item.getAttribute('data-plant') || '';
+      var plantVal = item.getAttribute('data-plant') || item.getAttribute('data-name') || '';
+      if (nhaMay) nhaMay.value = plantVal;
       drop.classList.add('dp-hidden');
-      lockSelection(item.getAttribute('data-id'));
+      lockSelection({
+        plant_name:  item.getAttribute('data-plant'),
+        tax_code:    item.getAttribute('data-taxcode'),
+        province:    item.getAttribute('data-province'),
+        client_type: item.getAttribute('data-ctype'),
+      });
     });
 
-    function lockSelection(clientId) {
+    function lockSelection(clientData) {
       inp.readOnly = true;
       inp.style.background = 'var(--bg)';
       // create clear button if not already present
@@ -292,16 +337,8 @@
         btn.addEventListener('click', clearSelection);
         inp.parentNode.appendChild(btn);
       }
-      // create/update ID badge
-      var wrap = inp.closest('.ac-wrap');
-      var badge = wrap && wrap.querySelector('[data-ac-badge]');
-      if (!badge && wrap) {
-        badge = document.createElement('small');
-        badge.setAttribute('data-ac-badge', '1');
-        badge.style.cssText = 'color:var(--text-muted);display:block;margin-top:2px';
-        wrap.appendChild(badge);
-      }
-      if (badge) badge.textContent = 'ID: ' + clientId;
+      // update helper text (no internal ID shown)
+      if (helper) helper.innerHTML = buildClientHelper(clientData);
     }
 
     function clearSelection() {
@@ -310,11 +347,9 @@
       inp.readOnly = false;
       inp.style.background = '';
       if (nhaMay) nhaMay.value = '';
+      if (helper) helper.textContent = '';
       var btn = document.getElementById('rfq-cac-clear');
       if (btn) btn.remove();
-      var wrap = inp.closest('.ac-wrap');
-      var badge = wrap && wrap.querySelector('[data-ac-badge]');
-      if (badge) badge.remove();
       inp.focus();
     }
 
