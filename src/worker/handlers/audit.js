@@ -8,6 +8,6 @@ export async function handleAudit(action, request, env, ctx, actor) {
   const denied = requireRole(actor, allowed);
   if (denied) return denied;
   const p = await readJson(request);
-  const data = await listAuditLogsSQL(env.DB, { q: p.q || '', cursor: p.cursor || '', limit: clampLimit(p.limit) });
+  const data = await listAuditLogsSQL(env.DB, { q: p.q || '', cursor: p.cursor || '', sortBy: p.sortBy || '', sortDir: p.sortDir || '', limit: clampLimit(p.limit) });
   return json({ ok: true, ...data });
 }

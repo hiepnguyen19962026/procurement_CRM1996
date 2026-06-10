@@ -1,4 +1,21 @@
-export async function listSuppliersSQL(db, { q, cursor, limit }) {
+function parseCursor(cursor) {
+  if (!cursor) return null;
+  const idx = cursor.indexOf('|||');
+  return idx === -1 ? { pk: cursor, sortVal: undefined } : { pk: cursor.slice(idx + 3), sortVal: cursor.slice(0, idx) };
+}
+
+const SUPPLIER_SORT = {
+  supplier_id:   { col: 'supplier_id',   rowKey: 'supplier_id',   type: 'text' },
+  supplier_name: { col: 'supplier_name', rowKey: 'supplier_name', type: 'text' },
+  supplier_type: { col: 'supplier_type', rowKey: 'supplier_type', type: 'text' },
+  country:       { col: 'country',       rowKey: 'country',       type: 'text' },
+};
+
+export async function listSuppliersSQL(db, { q, cursor, sortBy, sortDir, limit }) {
+  const sort = SUPPLIER_SORT[sortBy] || null;
+  const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
+  const op  = dir === 'ASC' ? '>' : '<';
+
   const binds = [];
   const where = [];
   if (q) {
@@ -6,15 +23,30 @@ export async function listSuppliersSQL(db, { q, cursor, limit }) {
     binds.push(`%${q}%`, `%${q}%`);
   }
   if (cursor) {
-    where.push('supplier_id > ?');
-    binds.push(cursor);
+    const c = parseCursor(cursor);
+    if (!sort || c.sortVal === undefined) {
+      where.push('supplier_id > ?'); binds.push(c.pk);
+    } else {
+      const wrap = `COALESCE(${sort.col}, '')`;
+      where.push(`(${wrap} ${op} ? OR (${wrap} = ? AND supplier_id ${op} ?))`);
+      binds.push(c.sortVal, c.sortVal, c.pk);
+    }
   }
+
+  const orderBy = sort ? `${sort.col} ${dir}, supplier_id ${dir}` : 'supplier_id ASC';
   const res = await db.prepare(
     `SELECT * FROM suppliers ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-     ORDER BY supplier_id ASC LIMIT ?`
+     ORDER BY ${orderBy} LIMIT ?`
   ).bind(...binds, limit + 1).all();
+
   const rows = res.results || [];
-  return { rows: rows.slice(0, limit), hasMore: rows.length > limit, nextCursor: rows.length > limit ? rows[limit - 1].supplier_id : null };
+  const page = rows.slice(0, limit);
+  let nextCursor = null;
+  if (rows.length > limit && page.length > 0) {
+    const last = page[page.length - 1];
+    nextCursor = sort ? String(last[sort.rowKey] ?? '') + '|||' + last.supplier_id : last.supplier_id;
+  }
+  return { rows: page, hasMore: rows.length > limit, nextCursor };
 }
 
 export async function getSupplierSQL(db, id) {

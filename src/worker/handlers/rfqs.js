@@ -27,7 +27,7 @@ async function listRfqs(request, env, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
   const p = await readJson(request);
-  const data = await listRfqsSQL(env.DB, { q: normalizeText(p.q), status: p.status || '', cursor: p.cursor || '', limit: clampLimit(p.limit) });
+  const data = await listRfqsSQL(env.DB, { q: normalizeText(p.q), status: p.status || '', cursor: p.cursor || '', sortBy: p.sortBy || '', sortDir: p.sortDir || '', limit: clampLimit(p.limit) });
   return json({ ok: true, ...data });
 }
 

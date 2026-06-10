@@ -1,31 +1,62 @@
-export async function listRfqsSQL(db, { q, status, cursor, limit }) {
+// Keyset cursor: "sortVal|||pk" for custom sort, plain "pk" for default PK sort.
+function parseCursor(cursor) {
+  if (!cursor) return null;
+  const idx = cursor.indexOf('|||');
+  return idx === -1 ? { pk: cursor, sortVal: undefined } : { pk: cursor.slice(idx + 3), sortVal: cursor.slice(0, idx) };
+}
+
+const RFQ_SORT = {
+  rfq_id:        { col: 'r.rfq_id',                  rowKey: 'rfq_id',                  type: 'text' },
+  ma_goi:        { col: 'r.ma_goi_tbmt',             rowKey: 'ma_goi_tbmt',             type: 'text' },
+  ten_goi:       { col: 'r.ten_goi',                 rowKey: 'ten_goi',                 type: 'text' },
+  client_name:   { col: 'c.client_name',             rowKey: 'client_name',             type: 'text' },
+  ngay_dang_tai: { col: 'r.ngay_nhan_hoac_dang_tai', rowKey: 'ngay_nhan_hoac_dang_tai', type: 'text' },
+  han_nop:       { col: 'r.ngay_het_han',            rowKey: 'ngay_het_han',            type: 'text' },
+  du_toan:       { col: 'r.du_toan',                 rowKey: 'du_toan',                 type: 'num'  },
+  trang_thai:    { col: 'r.trang_thai_goi',          rowKey: 'trang_thai_goi',          type: 'text' },
+};
+
+export async function listRfqsSQL(db, { q, status, cursor, sortBy, sortDir, limit }) {
+  const sort = RFQ_SORT[sortBy] || null;
+  const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
+  const op  = dir === 'ASC' ? '>' : '<';
+
   const binds = [];
   const where = [];
   if (q) {
     where.push('(r.normalized_search LIKE ? OR r.ten_goi LIKE ? OR r.ma_goi_tbmt LIKE ?)');
     binds.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
-  if (status) {
-    where.push('r.trang_thai_goi = ?');
-    binds.push(status);
-  }
+  if (status) { where.push('r.trang_thai_goi = ?'); binds.push(status); }
   if (cursor) {
-    where.push('r.rfq_id < ?');
-    binds.push(cursor);
+    const c = parseCursor(cursor);
+    if (!sort || c.sortVal === undefined) {
+      where.push(`r.rfq_id ${op} ?`); binds.push(c.pk);
+    } else {
+      const wrap = sort.type === 'num' ? `COALESCE(${sort.col}, 0)` : `COALESCE(${sort.col}, '')`;
+      const sv = sort.type === 'num' ? Number(c.sortVal) : c.sortVal;
+      where.push(`(${wrap} ${op} ? OR (${wrap} = ? AND r.rfq_id ${op} ?))`);
+      binds.push(sv, sv, c.pk);
+    }
   }
+
+  const orderBy = sort ? `${sort.col} ${dir}, r.rfq_id ${dir}` : `r.rfq_id ${dir}`;
   const res = await db.prepare(
     `SELECT r.*, c.client_name,
-       (
-         SELECT COUNT(*)
-         FROM rfq_items i
-         WHERE i.rfq_id = r.rfq_id
-       ) AS item_count
+       (SELECT COUNT(*) FROM rfq_items i WHERE i.rfq_id = r.rfq_id) AS item_count
      FROM rfqs r LEFT JOIN clients c ON c.client_id = r.client_id
      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-     ORDER BY r.created_at DESC, r.rfq_id DESC LIMIT ?`
+     ORDER BY ${orderBy} LIMIT ?`
   ).bind(...binds, limit + 1).all();
+
   const rows = res.results || [];
-  return { rows: rows.slice(0, limit), hasMore: rows.length > limit, nextCursor: rows.length > limit ? rows[limit - 1].rfq_id : null };
+  const page = rows.slice(0, limit);
+  let nextCursor = null;
+  if (rows.length > limit && page.length > 0) {
+    const last = page[page.length - 1];
+    nextCursor = sort ? String(last[sort.rowKey] ?? '') + '|||' + last.rfq_id : last.rfq_id;
+  }
+  return { rows: page, hasMore: rows.length > limit, nextCursor };
 }
 
 export async function getRfqSQL(db, id) {

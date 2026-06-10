@@ -1,47 +1,67 @@
-export async function listRfqItemsSQL(db, { q, rfqId, status, cursor, limit }) {
+function parseCursor(cursor) {
+  if (!cursor) return null;
+  const idx = cursor.indexOf('|||');
+  return idx === -1 ? { pk: cursor, sortVal: undefined } : { pk: cursor.slice(idx + 3), sortVal: cursor.slice(0, idx) };
+}
+
+const ITEM_SORT = {
+  stt:            { col: 'i.stt_goc',          rowKey: 'stt_goc',          type: 'text' },
+  ma_mua_sam:     { col: 'i.ma_mua_sam',        rowKey: 'ma_mua_sam',       type: 'text' },
+  ma_vat_tu:      { col: 'i.ma_vat_tu',         rowKey: 'ma_vat_tu',        type: 'text' },
+  ten_vat_tu:     { col: 'i.ten_vat_tu',        rowKey: 'ten_vat_tu',       type: 'text' },
+  required_model: { col: 'i.required_model',    rowKey: 'required_model',   type: 'text' },
+  brand:          { col: 'i.brand',             rowKey: 'brand',            type: 'text' },
+  manufacturer:   { col: 'i.manufacturer',      rowKey: 'manufacturer',     type: 'text' },
+  origin_country: { col: 'i.origin_country',    rowKey: 'origin_country',   type: 'text' },
+  trang_thai:     { col: 'i.trang_thai_dong',   rowKey: 'trang_thai_dong',  type: 'text' },
+};
+
+export async function listRfqItemsSQL(db, { q, rfqId, status, cursor, sortBy, sortDir, limit }) {
+  const sort = ITEM_SORT[sortBy] || null;
+  const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
+  const op  = dir === 'ASC' ? '>' : '<';
+
   const binds = [];
   const where = [];
   if (q) {
     where.push('(i.normalized_search LIKE ? OR i.ten_vat_tu LIKE ? OR i.ma_vat_tu LIKE ? OR i.ma_mua_sam LIKE ?)');
     binds.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   }
-  if (rfqId) {
-    where.push('i.rfq_id = ?');
-    binds.push(rfqId);
-  }
-  if (status) {
-    where.push('i.trang_thai_dong = ?');
-    binds.push(status);
-  }
+  if (rfqId) { where.push('i.rfq_id = ?'); binds.push(rfqId); }
+  if (status) { where.push('i.trang_thai_dong = ?'); binds.push(status); }
   if (cursor) {
-    where.push('i.rfq_item_id < ?');
-    binds.push(cursor);
+    const c = parseCursor(cursor);
+    if (!sort || c.sortVal === undefined) {
+      where.push(`i.rfq_item_id ${op} ?`); binds.push(c.pk);
+    } else {
+      const wrap = `COALESCE(${sort.col}, '')`;
+      where.push(`(${wrap} ${op} ? OR (${wrap} = ? AND i.rfq_item_id ${op} ?))`);
+      binds.push(c.sortVal, c.sortVal, c.pk);
+    }
   }
+
+  const orderBy = sort ? `${sort.col} ${dir}, i.rfq_item_id ${dir}` : `i.rfq_item_id ${dir}`;
   const res = await db.prepare(
     `WITH page AS (
        SELECT i.*, r.ten_goi, r.ma_goi_tbmt
        FROM rfq_items i LEFT JOIN rfqs r ON r.rfq_id = i.rfq_id
        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-       ORDER BY i.created_at DESC, i.rfq_item_id DESC LIMIT ?
+       ORDER BY ${orderBy} LIMIT ?
      )
      SELECT page.*,
-       (
-         SELECT COUNT(*)
-         FROM technical_clarifications tc
-         WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL
-       ) AS clarification_count,
-       (
-         SELECT tc.status_after
-         FROM technical_clarifications tc
-         WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL
-         ORDER BY tc.created_at DESC, tc.sequence_no DESC
-         LIMIT 1
-       ) AS clarification_status
-     FROM page
-     ORDER BY page.created_at DESC, page.rfq_item_id DESC`
+       (SELECT COUNT(*) FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL) AS clarification_count,
+       (SELECT tc.status_after FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL ORDER BY tc.created_at DESC, tc.sequence_no DESC LIMIT 1) AS clarification_status
+     FROM page ORDER BY ${orderBy}`
   ).bind(...binds, limit + 1).all();
+
   const rows = res.results || [];
-  return { rows: rows.slice(0, limit), hasMore: rows.length > limit, nextCursor: rows.length > limit ? rows[limit - 1].rfq_item_id : null };
+  const page = rows.slice(0, limit);
+  let nextCursor = null;
+  if (rows.length > limit && page.length > 0) {
+    const last = page[page.length - 1];
+    nextCursor = sort ? String(last[sort.rowKey] ?? '') + '|||' + last.rfq_item_id : String(last.rfq_item_id);
+  }
+  return { rows: page, hasMore: rows.length > limit, nextCursor };
 }
 
 export async function getRfqItemSQL(db, id) {

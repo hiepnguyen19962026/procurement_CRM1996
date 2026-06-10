@@ -1,9 +1,30 @@
 (function () {
   var state = AppState.list('accounts');
+  var sort = { by: '', dir: 'asc' };
+
+  function syncSort() {
+    var def = 'username';
+    document.querySelectorAll('#screen-accounts th[data-sort-key]').forEach(function (th) {
+      var key = th.getAttribute('data-sort-key');
+      if (!th.getAttribute('data-label')) th.setAttribute('data-label', th.textContent.trim());
+      var label = th.getAttribute('data-label');
+      var active = (sort.by || def) === key;
+      th.textContent = label + (active ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ' ↕');
+      th.onclick = function () {
+        var cur = sort.by || def;
+        if (cur === key) { sort.dir = sort.dir === 'asc' ? 'desc' : 'asc'; }
+        else { sort.by = key; sort.dir = 'asc'; }
+        load(true);
+      };
+    });
+  }
+
   async function load(reset) {
     if (reset) state.cursor = '';
     try {
-      var data = await API.get('getAccounts', { cursor: state.cursor, limit: 50 });
+      var params = { cursor: state.cursor, limit: 50 };
+      if (sort.by) { params.sortBy = sort.by; params.sortDir = sort.dir; }
+      var data = await API.get('getAccounts', params);
       state.rows = reset ? data.rows : state.rows.concat(data.rows || []);
       state.cursor = data.nextCursor || '';
       state.hasMore = !!data.hasMore;
@@ -11,6 +32,7 @@
     } catch (err) { API.error(err); }
   }
   function render() {
+    syncSort();
     document.getElementById('accountRows').innerHTML = (state.rows || []).map(function (r) {
       return '<tr>'
         + '<td>' + API.esc(maskId(r.user_id)) + '</td>'

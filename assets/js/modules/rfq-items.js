@@ -1,17 +1,46 @@
 (function () {
   var state = AppState.list('rfqItems');
+  var sort = { by: '', dir: 'desc' };
+  var _setupDone = false;
+
+  function setupOnce() {
+    if (_setupDone) return;
+    _setupDone = true;
+    ['itemSearch', 'itemRfqId'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('keydown', function (e) { if (e.key === 'Enter') load(true); });
+    });
+  }
+
+  function syncSort() {
+    document.querySelectorAll('#screen-items th[data-sort-key]').forEach(function (th) {
+      var key = th.getAttribute('data-sort-key');
+      if (!th.getAttribute('data-label')) th.setAttribute('data-label', th.textContent.trim());
+      var label = th.getAttribute('data-label');
+      var active = sort.by === key;
+      th.textContent = label + (active ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ' ↕');
+      th.onclick = function () {
+        if (sort.by === key) { sort.dir = sort.dir === 'asc' ? 'desc' : 'asc'; }
+        else { sort.by = key; sort.dir = 'asc'; }
+        load(true);
+      };
+    });
+  }
 
   async function load(reset) {
+    setupOnce();
     if (reset) state.cursor = '';
     state.q = document.getElementById('itemSearch').value || '';
     try {
-      var data = await API.get('getRfqItems', {
+      var params = {
         q: state.q,
         rfqId: document.getElementById('itemRfqId').value,
         status: document.getElementById('itemStatus').value,
         cursor: state.cursor,
         limit: 50,
-      });
+      };
+      if (sort.by) { params.sortBy = sort.by; params.sortDir = sort.dir; }
+      var data = await API.get('getRfqItems', params);
       state.rows = reset ? data.rows : state.rows.concat(data.rows || []);
       state.cursor = data.nextCursor || '';
       state.hasMore = !!data.hasMore;
@@ -31,6 +60,7 @@
   }
 
   function render() {
+    syncSort();
     var rows = state.rows || [];
     var rfqFilter = (document.getElementById('itemRfqId').value || '').trim();
     if (!rows.length && rfqFilter) {

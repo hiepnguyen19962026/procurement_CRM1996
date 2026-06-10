@@ -64,16 +64,20 @@ async function searchQuotes(request, env, actor) {
   const priceMinRaw = body.priceMin !== undefined && body.priceMin !== '' ? cleanNumber(body.priceMin) : null;
   const priceMaxRaw = body.priceMax !== undefined && body.priceMax !== '' ? cleanNumber(body.priceMax) : null;
 
-  let cursorCreatedAt = null;
-  let cursorQuoteId   = null;
-  const cursorRaw = cleanString(body.cursor || '', 120);
+  // Cursor format: "sortVal|||quoteId"
+  let cursorSortVal = null;
+  let cursorQuoteId = null;
+  const cursorRaw = cleanString(body.cursor || '', 200);
   if (cursorRaw) {
-    const parts = cursorRaw.split('|');
-    if (parts.length === 2 && parts[0] && parts[1]) {
-      cursorCreatedAt = parts[0];
-      cursorQuoteId   = parts[1];
+    const sep = cursorRaw.indexOf('|||');
+    if (sep !== -1) {
+      cursorSortVal = cursorRaw.slice(0, sep);
+      cursorQuoteId = cursorRaw.slice(sep + 3);
     }
   }
+
+  const sortBy  = cleanString(body.sortBy  || '', 40);
+  const sortDir = body.sortDir === 'asc' ? 'asc' : 'desc';
 
   const params = {
     q:              cleanString(body.q            || '', 200),
@@ -87,18 +91,22 @@ async function searchQuotes(request, env, actor) {
     validUntilTo,
     rfqId:          cleanString(body.rfqId     || '', 80),
     rfqItemId:      cleanString(body.rfqItemId || '', 80),
-    cursorCreatedAt,
+    sortBy,
+    sortDir,
+    cursorSortVal,
     cursorQuoteId,
     limit: limit + 1,
   };
 
-  const all = await searchSupplierQuotesSQL(env.DB, params);
+  const result = await searchSupplierQuotesSQL(env.DB, params);
+  const all = result.rows;
   const hasMore = all.length > limit;
   const rows = hasMore ? all.slice(0, limit) : all;
   let nextCursor = null;
   if (hasMore && rows.length > 0) {
     const last = rows[rows.length - 1];
-    nextCursor = last.created_at + '|' + last.quote_id;
+    const sortRowKey = result.sort ? result.sort.rowKey : 'created_at';
+    nextCursor = String(last[sortRowKey] ?? '') + '|||' + last.quote_id;
   }
   return json({ ok: true, rows, hasMore, nextCursor });
 }

@@ -1,8 +1,36 @@
 (function () {
   var _cursor = null;
   var _hasMore = false;
+  var sort = { by: '', dir: 'desc' };
+  var _setupDone = false;
 
   function init() {}
+
+  function setupOnce() {
+    if (_setupDone) return;
+    _setupDone = true;
+    ['sqSearch', 'sqSupplier', 'sqManufacturer', 'sqPriceMin', 'sqPriceMax', 'sqValidFrom', 'sqValidTo'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('keydown', function (e) { if (e.key === 'Enter') search(); });
+    });
+  }
+
+  function syncSort() {
+    var def = 'created_at';
+    document.querySelectorAll('#screen-quotes th[data-sort-key]').forEach(function (th) {
+      var key = th.getAttribute('data-sort-key');
+      if (!th.getAttribute('data-label')) th.setAttribute('data-label', th.textContent.trim());
+      var label = th.getAttribute('data-label');
+      var active = (sort.by || def) === key;
+      th.textContent = label + (active ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ' ↕');
+      th.onclick = function () {
+        var cur = sort.by || def;
+        if (cur === key) { sort.dir = sort.dir === 'asc' ? 'desc' : 'asc'; }
+        else { sort.by = key; sort.dir = 'asc'; }
+        load(true);
+      };
+    });
+  }
 
   function getFilters() {
     return {
@@ -39,6 +67,7 @@
   }
 
   async function load(isFirstPage) {
+    setupOnce();
     if (isFirstPage) _cursor = null;
 
     var filters = getFilters();
@@ -53,6 +82,7 @@
     if (filters.validUntilFrom) params.validUntilFrom = filters.validUntilFrom;
     if (filters.validUntilTo)   params.validUntilTo   = filters.validUntilTo;
     if (_cursor)                params.cursor         = _cursor;
+    if (sort.by)                { params.sortBy = sort.by; params.sortDir = sort.dir; }
 
     try {
       var data = await API.get('searchSupplierQuotes', params);
@@ -62,7 +92,7 @@
       var tbody = document.getElementById('sqRows');
       if (!tbody) return;
 
-      if (isFirstPage) tbody.innerHTML = '';
+      if (isFirstPage) { tbody.innerHTML = ''; syncSort(); }
 
       if (!data.rows || data.rows.length === 0) {
         if (isFirstPage) tbody.innerHTML = '<tr><td colspan="11" class="empty-state">Không có báo giá nào phù hợp.</td></tr>';

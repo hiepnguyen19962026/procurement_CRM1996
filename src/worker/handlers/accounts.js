@@ -62,7 +62,7 @@ async function listAccounts(request, env, actor) {
   const denied = requireRole(actor, ADMIN_ROLES);
   if (denied) return denied;
   const body = await readJson(request);
-  const data = await listUsersSQL(env.DB, { limit: clampLimit(body.limit), cursor: body.cursor || '' });
+  const data = await listUsersSQL(env.DB, { limit: clampLimit(body.limit), cursor: body.cursor || '', sortBy: body.sortBy || '', sortDir: body.sortDir || '' });
   return json({ ok: true, ...data });
 }
 

@@ -22,6 +22,8 @@ async function listItems(request, env, actor) {
     rfqId: p.rfqId || p.rfq_id || '',
     status: p.status || '',
     cursor: p.cursor || '',
+    sortBy: p.sortBy || '',
+    sortDir: p.sortDir || '',
     limit: clampLimit(p.limit),
   });
   return json({ ok: true, ...data });

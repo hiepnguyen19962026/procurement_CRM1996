@@ -1,3 +1,12 @@
+const SQ_SORT = {
+  created_at:    { col: 'sq.created_at',        rowKey: 'created_at',        type: 'text' },
+  supplier_name: { col: 'sq.supplier_name',      rowKey: 'supplier_name',     type: 'text' },
+  manufacturer:  { col: 'sq.manufacturer',       rowKey: 'manufacturer',      type: 'text' },
+  price:         { col: 'sq.price_vnd_incl_tax', rowKey: 'price_vnd_incl_tax',type: 'num'  },
+  valid_until:   { col: 'sq.valid_until',        rowKey: 'valid_until',       type: 'text' },
+  quote_date:    { col: 'sq.quote_date',         rowKey: 'quote_date',        type: 'text' },
+};
+
 export async function listSupplierQuotesSQL(db, rfqItemId) {
   const res = await db.prepare(
     `SELECT * FROM supplier_quotes
@@ -56,8 +65,13 @@ export async function searchSupplierQuotesSQL(db, params) {
   const {
     q, supplierName, manufacturer, status, sourceChannel,
     priceMin, priceMax, validUntilFrom, validUntilTo,
-    rfqId, rfqItemId, cursorCreatedAt, cursorQuoteId, limit,
+    rfqId, rfqItemId, sortBy, sortDir,
+    cursorSortVal, cursorQuoteId, limit,
   } = params;
+
+  const sort = SQ_SORT[sortBy] || SQ_SORT.created_at;
+  const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
+  const op  = dir === 'ASC' ? '>' : '<';
 
   const conds = [];
   const binds = [];
@@ -77,12 +91,22 @@ export async function searchSupplierQuotesSQL(db, params) {
     conds.push('(sq.supplier_name LIKE ? OR sq.manufacturer LIKE ? OR sq.source_ref LIKE ? OR i.ten_vat_tu LIKE ? OR i.ma_vat_tu LIKE ? OR i.required_model LIKE ? OR i.quy_cach_model_yeu_cau LIKE ? OR r.ma_goi_tbmt LIKE ? OR r.ten_goi LIKE ?)');
     binds.push(like, like, like, like, like, like, like, like, like);
   }
-  if (cursorCreatedAt && cursorQuoteId) {
-    conds.push('(sq.created_at < ? OR (sq.created_at = ? AND sq.quote_id < ?))');
-    binds.push(cursorCreatedAt, cursorCreatedAt, cursorQuoteId);
+
+  // Keyset cursor using |||
+  if (cursorSortVal !== null && cursorSortVal !== undefined && cursorQuoteId) {
+    if (sort.type === 'num') {
+      const sv = Number(cursorSortVal);
+      conds.push(`(COALESCE(${sort.col}, 0) ${op} ? OR (COALESCE(${sort.col}, 0) = ? AND sq.quote_id ${op} ?))`);
+      binds.push(sv, sv, cursorQuoteId);
+    } else {
+      const sv = cursorSortVal;
+      conds.push(`(COALESCE(${sort.col}, '') ${op} ? OR (COALESCE(${sort.col}, '') = ? AND sq.quote_id ${op} ?))`);
+      binds.push(sv, sv, cursorQuoteId);
+    }
   }
 
   const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+  const orderBy = `${sort.col} ${dir}, sq.quote_id ${dir}`;
   const sql = `
     SELECT
       sq.quote_id, sq.rfq_item_id, sq.supplier_id, sq.supplier_name, sq.manufacturer,
@@ -97,11 +121,11 @@ export async function searchSupplierQuotesSQL(db, params) {
     JOIN rfq_items i ON i.rfq_item_id = sq.rfq_item_id
     JOIN rfqs r      ON r.rfq_id = i.rfq_id
     ${where}
-    ORDER BY sq.created_at DESC, sq.quote_id DESC
+    ORDER BY ${orderBy}
     LIMIT ?
   `;
   binds.push(limit);
 
   const res = await db.prepare(sql).bind(...binds).all();
-  return res.results || [];
+  return { rows: res.results || [], sort, dir };
 }

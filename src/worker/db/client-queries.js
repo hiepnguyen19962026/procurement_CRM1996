@@ -1,4 +1,21 @@
-export async function listClientsSQL(db, { q, cursor, limit }) {
+function parseCursor(cursor) {
+  if (!cursor) return null;
+  const idx = cursor.indexOf('|||');
+  return idx === -1 ? { pk: cursor, sortVal: undefined } : { pk: cursor.slice(idx + 3), sortVal: cursor.slice(0, idx) };
+}
+
+const CLIENT_SORT = {
+  client_id:   { col: 'client_id',   rowKey: 'client_id',   type: 'text' },
+  client_name: { col: 'client_name', rowKey: 'client_name', type: 'text' },
+  plant_name:  { col: 'plant_name',  rowKey: 'plant_name',  type: 'text' },
+  province:    { col: 'province',    rowKey: 'province',    type: 'text' },
+};
+
+export async function listClientsSQL(db, { q, cursor, sortBy, sortDir, limit }) {
+  const sort = CLIENT_SORT[sortBy] || null;
+  const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
+  const op  = dir === 'ASC' ? '>' : '<';
+
   const binds = [];
   const where = [];
   if (q) {
@@ -6,15 +23,31 @@ export async function listClientsSQL(db, { q, cursor, limit }) {
     binds.push(`%${q}%`, `%${q}%`);
   }
   if (cursor) {
-    where.push('client_id > ?');
-    binds.push(cursor);
+    const c = parseCursor(cursor);
+    if (!sort || c.sortVal === undefined) {
+      // default ASC by client_id
+      where.push('client_id > ?'); binds.push(c.pk);
+    } else {
+      const wrap = `COALESCE(${sort.col}, '')`;
+      where.push(`(${wrap} ${op} ? OR (${wrap} = ? AND client_id ${op} ?))`);
+      binds.push(c.sortVal, c.sortVal, c.pk);
+    }
   }
+
+  const orderBy = sort ? `${sort.col} ${dir}, client_id ${dir}` : 'client_id ASC';
   const res = await db.prepare(
     `SELECT * FROM clients ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-     ORDER BY client_id ASC LIMIT ?`
+     ORDER BY ${orderBy} LIMIT ?`
   ).bind(...binds, limit + 1).all();
+
   const rows = res.results || [];
-  return { rows: rows.slice(0, limit), hasMore: rows.length > limit, nextCursor: rows.length > limit ? rows[limit - 1].client_id : null };
+  const page = rows.slice(0, limit);
+  let nextCursor = null;
+  if (rows.length > limit && page.length > 0) {
+    const last = page[page.length - 1];
+    nextCursor = sort ? String(last[sort.rowKey] ?? '') + '|||' + last.client_id : last.client_id;
+  }
+  return { rows: page, hasMore: rows.length > limit, nextCursor };
 }
 
 export async function getClientSQL(db, id) {

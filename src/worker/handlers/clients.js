@@ -15,7 +15,7 @@ async function listClients(request, env, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
   const p = await readJson(request);
-  const data = await listClientsSQL(env.DB, { q: normalizeText(p.q), cursor: p.cursor || '', limit: clampLimit(p.limit) });
+  const data = await listClientsSQL(env.DB, { q: normalizeText(p.q), cursor: p.cursor || '', sortBy: p.sortBy || '', sortDir: p.sortDir || '', limit: clampLimit(p.limit) });
   return json({ ok: true, ...data });
 }
 
