@@ -10,6 +10,7 @@ import { handleSuppliers } from './handlers/suppliers.js';
 import { handlePricingDecisions } from './handlers/pricing-decisions.js';
 import { handleSupplierQuotes } from './handlers/supplier-quotes.js';
 import { handleTechnicalClarifications } from './handlers/technical-clarifications.js';
+import { handlePriceHistory } from './handlers/price-history.js';
 import { actorFromRequest, validateActorSession, validateSecret } from './lib/auth.js';
 import { json, readJson } from './lib/utils.js';
 
@@ -25,6 +26,7 @@ const AUDIT_ACTIONS = ['getAuditLogs'];
 const MEDIA_ACTIONS = ['getMediaFiles', 'uploadMedia', 'getMediaFileContent'];
 const IMPORT_ACTIONS = ['getImportTemplates', 'saveImportTemplate', 'commitImportRows', 'getImportJob', 'getImportJobRows'];
 const ITEM_ACTIONS = ['searchMasterItems', 'getMasterItemDetail', 'suggestMasterItemsForRfqItem', 'createMasterItem', 'updateMasterItem', 'linkRfqItemToMaster', 'unlinkRfqItemFromMaster'];
+const PRICE_HISTORY_ACTIONS = ['searchPriceHistory', 'getPriceHistorySummary', 'exportPriceHistoryCsv'];
 const PUBLIC_ACTIONS = ['authLogin', 'initSetup'];
 
 export default {
@@ -56,6 +58,7 @@ export default {
     else if (MEDIA_ACTIONS.includes(action)) res = await handleMedia(action, request, env, ctx, actor);
     else if (IMPORT_ACTIONS.includes(action)) res = await handleImports(action, request, env, ctx, actor);
     else if (ITEM_ACTIONS.includes(action)) res = await handleItems(action, request, env, ctx, actor);
+    else if (PRICE_HISTORY_ACTIONS.includes(action)) res = await handlePriceHistory(action, request, env, ctx, actor);
     else res = json({ ok: false, error: 'Unknown action' }, 400);
     return cors(res);
   },

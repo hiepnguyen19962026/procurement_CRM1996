@@ -217,7 +217,8 @@
       + itemAttachmentSection(r, (state.currentMedia && state.currentMedia.itemFiles) || [])
       + technicalSection(r, clarifications)
       + quotesSection(r, quotes || [], latestDecision, (state.currentMedia && state.currentMedia.quoteFiles) || {})
-      + pricingSection(r, pricingDecisions || []);
+      + pricingSection(r, pricingDecisions || [])
+      + priceHistorySection(r);
   }
 
   function masterItemSection(item, master) {
@@ -902,6 +903,122 @@
       + '<label>Ghi chú cân giá (bắt buộc nếu chọn "Lý do khác")<textarea name="pricingNote" placeholder="Ghi chú bổ sung hoặc lý do cụ thể"></textarea></label>';
   }
 
+  // --- Price History ---
+
+  function priceHistorySection(item) {
+    if (!item.rfq_item_id) return '';
+    var suffix = String(item.rfq_item_id).replace(/[^A-Za-z0-9_-]/g, '_');
+    var containerId = 'ph_' + suffix;
+    return '<section class="modal-section price-history-section">'
+      + '<div class="section-head"><h4>L&#7883;ch s&#7917; gi&#225;</h4>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      + '<button type="button" onclick="RfqItemsModule.loadPriceHistory(\'' + API.esc(item.rfq_item_id) + '\')">Xem l&#7883;ch s&#7917; gi&#225;</button>'
+      + '<button type="button" onclick="RfqItemsModule.exportPriceHistory(\'' + API.esc(item.rfq_item_id) + '\')">Xu&#7845;t CSV</button>'
+      + '</div></div>'
+      + '<div id="' + containerId + '" class="empty-state small">Nh&#7845;n &#8220;Xem l&#7883;ch s&#7917; gi&#225;&#8221; &#273;&#7875; t&#7843;i d&#7919; li&#7879;u.</div>'
+      + '</section>';
+  }
+
+  async function loadPriceHistory(rfqItemId) {
+    var item = (state.rows || []).find(function (r) { return r.rfq_item_id === rfqItemId; }) || { rfq_item_id: rfqItemId };
+    var suffix = String(rfqItemId).replace(/[^A-Za-z0-9_-]/g, '_');
+    var container = document.getElementById('ph_' + suffix);
+    if (!container) return;
+    container.textContent = 'Đang tải...';
+    var params = { limit: 50 };
+    if (item.item_id) {
+      params.itemId = item.item_id;
+    } else if (item.ma_vat_tu) {
+      params.maVatTu = item.ma_vat_tu;
+    } else {
+      params.rfqItemId = rfqItemId;
+    }
+    try {
+      var data = await API.get('searchPriceHistory', params);
+      var rows = data.rows || [];
+      if (!rows.length) {
+        container.innerHTML = '<div class="empty-state small">Ch&#432;a c&#243; l&#7883;ch s&#7917; gi&#225;.</div>';
+        return;
+      }
+      container.innerHTML = renderPriceHistoryTable(rows, data.hasMore);
+    } catch (err) {
+      container.textContent = 'Lỗi tải lịch sử giá.';
+      API.error(err);
+    }
+  }
+
+  async function exportPriceHistory(rfqItemId) {
+    var item = (state.rows || []).find(function (r) { return r.rfq_item_id === rfqItemId; }) || { rfq_item_id: rfqItemId };
+    var params = {};
+    if (item.item_id) {
+      params.itemId = item.item_id;
+    } else if (item.ma_vat_tu) {
+      params.maVatTu = item.ma_vat_tu;
+    } else {
+      params.rfqItemId = rfqItemId;
+    }
+    try {
+      var data = await API.call('exportPriceHistoryCsv', params);
+      if (!data.ok) { API.toast(data.error || 'Lỗi xuất CSV', 'error'); return; }
+      downloadCsvBlob(data.csv, data.filename);
+      API.toast('Đã xuất ' + (data.row_count || 0) + ' dòng lịch sử giá', 'success');
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  function downloadCsvBlob(csvText, filename) {
+    var blob = new Blob([csvText], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'price-history.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+  }
+
+  function renderPriceHistoryTable(rows, hasMore) {
+    var head = '<thead><tr>'
+      + '<th>Tên VT</th><th>Quy c&#225;ch/model</th><th>M&#227; g&#243;i</th>'
+      + '<th>T&#234;n NCC</th><th>H&#227;ng SX</th>'
+      + '<th>Ng&#224;y b&#225;o gi&#225;</th><th>Ng&#224;y nh&#7853;n</th>'
+      + '<th>Gi&#225; b&#225;o</th><th>T.t&#7879;</th><th>Gi&#225; VND+Thu&#7871;</th>'
+      + '<th>Giao h&#224;ng</th><th>Minh ch&#7913;ng</th><th>K&#234;nh</th>'
+      + '</tr></thead>';
+    var body = '<tbody>'
+      + rows.map(function (r) {
+          var tenVt = r.master_ten_vat_tu || r.ten_vat_tu || '-';
+          var model = r.master_spec || r.required_model || '-';
+          var evidenceBadge = r.evidence_count > 0
+            ? ' <span class="badge" style="background:var(--blue-lt);color:var(--blue)">' + r.evidence_count + ' file</span>'
+            : '';
+          return '<tr>'
+            + '<td><strong>' + API.esc(tenVt) + '</strong>'
+              + (r.ma_vat_tu ? '<div class="muted" style="font-size:11px">' + API.esc(r.ma_vat_tu) + '</div>' : '')
+              + '</td>'
+            + '<td>' + API.esc(model) + '</td>'
+            + '<td>' + API.esc(r.ma_goi_tbmt || r.rfq_id || '-') + '<div class="muted" style="font-size:11px">' + API.esc(r.ten_goi || '') + '</div></td>'
+            + '<td>' + API.esc(r.supplier_name || '-') + '</td>'
+            + '<td>' + API.esc(r.manufacturer || '-') + '</td>'
+            + '<td>' + API.esc(r.quote_date || '') + '</td>'
+            + '<td>' + API.esc(r.received_at || '') + '</td>'
+            + '<td class="num">' + API.esc(r.quoted_price ? Number(r.quoted_price).toLocaleString('vi-VN') : '-') + '</td>'
+            + '<td>' + API.esc(r.currency || 'VND') + '</td>'
+            + '<td class="num"><strong>' + API.esc(r.price_vnd_incl_tax ? API.money(r.price_vnd_incl_tax) : '-') + '</strong></td>'
+            + '<td>' + API.esc(r.lead_time || '') + '</td>'
+            + '<td>' + evidenceBadge + '</td>'
+            + '<td>' + API.esc(r.source_channel || '') + '</td>'
+            + '</tr>';
+        }).join('')
+      + '</tbody>';
+    return '<div class="quotes-table-wrap">'
+      + '<table class="quotes-mini-table">' + head + body + '</table>'
+      + (hasMore ? '<p style="font-size:12px;color:var(--text-muted);margin:6px 0 0">Ch&#7881; hi&#7875;n 50 d&#242;ng m&#7899;i nh&#7845;t. D&#249;ng n&#250;t Xu&#7845;t CSV &#273;&#7875; l&#7845;y to&#224;n b&#7897;.</p>' : '')
+      + '</div>';
+  }
+
   // --- CSV Template / Import ---
 
   // Business-friendly template — rfqItemId/rfqId/originFullText hidden (still supported on import)
@@ -1447,5 +1564,7 @@
     applyImportTemplate: applyImportTemplate,
     saveImportTemplate: saveImportTemplate,
     commitImportMapping: commitImportMapping,
+    loadPriceHistory: loadPriceHistory,
+    exportPriceHistory: exportPriceHistory,
   };
 })();
