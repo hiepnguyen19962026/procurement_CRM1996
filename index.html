@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#d97706">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <title>Procurement CRM</title>
+</head>
+<body>
+  <section class="login-screen">
+    <form class="login-box" id="loginForm">
+      <h1>Procurement CRM</h1>
+      <p>RFQ Price History</p>
+      <label>Username<input id="loginUsername" autocomplete="username" required></label>
+      <label>Mat khau<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Dang nhap</button>
+    </form>
+  </section>
+
+  <section class="app">
+    <aside class="sidebar">
+      <div class="brand">Procurement CRM<br><span class="muted">RFQ Price History</span></div>
+      <nav class="nav" id="nav">
+        <button data-screen="dashboard" class="active">Dashboard</button>
+        <button data-screen="rfqs">Goi RFQ</button>
+        <button data-screen="items">Dong vat tu</button>
+        <button data-screen="clients">Clients/CDT</button>
+        <button data-screen="suppliers">Nha cung cap</button>
+        <button data-screen="audit" data-role-only="admin,manager">Audit log</button>
+        <button data-screen="accounts" data-role-only="admin">Tai khoan</button>
+      </nav>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <strong id="screenTitle">Dashboard</strong>
+        <div><span id="currentUser"></span> <button onclick="Auth.logout()">Dang xuat</button></div>
+      </header>
+      <div class="content">
+        <section class="screen active" id="screen-dashboard">
+          <h2>Dashboard</h2>
+          <div class="metrics" id="dashboardStats"></div>
+        </section>
+
+        <section class="screen" id="screen-rfqs">
+          <h2>Goi RFQ</h2>
+          <div class="toolbar">
+            <input id="rfqSearch" placeholder="Tim ma goi, ten goi, CDT">
+            <select id="rfqStatus"><option value="">Tat ca trang thai</option><option value="dang_khao_gia">dang_khao_gia</option><option value="da_bao">da_bao</option><option value="trung">trung</option><option value="khong_trung">khong_trung</option><option value="treo">treo</option></select>
+            <button onclick="RfqsModule.load(true)">Tim</button>
+            <button class="primary" data-write onclick="RfqsModule.openCreate()">Them RFQ</button>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>ID</th><th>Ma goi</th><th>Ten goi</th><th>CDT</th><th>Deadline</th><th>Du toan</th><th>Trang thai</th><th></th></tr></thead><tbody id="rfqRows"></tbody></table></div>
+          <p><button id="rfqMore" class="hidden" onclick="RfqsModule.load(false)">Load more</button></p>
+        </section>
+
+        <section class="screen" id="screen-items">
+          <h2>Dong vat tu RFQ</h2>
+          <div class="toolbar">
+            <input id="itemSearch" placeholder="Tim ma vat tu, ten, model, hang">
+            <input id="itemRfqId" placeholder="RFQ ID">
+            <select id="itemStatus"><option value="">Tat ca</option><option value="chua_xu_ly">chua_xu_ly</option><option value="dang_hoi_gia">dang_hoi_gia</option><option value="du_gia">du_gia</option><option value="da_final">da_final</option></select>
+            <button onclick="RfqItemsModule.load(true)">Tim</button>
+            <button class="primary" data-write onclick="RfqItemsModule.openCreate()">Them dong</button>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>ID</th><th>RFQ</th><th>Ma</th><th>Vat tu / quy cach</th><th>Hang</th><th>SL</th><th>Trang thai</th><th></th></tr></thead><tbody id="itemRows"></tbody></table></div>
+          <p><button id="itemMore" class="hidden" onclick="RfqItemsModule.load(false)">Load more</button></p>
+        </section>
+
+        <section class="screen" id="screen-clients">
+          <h2>Clients / CDT</h2>
+          <div class="toolbar"><input id="clientSearch" placeholder="Tim client, nha may, tinh"><button onclick="ClientsModule.load(true)">Tim</button><button class="primary" data-write onclick="ClientsModule.openCreate()">Them client</button></div>
+          <div class="table-wrap"><table><thead><tr><th>ID</th><th>Ten</th><th>Nha may</th><th>Tinh</th><th>Ghi chu</th><th></th></tr></thead><tbody id="clientRows"></tbody></table></div>
+          <p><button id="clientMore" class="hidden" onclick="ClientsModule.load(false)">Load more</button></p>
+        </section>
+
+        <section class="screen" id="screen-suppliers">
+          <h2>Nha cung cap</h2>
+          <div class="toolbar"><input id="supplierSearch" placeholder="Tim nha cung cap, contact"><button onclick="SuppliersModule.load(true)">Tim</button><button class="primary" data-write onclick="SuppliersModule.openCreate()">Them NCC</button></div>
+          <div class="table-wrap"><table><thead><tr><th>ID</th><th>Ten</th><th>Loai</th><th>Quoc gia</th><th>Contact</th><th>Email</th><th></th></tr></thead><tbody id="supplierRows"></tbody></table></div>
+          <p><button id="supplierMore" class="hidden" onclick="SuppliersModule.load(false)">Load more</button></p>
+        </section>
+
+        <section class="screen" id="screen-audit">
+          <h2>Audit log</h2>
+          <div class="toolbar"><input id="auditSearch" placeholder="Tim action, actor, message"><button onclick="AuditModule.load(true)">Tim</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Message</th></tr></thead><tbody id="auditRows"></tbody></table></div>
+          <p><button id="auditMore" class="hidden" onclick="AuditModule.load(false)">Load more</button></p>
+        </section>
+
+        <section class="screen" id="screen-accounts">
+          <h2>Tai khoan</h2>
+          <div class="toolbar"><button onclick="AccountsModule.load(true)">Reload</button><button class="primary" onclick="AccountsModule.openCreate()">Them tai khoan</button></div>
+          <div class="table-wrap"><table><thead><tr><th>ID</th><th>Username</th><th>Ten</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody id="accountRows"></tbody></table></div>
+          <p><button id="accountMore" class="hidden" onclick="AccountsModule.load(false)">Load more</button></p>
+        </section>
+      </div>
+    </main>
+  </section>
+
+  <div class="modal-backdrop hidden" id="modal">
+    <div class="modal">
+      <div class="modal-head"><h3 id="modalTitle"></h3><button type="button" class="icon-btn" id="modalClose">x</button></div>
+      <form id="modalForm"><div class="modal-body" id="modalBody"></div><div class="modal-actions"><button type="button" id="modalCancel">Huy</button><button class="primary" type="submit">Luu</button></div></form>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script src="/assets/js/core/api.js"></script>
+  <script src="/assets/js/core/state.js"></script>
+  <script src="/assets/js/core/utils.js"></script>
+  <script src="/assets/js/core/auth.js"></script>
+  <script src="/assets/js/modules/dashboard.js"></script>
+  <script src="/assets/js/modules/clients.js"></script>
+  <script src="/assets/js/modules/suppliers.js"></script>
+  <script src="/assets/js/modules/rfqs.js"></script>
+  <script src="/assets/js/modules/rfq-items.js"></script>
+  <script src="/assets/js/modules/audit.js"></script>
+  <script src="/assets/js/modules/accounts.js"></script>
+  <script>
+    Utils.bindModal();
+    Auth.init();
+    document.getElementById('loginForm').addEventListener('submit', function (e) {
+      e.preventDefault();
+      Auth.login(document.getElementById('loginUsername').value, document.getElementById('loginPassword').value).catch(API.error);
+    });
+    document.getElementById('nav').addEventListener('click', function (e) {
+      if (!e.target.matches('button[data-screen]')) return;
+      document.querySelectorAll('.nav button').forEach(function (b) { b.classList.remove('active'); });
+      e.target.classList.add('active');
+      var screen = e.target.getAttribute('data-screen');
+      document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
+      document.getElementById('screen-' + screen).classList.add('active');
+      document.getElementById('screenTitle').textContent = e.target.textContent;
+      if (screen === 'dashboard') DashboardModule.load();
+      if (screen === 'rfqs') RfqsModule.load(true);
+      if (screen === 'items') RfqItemsModule.load(true);
+      if (screen === 'clients') ClientsModule.load(true);
+      if (screen === 'suppliers') SuppliersModule.load(true);
+      if (screen === 'audit') AuditModule.load(true);
+      if (screen === 'accounts') AccountsModule.load(true);
+    });
+    if (Auth.session()) DashboardModule.load();
+    if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
+  </script>
+</body>
+</html>

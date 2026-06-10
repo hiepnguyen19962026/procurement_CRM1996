@@ -1,0 +1,9 @@
+{
+  "name": "Procurement CRM",
+  "short_name": "ProcureCRM",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f9fafb",
+  "theme_color": "#d97706",
+  "icons": []
+}

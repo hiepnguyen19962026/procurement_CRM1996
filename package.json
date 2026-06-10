@@ -1,0 +1,14 @@
+{
+  "name": "procurement-crm",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "node --check src/worker/index.js && node --check api/fetch-data.js && node --check api/upload.js",
+    "dev:worker": "wrangler dev",
+    "deploy:worker": "wrangler deploy"
+  },
+  "devDependencies": {
+    "wrangler": "^4.20.0"
+  }
+}
