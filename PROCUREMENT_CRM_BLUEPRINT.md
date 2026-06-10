@@ -26,6 +26,281 @@ Không lấy hợp đồng làm trung tâm, vì phần lớn dữ liệu thực 
 
 ---
 
+## 1A. Trạng thái triển khai hiện tại đã chốt
+
+Tính đến phase hiện tại, app đang đi đúng kiến trúc mục tiêu:
+
+```text
+Browser
+  -> Vercel Gateway
+  -> Cloudflare Worker
+  -> D1
+  -> KV
+  -> R2
+```
+
+Frontend là Vanilla JS + PWA, không dùng framework frontend. Authentication đã hoạt động bằng JWT cookie httpOnly 7 ngày, giữ các thuộc tính bảo mật `HttpOnly`, `Secure`, `SameSite=Strict`.
+
+Các nhóm nghiệp vụ đã hoạt động:
+
+- Login/session/role: `admin`, `manager`, `purchasing`, `viewer`.
+- Clients.
+- Suppliers.
+- RFQ/gói thầu.
+- RFQ Items/dòng vật tư.
+- Technical Clarification theo timeline.
+- Supplier Quotations v1.
+- Audit log.
+- Pagination/search cơ bản.
+- Dashboard cơ bản.
+
+Nguyên tắc triển khai đang dùng:
+
+- RFQ Item là trung tâm hệ thống.
+- Danh sách RFQ Item không load toàn bộ timeline, báo giá, ảnh, file.
+- Chỉ mở detail/modal của một RFQ Item mới load:
+  - technical clarifications;
+  - supplier quotations;
+  - ảnh/file/báo giá ở các phase sau.
+- Upload `/api/upload` vẫn khóa 501 nếu chưa hoàn thành MIME allowlist và magic-byte validation.
+- Không mở upload public trước khi hoàn thành validate file an toàn.
+
+---
+
+## 1B. Gói thầu / RFQ đã triển khai
+
+Màn hình RFQ list hiện cần giữ các thông tin nghiệp vụ chính:
+
+- Mã gói.
+- Tên gói.
+- CĐT/nhà máy.
+- Ngày đăng tải hoặc ngày nhận.
+- Hạn nộp.
+- Số dòng vật tư (`item_count`).
+- Dự toán.
+- Trạng thái.
+- Ghi chú.
+- Nút sửa theo quyền.
+
+`item_count` lấy từ D1/query backend, không aggregate toàn bộ ở frontend. Ví dụ hiển thị:
+
+```text
+15 dòng
+50 dòng
+```
+
+Không cần migration riêng chỉ để hiển thị `item_count` nếu đã có thể tính bằng query.
+
+Trạng thái gói nên giữ tiếng Việt/code nội bộ thống nhất, ví dụ:
+
+```text
+dang_khao_gia
+da_bao
+trung
+khong_trung
+treo
+tham_khao
+```
+
+Không trộn enum Anh + Việt trong cùng một field nghiệp vụ.
+
+---
+
+## 1C. Dòng vật tư / RFQ Item đã triển khai
+
+Các field canonical đã có và cần tiếp tục dùng làm dữ liệu search/filter chính:
+
+```text
+required_model
+brand
+manufacture_year
+origin_country
+manufacturer
+technical_params
+unit
+quantity
+```
+
+Các field tiếng Việt trong blueprint vẫn là chuẩn nghiệp vụ, nhưng khi repo đang có field canonical tiếng Anh thì không tự ý đổi schema nếu chưa có lý do rõ ràng.
+
+`origin_full_text` chỉ dùng cho:
+
+- import;
+- export;
+- đối chiếu dữ liệu gốc;
+- debug mapping.
+
+Không dùng `origin_full_text` làm field search/filter chính nếu đã có field structured.
+
+Luôn giữ:
+
+```text
+raw_row_json
+```
+
+để bảo toàn nguyên dòng Excel gốc. Nếu sau này thiếu field hoặc map sai, dùng `raw_row_json` để remap lại thay vì mất dữ liệu gốc.
+
+Danh sách RFQ Item bắt buộc theo performance rule:
+
+- pagination mặc định 50 dòng;
+- search/filter tại D1;
+- không filter toàn bộ ở frontend;
+- không load timeline/báo giá/ảnh/file trong list;
+- detail/modal mới load dữ liệu phụ.
+
+---
+
+## 1D. Technical Clarification đã triển khai
+
+Technical Clarification hiện dùng bảng riêng:
+
+```text
+technical_clarifications
+```
+
+Lưu theo chiều dọc dạng timeline. Một vật tư có thể có vô hạn lần trao đổi.
+
+Không dùng thiết kế dạng cột cố định:
+
+```text
+clarification_1
+clarification_2
+clarification_3
+```
+
+Actions đã triển khai:
+
+```text
+getTechnicalClarifications
+createTechnicalClarification
+updateTechnicalClarification
+deleteTechnicalClarification
+```
+
+Quyền:
+
+- `viewer`: xem.
+- `purchasing`: tạo mới.
+- `manager`/`admin`: tạo, sửa, soft delete.
+
+Timeline hỗ trợ các tình huống nghiệp vụ:
+
+- hỏi hãng;
+- hãng phản hồi;
+- đề xuất thay thế;
+- CĐT phản hồi;
+- final confirm.
+
+Mapping trạng thái kỹ thuật:
+
+```text
+technical_clarifications.status_after -> rfq_items.trang_thai_ky_thuat
+
+waiting_supplier -> dang_hoi
+waiting_client   -> dang_hoi
+need_more_info   -> can_bo_sung
+final_confirmed  -> da_xac_nhan
+rejected         -> bi_tu_choi
+```
+
+Khi `clarification_type = final_confirm` hoặc `status_after = final_confirmed`, và user tick “Cập nhật quy cách final”, hệ thống được cập nhật các field snapshot cuối:
+
+```text
+quy_cach_final
+hang_final
+xuat_xu_final
+trang_thai_ky_thuat
+```
+
+Không sửa đè lịch sử clarification cũ. Timeline là lịch sử, field final trên `rfq_items` chỉ là snapshot hiện tại.
+
+Clarification create/update phải ghi audit log.
+
+---
+
+## 1E. Supplier Quotations v1 đã triển khai
+
+Supplier Quotations v1 đã hoàn thành theo hướng nhập thủ công, chưa upload file báo giá.
+
+Actions:
+
+```text
+getSupplierQuotes
+createSupplierQuote
+updateSupplierQuote
+archiveSupplierQuote
+```
+
+Quyền:
+
+- `viewer`: xem.
+- `purchasing`: tạo mới.
+- `manager`/`admin`: tạo, sửa, archive.
+
+Bảng production:
+
+```text
+supplier_quotes
+```
+
+Một RFQ Item có nhiều báo giá NCC. Danh sách RFQ Item không load báo giá. Báo giá chỉ load khi mở detail/modal của RFQ Item.
+
+Các field v1:
+
+```text
+quote_id
+rfq_item_id
+supplier_id
+supplier_name
+manufacturer
+quote_date
+quoted_price
+currency
+exchange_rate
+price_vnd
+tax_rate
+price_vnd_incl_tax
+lead_time
+valid_until
+warranty
+note
+status
+created_by
+created_at
+updated_at
+```
+
+Trong v1 không có:
+
+```text
+quote_file_id
+email_ref
+```
+
+Hai field này chỉ thêm ở phase upload/file sau, bằng migration mới.
+
+Rule tính giá:
+
+```text
+price_vnd = Math.round(quoted_price * exchange_rate)
+price_vnd_incl_tax = Math.round(price_vnd * (1 + tax_rate / 100))
+```
+
+Backend phải tự tính `price_vnd` và `price_vnd_incl_tax`, không tin giá đã tính từ frontend.
+
+`status` dùng:
+
+```text
+active
+archived
+```
+
+Archive là soft-hide/soft-archive, không hard delete. Báo giá archived vẫn là lịch sử nghiệp vụ.
+
+Mutation create/update/archive phải ghi audit log.
+
+---
+
 ## 2. Stack đề xuất
 
 Giữ stack quen thuộc của các web app trước:
@@ -386,6 +661,8 @@ Giai đoạn đầu không bắt buộc mọi RFQ item phải link vào `items`.
 
 ### 7.6. `supplier_quotes`
 
+Schema v1 đang dùng trong production:
+
 ```sql
 quote_id TEXT PRIMARY KEY,
 rfq_item_id TEXT NOT NULL,
@@ -402,14 +679,32 @@ price_vnd_incl_tax INTEGER DEFAULT 0,
 lead_time TEXT,
 valid_until TEXT,
 warranty TEXT,
-quote_file_id TEXT,
-email_ref TEXT,
 note TEXT,
-status TEXT DEFAULT 'active',
+status TEXT NOT NULL DEFAULT 'active',
 created_by TEXT,
-created_at TEXT,
-updated_at TEXT
+created_at TEXT NOT NULL,
+updated_at TEXT,
+FOREIGN KEY (rfq_item_id) REFERENCES rfq_items(rfq_item_id)
 ```
+
+Index production:
+
+```sql
+CREATE INDEX IF NOT EXISTS idx_supplier_quotes_item
+  ON supplier_quotes(rfq_item_id, created_at DESC);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_quotes_status
+  ON supplier_quotes(status);
+```
+
+Ghi chú:
+
+- V1 nhập báo giá thủ công, chưa upload file.
+- `quote_file_id` và `email_ref` chưa có trong production v1.
+- Khi mở upload báo giá/file email ở phase sau, thêm các field này bằng migration mới.
+- Backend tự tính `price_vnd` và `price_vnd_incl_tax`, không tin frontend.
+- `status` chỉ dùng `active` hoặc `archived`.
+- Archive không xóa dữ liệu lịch sử.
 
 ### 7.7. `pricing_decisions`
 
@@ -449,6 +744,36 @@ created_at TEXT
 ```
 
 Không sửa đè quá trình thay đổi quy cách. `rfq_items.quy_cach_final` chỉ là kết quả cuối.
+
+### 7.8A. `technical_clarifications` — production timeline hiện tại
+
+Production hiện dùng bảng `technical_clarifications` để lưu timeline clarification theo chiều dọc:
+
+```sql
+clarification_id TEXT PRIMARY KEY,
+rfq_item_id TEXT NOT NULL,
+clarification_type TEXT NOT NULL,
+question_text TEXT,
+response_text TEXT,
+proposed_spec TEXT,
+proposed_brand TEXT,
+proposed_origin TEXT,
+status_after TEXT,
+is_final_update INTEGER DEFAULT 0,
+created_by TEXT,
+created_at TEXT NOT NULL,
+updated_at TEXT,
+deleted_at TEXT
+```
+
+Tên cột cụ thể phải kiểm tra theo migration production thật trước khi sửa code. Nguyên tắc không đổi:
+
+- Một `rfq_item_id` có nhiều clarification.
+- Không thêm cột `clarification_1`, `clarification_2`.
+- Không sửa đè lịch sử khi final confirm.
+- Nếu final confirm và user tick cập nhật final, chỉ cập nhật snapshot trên `rfq_items`.
+- Danh sách RFQ Item không join/load toàn bộ timeline.
+- Detail/modal mới gọi `getTechnicalClarifications`.
 
 ### 7.9. `contracts`
 
@@ -745,6 +1070,172 @@ Chỉ làm core purchasing CRM trước.
 
 ---
 
+## 14A. D1 migration production và deploy
+
+Wrangler mặc định có thể chạy D1 trên local database nếu không thêm `--remote`.
+
+Khi migrate production D1, bắt buộc dùng `--remote`:
+
+```powershell
+wrangler d1 execute procurement-crm-db --remote --file=src/worker/db/migrations/005_supplier_quotes.sql
+```
+
+Kiểm tra bảng trên production D1:
+
+```powershell
+wrangler d1 execute procurement-crm-db --remote --command "SELECT name FROM sqlite_master WHERE type='table' AND name='supplier_quotes';"
+```
+
+Kiểm tra schema production D1:
+
+```powershell
+wrangler d1 execute procurement-crm-db --remote --command "PRAGMA table_info(supplier_quotes);"
+```
+
+Nếu quên `--remote`, Wrangler sẽ báo dạng:
+
+```text
+Resource location: local
+Use --remote if you want to access the remote instance.
+```
+
+Khi đó migration chỉ chạy vào `.wrangler/state/...` local, Worker production vẫn lỗi:
+
+```text
+D1_ERROR: no such table: supplier_quotes
+```
+
+Quy trình deploy có migration:
+
+```powershell
+# 1. Chạy migration production D1 trước nếu Worker cần bảng/cột mới
+wrangler d1 execute procurement-crm-db --remote --file=src/worker/db/migrations/00N_name.sql
+
+# 2. Deploy Worker
+wrangler deploy
+
+# 3. Commit/push để Vercel auto deploy frontend/gateway
+git status
+git add .
+git commit -m "feat: describe change"
+git push
+```
+
+Không sửa migration cũ đã chạy production. Nếu cần đổi schema, tạo migration mới tăng số.
+
+---
+
+## 14B. Console smoke test Supplier Quotations v1
+
+Sau khi login trên browser, copy một lần toàn bộ block này vào DevTools Console để test `Supplier Quotations v1`:
+
+```js
+(async () => {
+  const log = (name, res) => console.log(`✅ ${name}:`, res);
+  const fail = (name, err) => console.error(`❌ ${name}:`, err);
+
+  try {
+    console.log("=== Supplier Quotations v1 Smoke Test ===");
+
+    const session = Auth.session?.();
+    log("Current session", session);
+
+    const itemsRes = await API.get("getRfqItems", { limit: 1 });
+    log("Get 1 RFQ item", itemsRes);
+
+    const item = itemsRes.rows?.[0] || itemsRes.items?.[0] || itemsRes.data?.[0];
+    if (!item) throw new Error("Không tìm thấy RFQ item nào để test.");
+
+    const rfqItemId = item.rfq_item_id || item.rfqItemId || item.id;
+    if (!rfqItemId) throw new Error("RFQ item không có rfq_item_id.");
+
+    log("Selected rfqItemId", rfqItemId);
+
+    const before = await API.get("getSupplierQuotes", { rfqItemId });
+    log("Quotes before create", before);
+
+    if (session?.role === "viewer") {
+      console.log("ℹ️ Viewer chỉ test xem danh sách. Không test create/update/archive.");
+      console.log("=== DONE ===");
+      return;
+    }
+
+    const created = await API.call("createSupplierQuote", {
+      rfqItemId,
+      supplierName: "TEST NCC Console",
+      manufacturer: "SKF",
+      quoteDate: "2026-06-10",
+      quotedPrice: 1000,
+      currency: "USD",
+      exchangeRate: 25000,
+      taxRate: 10,
+      leadTime: "6 tuần",
+      validUntil: "2026-09-30",
+      warranty: "12 tháng",
+      note: "Smoke test từ browser console"
+    });
+    log("Create quote", created);
+
+    const quote = created.quote || created.row || created.data;
+    const quoteId = quote?.quote_id || quote?.quoteId;
+    if (!quoteId) throw new Error("Create thành công nhưng không thấy quote_id.");
+
+    console.log("Expected price_vnd = 25,000,000");
+    console.log("Expected price_vnd_incl_tax = 27,500,000");
+
+    const afterCreate = await API.get("getSupplierQuotes", { rfqItemId });
+    log("Quotes after create", afterCreate);
+
+    if (["manager", "admin"].includes(session?.role)) {
+      const updated = await API.call("updateSupplierQuote", {
+        quoteId,
+        rfqItemId,
+        supplierName: "TEST NCC Console Updated",
+        manufacturer: "FAG",
+        quoteDate: "2026-06-10",
+        quotedPrice: 2000,
+        currency: "USD",
+        exchangeRate: 25000,
+        taxRate: 8,
+        leadTime: "8 tuần",
+        validUntil: "2026-10-31",
+        warranty: "18 tháng",
+        note: "Smoke test update"
+      });
+      log("Update quote", updated);
+
+      const afterUpdate = await API.get("getSupplierQuotes", { rfqItemId });
+      log("Quotes after update", afterUpdate);
+
+      const archived = await API.call("archiveSupplierQuote", { quoteId });
+      log("Archive quote", archived);
+
+      const afterArchive = await API.get("getSupplierQuotes", { rfqItemId });
+      log("Quotes after archive", afterArchive);
+    } else {
+      console.log("ℹ️ Purchasing chỉ test create. Không test update/archive.");
+    }
+
+    console.log("=== DONE ===");
+  } catch (err) {
+    fail("Smoke test failed", err);
+  }
+})();
+```
+
+Kết quả kỳ vọng:
+
+- `viewer`: get/list PASS, không create.
+- `purchasing`: get/list + create PASS, không update/archive.
+- `manager`/`admin`: get/list + create + update + archive PASS.
+- Với test USD 1000, tỷ giá 25000, thuế 10:
+  - `price_vnd = 25,000,000`;
+  - `price_vnd_incl_tax = 27,500,000`.
+
+Nếu console báo `Worker HTTP 500` và `wrangler tail` có `D1_ERROR: no such table`, kiểm tra lại migration production D1 đã chạy với `--remote` chưa.
+
+---
+
 ## 15. Workflow làm việc với GPT/Codex
 
 ### GPT project vai trò
@@ -892,7 +1383,7 @@ Khi tôi yêu cầu sửa app:
 Procurement CRM nên đi từ nhỏ đến chắc:
 
 ```text
-RFQ + RFQ items + supplier quotes + pricing + technical change log
+RFQ + RFQ items + technical clarification + supplier quotes + pricing + contract history
 ```
 
 Sau đó mới mở rộng contract history, ảnh vật tư lớn, import Excel nâng cao.

@@ -378,6 +378,202 @@
       + textarea('note', 'Ghi chú', r.note || '');
   }
 
+  // --- CSV Template / Import ---
+
+  var TEMPLATE_HEADERS = [
+    'rfqItemId', 'rfqId', 'STT', 'Mã mua sắm', 'Mã vật tư',
+    'Tên vật tư / Danh mục hàng hóa', 'Ký mã hiệu / Model', 'Nhãn hiệu',
+    'Năm sản xuất', 'Xuất xứ', 'Hãng sản xuất', 'Quy cách / thông số kỹ thuật',
+    'Vật liệu', 'Phụ tùng chuyên dụng', 'Yêu cầu kỹ thuật bổ sung',
+    'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền',
+    'Thời gian giao hàng', 'Ghi chú', 'Cột tổng hợp gốc để đối chiếu/export',
+  ];
+
+  var HEADER_MAP = {
+    'rfqItemId': 'rfqItemId',
+    'rfqId': 'rfqId',
+    'STT': 'sttGoc',
+    'Mã mua sắm': 'maMuaSam',
+    'Mã vật tư': 'maVatTu',
+    'Tên vật tư / Danh mục hàng hóa': 'tenVatTu',
+    'Ký mã hiệu / Model': 'requiredModel',
+    'Nhãn hiệu': 'brand',
+    'Năm sản xuất': 'manufactureYear',
+    'Xuất xứ': 'originCountry',
+    'Hãng sản xuất': 'manufacturer',
+    'Quy cách / thông số kỹ thuật': 'technicalParams',
+    'Vật liệu': 'vatLieu',
+    'Phụ tùng chuyên dụng': 'phuTungChuyenDung',
+    'Yêu cầu kỹ thuật bổ sung': 'yeuCauKyThuatBoSung',
+    'Đơn vị tính': 'unit',
+    'Khối lượng': 'quantity',
+    'Thuế suất': 'thueSuat',
+    'Đơn giá': 'donGiaTruocThue',
+    'Thành tiền': 'thanhTienSauThue',
+    'Thời gian giao hàng': 'deliveryTime',
+    'Ghi chú': 'note',
+    'Cột tổng hợp gốc để đối chiếu/export': 'originFullText',
+  };
+
+  var csvState = { headers: null, rows: null };
+
+  function csvQuote(value) {
+    var s = String(value == null ? '' : value);
+    if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) {
+      return '"' + s.replace(/"/g, '""') + '"';
+    }
+    return s;
+  }
+
+  function downloadTemplate() {
+    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
+    var exampleRow = TEMPLATE_HEADERS.map(function (h) {
+      if (h === 'rfqId') return csvQuote(rfqId);
+      if (h === 'Tên vật tư / Danh mục hàng hóa') return csvQuote('VÍ DỤ: Vòng bi SKF 6205-2RS');
+      if (h === 'Đơn vị tính') return 'cái';
+      if (h === 'Khối lượng') return '10';
+      return '';
+    });
+    var csv = '﻿'
+      + TEMPLATE_HEADERS.map(csvQuote).join(',') + '\r\n'
+      + exampleRow.join(',') + '\r\n';
+    var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = 'rfq-items-template.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+  }
+
+  function parseCsv(text) {
+    // RFC 4180 + BOM strip + CRLF normalize
+    var src = text.replace(/^﻿/, '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+    var rows = [], row = [], field = '', inQ = false, n = src.length;
+    for (var i = 0; i <= n; i++) {
+      var c = i < n ? src[i] : '\n'; // virtual newline flushes last row
+      if (inQ) {
+        if (c === '"') {
+          if (i + 1 < n && src[i + 1] === '"') { field += '"'; i++; } // escaped ""
+          else { inQ = false; }
+        } else { field += c; }
+      } else if (c === '"') {
+        inQ = true;
+      } else if (c === ',') {
+        row.push(field.trim()); field = '';
+      } else if (c === '\n') {
+        row.push(field.trim()); field = '';
+        if (row.some(function (v) { return v !== ''; })) rows.push(row);
+        row = [];
+      } else {
+        field += c;
+      }
+    }
+    return rows;
+  }
+
+  function csvRowToPayload(headers, rowValues) {
+    var rawRowJson = {};
+    headers.forEach(function (h, i) { rawRowJson[h] = rowValues[i] !== undefined ? rowValues[i] : ''; });
+    var payload = { rawRowJson: rawRowJson };
+    Object.keys(HEADER_MAP).forEach(function (h) {
+      var idx = headers.indexOf(h);
+      payload[HEADER_MAP[h]] = idx >= 0 && rowValues[idx] !== undefined ? rowValues[idx] : '';
+    });
+    return payload;
+  }
+
+  function importCsv() {
+    csvState.headers = null;
+    csvState.rows = null;
+    var html = '<div style="margin-bottom:0.75rem">'
+      + '<label style="display:block">Chọn file CSV<br>'
+      + '<input type="file" name="csvFile" id="csvFileInput" accept=".csv,text/csv" style="margin-top:0.25rem" onchange="RfqItemsModule._onCsvFileChange(this)">'
+      + '</label></div>'
+      + '<div id="csvPreviewArea" style="color:var(--text-muted);font-size:13px">Chưa chọn file — chọn file để xem trước rồi nhấn Lưu để import.</div>';
+    Utils.openModal('Import CSV – Dòng vật tư', html, async function () {
+      if (!csvState.rows || !csvState.rows.length) {
+        var area = document.getElementById('csvPreviewArea');
+        if (area) area.innerHTML = '<p style="color:var(--red)">Chưa chọn file hoặc file không có dữ liệu.</p>';
+        return;
+      }
+      await runImport(csvState.rows, csvState.headers);
+    });
+  }
+
+  function _onCsvFileChange(input) {
+    var area = document.getElementById('csvPreviewArea');
+    if (!input || !input.files || !input.files[0]) return;
+    area.textContent = 'Đang đọc file...';
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var all = parseCsv(e.target.result);
+        if (!all.length) { area.textContent = 'File trống.'; return; }
+        var headers = all[0];
+        var dataRows = all.slice(1).filter(function (r) { return r.some(function (c) { return c !== ''; }); });
+        csvState.headers = headers;
+        csvState.rows = dataRows;
+        renderCsvPreview(area, headers, dataRows);
+      } catch (err) {
+        area.textContent = 'Lỗi đọc file: ' + (err.message || String(err));
+      }
+    };
+    reader.onerror = function () { area.textContent = 'Không đọc được file.'; };
+    reader.readAsText(input.files[0], 'UTF-8');
+  }
+
+  function renderCsvPreview(area, headers, rows) {
+    var warn = rows.length > 200
+      ? '<p style="color:var(--red);font-weight:600;margin-bottom:0.5rem">⚠ File có ' + rows.length + ' dòng dữ liệu. Khuyến nghị không quá 200 dòng mỗi lần import.</p>'
+      : '';
+    var previewRows = rows.slice(0, 20);
+    var th = headers.map(function (h) {
+      return '<th style="border:1px solid var(--border);padding:2px 5px;background:var(--bg);white-space:nowrap;font-size:11px">' + API.esc(h) + '</th>';
+    }).join('');
+    var tb = previewRows.map(function (r) {
+      return '<tr>' + r.map(function (c) {
+        return '<td style="border:1px solid var(--border);padding:2px 5px;max-width:100px;overflow:hidden;white-space:nowrap;font-size:11px">' + API.esc(c) + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    area.innerHTML = warn
+      + '<p style="color:var(--text-muted);font-size:12px;margin-bottom:0.3rem">Xem trước ' + previewRows.length + '/' + rows.length + ' dòng. Nhấn <strong>Lưu</strong> để bắt đầu import.</p>'
+      + '<div style="overflow:auto;max-height:200px"><table style="border-collapse:collapse;width:max-content"><thead><tr>' + th + '</tr></thead><tbody>' + tb + '</tbody></table></div>';
+  }
+
+  async function runImport(rows, headers) {
+    var area = document.getElementById('csvPreviewArea');
+    var ok = 0, errs = [];
+    for (var i = 0; i < rows.length; i++) {
+      var payload = csvRowToPayload(headers, rows[i]);
+      var rowNum = i + 2; // 1-based + header row
+      if (!payload.rfqId) { errs.push('Dòng ' + rowNum + ': Thiếu rfqId'); continue; }
+      if (!payload.tenVatTu) { errs.push('Dòng ' + rowNum + ': Thiếu Tên vật tư'); continue; }
+      var action = payload.rfqItemId ? 'updateRfqItem' : 'createRfqItem';
+      try {
+        await API.call(action, payload);
+        ok++;
+      } catch (err) {
+        errs.push('Dòng ' + rowNum + ': ' + (err && err.message ? err.message : String(err)));
+      }
+      if (area) area.innerHTML = '<p style="color:var(--text-muted)">Đang import... ' + (ok + errs.length) + '/' + rows.length + '</p>';
+    }
+    await load(true);
+    var color = errs.length && ok === 0 ? 'var(--red)' : (errs.length ? 'var(--primary)' : 'var(--green)');
+    var summary = '<p style="font-weight:600;color:' + color + ';margin-bottom:0.4rem">Hoàn tất: ' + ok + ' thành công' + (errs.length ? ', ' + errs.length + ' lỗi.' : '.') + '</p>';
+    var errList = errs.length
+      ? '<ul style="font-size:12px;color:var(--red);margin:0;padding-left:1.2em">'
+        + errs.slice(0, 20).map(function (e) { return '<li>' + API.esc(e) + '</li>'; }).join('')
+        + (errs.length > 20 ? '<li>... và ' + (errs.length - 20) + ' lỗi khác (xem console)</li>' : '')
+        + '</ul>'
+      : '';
+    if (area) area.innerHTML = summary + errList;
+    if (errs.length) console.warn('[Import CSV] Lỗi:', errs);
+    API.toast(ok + ' dòng đã import' + (errs.length ? ', ' + errs.length + ' lỗi' : ''), errs.length ? 'warn' : 'success');
+  }
+
   window.RfqItemsModule = {
     load: load,
     openCreate: openCreate,
@@ -385,5 +581,8 @@
     openClarificationForm: openClarificationForm,
     openQuoteForm: openQuoteForm,
     archiveQuote: archiveQuote,
+    downloadTemplate: downloadTemplate,
+    importCsv: importCsv,
+    _onCsvFileChange: _onCsvFileChange,
   };
 })();

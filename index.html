@@ -79,7 +79,7 @@
         </section>
 
         <section class="screen" id="screen-items">
-          <div class="page-head"><div><h2>Dòng vật tư</h2><p>Theo dõi từng vật tư trong RFQ, kỹ thuật và trạng thái hỏi giá.</p></div><div class="page-actions"><button class="primary" data-write onclick="RfqItemsModule.openCreate()">+ Thêm dòng</button></div></div>
+          <div class="page-head"><div><h2>Dòng vật tư</h2><p>Theo dõi từng vật tư trong RFQ, kỹ thuật và trạng thái hỏi giá.</p></div><div class="page-actions"><button onclick="RfqItemsModule.downloadTemplate()">Tải template CSV</button><button data-write onclick="RfqItemsModule.importCsv()">Upload CSV</button><button class="primary" data-write onclick="RfqItemsModule.openCreate()">+ Thêm dòng</button></div></div>
           <div class="panel">
             <div class="toolbar">
               <input id="itemSearch" placeholder="Tìm mã vật tư, tên, model, hãng">
