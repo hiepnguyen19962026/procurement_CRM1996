@@ -52,11 +52,15 @@
       var tenGoiCell = canWrite
         ? '<span class="link-edit" onclick="RfqsModule.openEdit(\'' + API.esc(r.rfq_id) + '\')">' + API.esc(r.ten_goi) + '</span>'
         : API.esc(r.ten_goi);
+      var cdtText = r.client_name || r.nha_may_cdt || '';
+      var cdtCell = cdtText
+        ? '<span class="link-edit" onclick="RfqsModule.drillDownClient(\'' + API.esc(r.client_id || '') + '\',\'' + API.esc(cdtText) + '\')">' + API.esc(cdtText) + '</span>'
+        : '<span class="muted">—</span>';
       return '<tr>'
         + '<td>' + API.esc(r.rfq_id) + '</td>'
         + '<td>' + maGoiCell + '</td>'
         + '<td>' + tenGoiCell + '</td>'
-        + '<td>' + API.esc(r.client_name || r.nha_may_cdt) + '</td>'
+        + '<td>' + cdtCell + '</td>'
         + '<td>' + valueOrDash(r.ngay_nhan_hoac_dang_tai) + '</td>'
         + '<td>' + valueOrDash(r.ngay_het_han) + '</td>'
         + '<td><button class="badge badge-items" onclick="RfqsModule.drillDown(\'' + API.esc(r.rfq_id) + '\')">' + API.esc(itemCountLabel(r.item_count)) + '</button></td>'
@@ -110,5 +114,11 @@
     var navBtn = document.querySelector('.nav button[data-screen="items"]');
     if (navBtn) navBtn.click();
   }
-  window.RfqsModule = { load: load, openCreate: openCreate, openEdit: openEdit, drillDown: drillDown };
+  function drillDownClient(clientId, clientName) {
+    var el = document.getElementById('clientSearch');
+    if (el) el.value = clientId || clientName || '';
+    var navBtn = document.querySelector('.nav button[data-screen="clients"]');
+    if (navBtn) navBtn.click();
+  }
+  window.RfqsModule = { load: load, openCreate: openCreate, openEdit: openEdit, drillDown: drillDown, drillDownClient: drillDownClient };
 })();
