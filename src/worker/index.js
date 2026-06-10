@@ -1,6 +1,7 @@
 import { handleAccounts } from './handlers/accounts.js';
 import { handleAudit } from './handlers/audit.js';
 import { handleClients } from './handlers/clients.js';
+import { handleClientEquipment } from './handlers/client-equipment.js';
 import { handleImports } from './handlers/imports.js';
 import { handleItems } from './handlers/items.js';
 import { handleMedia } from './handlers/media.js';
@@ -18,6 +19,7 @@ import { json, readJson } from './lib/utils.js';
 
 const ACCOUNT_ACTIONS = ['authLogin', 'initSetup', 'logout', 'getSession', 'changePassword', 'getAccounts', 'createAccount', 'updateAccount'];
 const CLIENT_ACTIONS = ['getClients', 'createClient', 'updateClient'];
+const CLIENT_EQUIPMENT_ACTIONS = ['getClientEquipment', 'createClientEquipment', 'updateClientEquipment', 'archiveClientEquipment', 'importClientEquipment'];
 const SUPPLIER_ACTIONS = ['getSuppliers', 'createSupplier', 'updateSupplier'];
 const RFQ_ACTIONS = ['getDashboard', 'getRfqs', 'createRfq', 'updateRfq'];
 const RFQ_ITEM_ACTIONS = ['getRfqItems', 'createRfqItem', 'updateRfqItem'];
@@ -52,6 +54,7 @@ export default {
     let res;
     if (ACCOUNT_ACTIONS.includes(action)) res = await handleAccounts(action, request, env, ctx, actor);
     else if (CLIENT_ACTIONS.includes(action)) res = await handleClients(action, request, env, ctx, actor);
+    else if (CLIENT_EQUIPMENT_ACTIONS.includes(action)) res = await handleClientEquipment(action, request, env, ctx, actor);
     else if (SUPPLIER_ACTIONS.includes(action)) res = await handleSuppliers(action, request, env, ctx, actor);
     else if (RFQ_ACTIONS.includes(action)) res = await handleRfqs(action, request, env, ctx, actor);
     else if (RFQ_ITEM_ACTIONS.includes(action)) res = await handleRfqItems(action, request, env, ctx, actor);
