@@ -46,7 +46,7 @@
     </aside>
     <main class="main">
       <header class="topbar">
-        <div class="topbar-left"><button class="hamburger" type="button" onclick="document.body.classList.toggle('sidebar-collapsed')">☰</button><strong id="screenTitle">Tổng quan</strong></div>
+        <div class="topbar-left"><button class="hamburger" type="button" onclick="document.body.classList.toggle('sidebar-collapsed')">☰</button><strong id="screenTitle">Tổng quan</strong><div id="screenActions" class="screen-actions"></div></div>
         <div class="topbar-right">
           <label class="quick-search"><span>⌕</span><input id="quickSearch" placeholder="Tìm kiếm nhanh..."><kbd>Ctrl K</kbd></label>
           <div class="userbar" id="currentUser"></div>
@@ -55,9 +55,6 @@
       </header>
       <div class="content">
         <section class="screen active" id="screen-dashboard">
-          <div class="page-head">
-            <div class="page-actions"><button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button><button onclick="DashboardModule.openNsxStats()">Thống kê NSX</button></div>
-          </div>
           <div class="metrics" id="dashboardStats"></div>
           <div class="dashboard-grid" id="dashboardPanels">
             <section class="panel"><div class="empty-state">Đang tải tổng quan...</div></section>
@@ -65,7 +62,6 @@
         </section>
 
         <section class="screen" id="screen-rfqs">
-          <div class="page-head"><div class="page-actions"><button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button></div></div>
           <div class="panel">
             <div class="toolbar">
               <input id="rfqSearch" placeholder="Tìm mã gói, tên gói, CĐT">
@@ -78,7 +74,6 @@
         </section>
 
         <section class="screen" id="screen-items">
-          <div class="page-head"><div class="page-actions"><button onclick="RfqItemsModule.downloadTemplate()">Tải template CSV</button><button onclick="RfqItemsModule.exportCsv()">Xuất CSV</button><button data-write onclick="RfqItemsModule.importCsv()">Upload CSV</button><button data-write onclick="RfqItemsModule.openImportMapping()">Import CSV nâng cao</button><button class="primary" data-write onclick="RfqItemsModule.openCreate()">+ Thêm dòng</button></div></div>
           <div class="panel">
             <div class="toolbar">
               <input id="itemSearch" placeholder="Tìm mã vật tư, tên, model, hãng">
@@ -92,12 +87,10 @@
         </section>
 
         <section class="screen" id="screen-clients">
-          <div class="page-head"><div class="page-actions"><button class="primary" data-write onclick="ClientsModule.openCreate()">+ Thêm khách hàng</button></div></div>
           <div class="panel"><div class="toolbar"><input id="clientSearch" placeholder="Tìm khách hàng, nhà máy, tỉnh"><button onclick="ClientsModule.load(true)">Tìm kiếm</button></div><div class="table-wrap"><table><thead><tr><th data-sort-key="client_id">ID</th><th data-sort-key="client_name">Tên</th><th data-sort-key="plant_name">Nhà máy</th><th data-sort-key="province">Tỉnh</th><th>Ghi chú</th></tr></thead><tbody id="clientRows"></tbody></table></div><p><button id="clientMore" class="hidden" onclick="ClientsModule.load(false)">Tải thêm</button></p></div>
         </section>
 
         <section class="screen" id="screen-suppliers">
-          <div class="page-head"><div class="page-actions"><button class="primary" data-write onclick="SuppliersModule.openCreate()">+ Thêm NCC</button></div></div>
           <div class="panel"><div class="toolbar"><input id="supplierSearch" placeholder="Tìm nhà cung cấp, liên hệ"><button onclick="SuppliersModule.load(true)">Tìm kiếm</button></div><div class="table-wrap"><table><thead><tr><th data-sort-key="supplier_id">ID</th><th data-sort-key="supplier_name">Tên</th><th data-sort-key="supplier_type">Loại</th><th data-sort-key="country">Quốc gia</th><th>Liên hệ</th><th>Email</th></tr></thead><tbody id="supplierRows"></tbody></table></div><p><button id="supplierMore" class="hidden" onclick="SuppliersModule.load(false)">Tải thêm</button></p></div>
         </section>
 
@@ -157,7 +150,6 @@
         </section>
 
         <section class="screen" id="screen-accounts">
-          <div class="page-head"><div class="page-actions"><button onclick="AccountsModule.load(true)">Tải lại</button><button class="primary" onclick="AccountsModule.openCreate()">+ Thêm tài khoản</button></div></div>
           <div class="panel"><div class="table-wrap"><table><thead><tr><th>Mã</th><th data-sort-key="username">Tài khoản</th><th data-sort-key="display_name">Tên hiển thị</th><th data-sort-key="role">Vai trò</th><th data-sort-key="status">Trạng thái</th></tr></thead><tbody id="accountRows"></tbody></table></div><p><button id="accountMore" class="hidden" onclick="AccountsModule.load(false)">Tải thêm</button></p></div>
         </section>
       </div>
@@ -186,6 +178,22 @@
   <script src="/assets/js/modules/audit.js"></script>
   <script src="/assets/js/modules/accounts.js"></script>
   <script>
+    var SCREEN_ACTIONS = {
+      dashboard: '<button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button><button onclick="DashboardModule.openNsxStats()">Thống kê NSX</button>',
+      rfqs:      '<button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button>',
+      items:     '<button onclick="RfqItemsModule.downloadTemplate()">Tải template CSV</button><button onclick="RfqItemsModule.exportCsv()">Xuất CSV</button><button data-write onclick="RfqItemsModule.importCsv()">Upload CSV</button><button data-write onclick="RfqItemsModule.openImportMapping()">Import CSV nâng cao</button><button class="primary" data-write onclick="RfqItemsModule.openCreate()">+ Thêm dòng</button>',
+      clients:   '<button class="primary" data-write onclick="ClientsModule.openCreate()">+ Thêm khách hàng</button>',
+      suppliers: '<button class="primary" data-write onclick="SuppliersModule.openCreate()">+ Thêm NCC</button>',
+      quotes:    '',
+      audit:     '',
+      accounts:  '<button onclick="AccountsModule.load(true)">Tải lại</button><button class="primary" onclick="AccountsModule.openCreate()">+ Thêm tài khoản</button>',
+    };
+    function setScreenActions(screen) {
+      var el = document.getElementById('screenActions');
+      if (el) el.innerHTML = SCREEN_ACTIONS[screen] || '';
+      if (typeof Auth !== 'undefined' && Auth.applyRoleUI) Auth.applyRoleUI();
+    }
+
     Utils.bindModal();
     Auth.init();
     document.getElementById('loginForm').addEventListener('submit', function (e) {
@@ -200,6 +208,7 @@
       document.querySelectorAll('.screen').forEach(function (s) { s.classList.remove('active'); });
       document.getElementById('screen-' + screen).classList.add('active');
       document.getElementById('screenTitle').textContent = e.target.getAttribute('data-title') || e.target.textContent.trim();
+      setScreenActions(screen);
       if (screen === 'dashboard') DashboardModule.load();
       if (screen === 'rfqs') RfqsModule.load(true);
       if (screen === 'items') RfqItemsModule.load(true);
@@ -209,7 +218,7 @@
       if (screen === 'audit') AuditModule.load(true);
       if (screen === 'accounts') AccountsModule.load(true);
     });
-    if (Auth.session()) DashboardModule.load();
+    if (Auth.session()) { DashboardModule.load(); setScreenActions('dashboard'); }
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
   </script>
 </body>

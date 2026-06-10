@@ -40,18 +40,20 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, cursor, sortBy, so
     }
   }
 
-  const orderBy = sort ? `${sort.col} ${dir}, i.rfq_item_id ${dir}` : `i.rfq_item_id ${dir}`;
+  // innerOrderBy uses table alias `i.` (valid inside CTE); outerOrderBy strips it (CTE exposes bare column names)
+  const innerOrderBy = sort ? `${sort.col} ${dir}, i.rfq_item_id ${dir}` : `i.rfq_item_id ${dir}`;
+  const outerOrderBy = sort ? `${sort.col.replace(/^\w+\./, '')} ${dir}, rfq_item_id ${dir}` : `rfq_item_id ${dir}`;
   const res = await db.prepare(
     `WITH page AS (
        SELECT i.*, r.ten_goi, r.ma_goi_tbmt
        FROM rfq_items i LEFT JOIN rfqs r ON r.rfq_id = i.rfq_id
        ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-       ORDER BY ${orderBy} LIMIT ?
+       ORDER BY ${innerOrderBy} LIMIT ?
      )
      SELECT page.*,
        (SELECT COUNT(*) FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL) AS clarification_count,
        (SELECT tc.status_after FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL ORDER BY tc.created_at DESC, tc.sequence_no DESC LIMIT 1) AS clarification_status
-     FROM page ORDER BY ${orderBy}`
+     FROM page ORDER BY ${outerOrderBy}`
   ).bind(...binds, limit + 1).all();
 
   const rows = res.results || [];
