@@ -583,7 +583,16 @@
     try {
       await API.upload(form);
       if (isImage) {
-        API.toast('Đã upload ảnh', 'success');
+        var origSz = Number(form.get('_origSize') || 0);
+        var compSz = Number(form.get('_compSize') || 0);
+        var overTgt = form.get('_overTarget') === '1';
+        var sizeHint = (compSz > 0 && origSz > 0 && compSz < origSz)
+          ? ' (' + Math.round(compSz / 1024) + ' KB sau nén)' : '';
+        if (overTgt) {
+          API.toast('Đã upload ảnh' + sizeHint + ' — lớn hơn khuyến nghị', 'warn');
+        } else {
+          API.toast('Đã upload ảnh' + sizeHint, 'success');
+        }
         await openEdit(rfqItemId);
         return;
       }

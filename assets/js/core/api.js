@@ -19,6 +19,16 @@
     return data;
   }
 
+  // Browser-side image compression profiles
+  var _webpSupported = null;
+  var IMAGE_PROFILES = {
+    // quote_evidence_image: nameplate/spec-sheet — needs more detail
+    nameplate: { maxLongEdge: 2000, initQuality: 0.85, targetBytes: 1024 * 1024 },
+    // item_image: general RFQ item photo
+    normal:    { maxLongEdge: 1600, initQuality: 0.82, targetBytes: 700 * 1024 },
+  };
+  var QUALITY_STEPS = [0.8, 0.75, 0.72];
+
   async function upload(formData) {
     await prepareUploadForm(formData);
     var res = await fetch('/api/upload', {
@@ -35,32 +45,73 @@
     var file = formData && formData.get && formData.get('file');
     if (!file || !file.type || !/^image\//i.test(file.type)) return;
     if (!/^(image\/jpeg|image\/png|image\/webp)$/i.test(file.type)) return;
-    var resized = await resizeImageFile(file, 1600, 1600, 0.86);
-    formData.set('file', resized.file);
-    formData.set('width', String(resized.width || 0));
-    formData.set('height', String(resized.height || 0));
+    var fileKind = String((formData.get && formData.get('fileKind')) || '');
+    var profile = fileKind === 'quote_evidence_image' ? IMAGE_PROFILES.nameplate : IMAGE_PROFILES.normal;
+    var useWebp = await checkWebpSupport();
+    var result = await compressImage(file, profile, useWebp);
+    formData.set('file', result.file);
+    formData.set('width', String(result.width || 0));
+    formData.set('height', String(result.height || 0));
+    formData.set('_origSize', String(result.originalSize || 0));
+    formData.set('_compSize', String(result.compressedSize || 0));
+    if (result.overTarget) formData.set('_overTarget', '1');
   }
 
-  async function resizeImageFile(file, maxWidth, maxHeight, quality) {
+  async function checkWebpSupport() {
+    if (_webpSupported !== null) return _webpSupported;
+    try {
+      var c = document.createElement('canvas');
+      c.width = 1; c.height = 1;
+      var blob = await canvasToBlob(c, 'image/webp', 0.9);
+      var buf = await blob.arrayBuffer();
+      var b = new Uint8Array(buf);
+      // WebP magic: RIFF....WEBP
+      _webpSupported = b.length >= 12 &&
+        b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+        b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50;
+    } catch (e) {
+      _webpSupported = false;
+    }
+    return _webpSupported;
+  }
+
+  async function compressImage(file, profile, useWebp) {
     var image = await loadImage(file);
-    var sourceWidth = image.width || image.naturalWidth || 0;
-    var sourceHeight = image.height || image.naturalHeight || 0;
-    if (!sourceWidth || !sourceHeight) return { file: file, width: 0, height: 0 };
-    var scale = Math.min(1, maxWidth / sourceWidth, maxHeight / sourceHeight);
-    var targetWidth = Math.max(1, Math.round(sourceWidth * scale));
-    var targetHeight = Math.max(1, Math.round(sourceHeight * scale));
+    var sw = image.width || image.naturalWidth || 0;
+    var sh = image.height || image.naturalHeight || 0;
+    if (!sw || !sh) {
+      if (image.close) image.close();
+      return { file: file, width: 0, height: 0, originalSize: file.size, compressedSize: file.size, overTarget: false };
+    }
+    var longEdge = Math.max(sw, sh);
+    var scale = longEdge > profile.maxLongEdge ? profile.maxLongEdge / longEdge : 1;
+    var tw = Math.max(1, Math.round(sw * scale));
+    var th = Math.max(1, Math.round(sh * scale));
     var canvas = document.createElement('canvas');
-    canvas.width = targetWidth;
-    canvas.height = targetHeight;
+    canvas.width = tw;
+    canvas.height = th;
     var ctx = canvas.getContext('2d');
-    ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+    ctx.drawImage(image, 0, 0, tw, th);
     if (image.close) image.close();
-    var blob = await canvasToBlob(canvas, 'image/jpeg', quality);
+    var mimeType = useWebp ? 'image/webp' : 'image/jpeg';
+    var ext = useWebp ? 'webp' : 'jpg';
+    // qualities: [initQuality, ...QUALITY_STEPS below it]
+    var qualities = [profile.initQuality].concat(QUALITY_STEPS.filter(function (q) { return q < profile.initQuality; }));
     var safeName = String(file.name || 'image').replace(/\.[^.]*$/, '').replace(/[\\/]+/g, ' ').trim() || 'image';
+    var blob = null;
+    var overTarget = false;
+    for (var i = 0; i < qualities.length; i++) {
+      blob = await canvasToBlob(canvas, mimeType, qualities[i]);
+      if (blob.size <= profile.targetBytes) break;
+      if (i === qualities.length - 1) overTarget = true;
+    }
     return {
-      file: new File([blob], safeName + '.jpg', { type: 'image/jpeg' }),
-      width: targetWidth,
-      height: targetHeight,
+      file: new File([blob], safeName + '.' + ext, { type: mimeType }),
+      width: tw,
+      height: th,
+      originalSize: file.size,
+      compressedSize: blob.size,
+      overTarget: overTarget,
     };
   }
 
