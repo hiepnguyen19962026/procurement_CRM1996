@@ -56,14 +56,28 @@ export async function getClientSQL(db, id) {
 
 export async function insertClientSQL(db, row) {
   return db.prepare(
-    `INSERT INTO clients (client_id, client_name, plant_name, province, note, normalized_search, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(row.client_id, row.client_name, row.plant_name, row.province, row.note, row.normalized_search, row.created_at, row.updated_at).run();
+    `INSERT INTO clients (
+      client_id, client_name, plant_name, province, note,
+      tax_code, legal_name, client_type, address, email, phone, website,
+      normalized_search, created_at, updated_at
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+  ).bind(
+    row.client_id, row.client_name, row.plant_name, row.province, row.note,
+    row.tax_code, row.legal_name, row.client_type, row.address, row.email, row.phone, row.website,
+    row.normalized_search, row.created_at, row.updated_at
+  ).run();
 }
 
 export async function updateClientSQL(db, row) {
   return db.prepare(
-    `UPDATE clients SET client_name = ?, plant_name = ?, province = ?, note = ?, normalized_search = ?, updated_at = ?
-     WHERE client_id = ?`
-  ).bind(row.client_name, row.plant_name, row.province, row.note, row.normalized_search, row.updated_at, row.client_id).run();
+    `UPDATE clients SET
+      client_name=?, plant_name=?, province=?, note=?,
+      tax_code=?, legal_name=?, client_type=?, address=?, email=?, phone=?, website=?,
+      normalized_search=?, updated_at=?
+     WHERE client_id=?`
+  ).bind(
+    row.client_name, row.plant_name, row.province, row.note,
+    row.tax_code, row.legal_name, row.client_type, row.address, row.email, row.phone, row.website,
+    row.normalized_search, row.updated_at, row.client_id
+  ).run();
 }
