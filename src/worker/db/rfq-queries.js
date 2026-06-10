@@ -14,7 +14,12 @@ export async function listRfqsSQL(db, { q, status, cursor, limit }) {
     binds.push(cursor);
   }
   const res = await db.prepare(
-    `SELECT r.*, c.client_name
+    `SELECT r.*, c.client_name,
+       (
+         SELECT COUNT(*)
+         FROM rfq_items i
+         WHERE i.rfq_id = r.rfq_id
+       ) AS item_count
      FROM rfqs r LEFT JOIN clients c ON c.client_id = r.client_id
      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
      ORDER BY r.created_at DESC, r.rfq_id DESC LIMIT ?`
