@@ -62,21 +62,24 @@
   }
 
   function openCreate() {
-    openForm({}, []);
+    openForm({}, [], []);
   }
 
   async function openEdit(id) {
     var row = (state.rows || []).find(function (r) { return r.rfq_item_id === id; }) || {};
     try {
-      var data = await API.get('getTechnicalClarifications', { rfqItemId: id });
-      openForm(row, data.rows || []);
+      var results = await Promise.all([
+        API.get('getTechnicalClarifications', { rfqItemId: id }),
+        API.get('getSupplierQuotes', { rfqItemId: id }),
+      ]);
+      openForm(row, results[0].rows || [], results[1].rows || []);
     } catch (err) {
       API.error(err);
     }
   }
 
-  function openForm(r, clarifications) {
-    Utils.openModal(r.rfq_item_id ? 'Sửa dòng vật tư' : 'Thêm dòng vật tư', fields(r, clarifications || []), async function (data) {
+  function openForm(r, clarifications, quotes) {
+    Utils.openModal(r.rfq_item_id ? 'Sửa dòng vật tư' : 'Thêm dòng vật tư', fields(r, clarifications || [], quotes || []), async function (data) {
       try {
         if (r.rfq_item_id) data.rfqItemId = r.rfq_item_id;
         await API.call(r.rfq_item_id ? 'updateRfqItem' : 'createRfqItem', data);
@@ -122,7 +125,7 @@
     return '<label>' + API.esc(label) + '<textarea name="' + API.esc(name) + '" ' + (attrs || '') + '>' + API.esc(value) + '</textarea></label>';
   }
 
-  function fields(r, clarifications) {
+  function fields(r, clarifications, quotes) {
     var status = r.trang_thai_dong || 'chua_xu_ly';
     return ''
       + input('rfqId', 'RFQ ID', r.rfq_id, 'required')
@@ -155,7 +158,8 @@
       + option('da_final', 'Đã final', status)
       + '</select></label>'
       + textarea('originFullText', 'Cột tổng hợp gốc để đối chiếu/export', r.origin_full_text)
-      + technicalSection(r, clarifications);
+      + technicalSection(r, clarifications)
+      + quotesSection(r, quotes || []);
   }
 
   function technicalSection(item, rows) {
@@ -258,10 +262,128 @@
     return Number.isNaN(date.getTime()) ? value : date.toLocaleString('vi-VN');
   }
 
+  // --- Supplier Quotes ---
+
+  function quotesSection(item, rows) {
+    if (!item.rfq_item_id) return '';
+    var activeRows = rows.filter(function (r) { return r.status !== 'archived'; });
+    var archivedRows = rows.filter(function (r) { return r.status === 'archived'; });
+    return '<section class="modal-section quotes-section">'
+      + '<div class="section-head"><h4>Báo giá nhà cung cấp</h4>'
+      + '<button type="button" data-write onclick="RfqItemsModule.openQuoteForm(\'' + API.esc(item.rfq_item_id) + '\')">+ Thêm báo giá</button></div>'
+      + (activeRows.length
+        ? '<div class="quotes-table-wrap">' + quotesTable(item.rfq_item_id, activeRows) + '</div>'
+        : '<div class="empty-state small">Chưa có báo giá.</div>')
+      + (archivedRows.length
+        ? '<details class="archived-quotes"><summary>Đã lưu trữ (' + archivedRows.length + ')</summary>'
+          + '<div class="quotes-table-wrap">' + quotesTable(item.rfq_item_id, archivedRows) + '</div>'
+          + '</details>'
+        : '')
+      + '</section>';
+  }
+
+  function quotesTable(rfqItemId, rows) {
+    return '<table class="quotes-mini-table">'
+      + '<thead><tr>'
+      + '<th>Nhà CC</th><th>Hãng SX</th><th>Giá báo</th><th>T.tệ</th><th>Tỷ giá</th>'
+      + '<th>Thuế</th><th>VND + Thuế</th><th>Giao hàng</th><th>Hiệu lực</th><th>Bảo hành</th><th>Ghi chú</th><th></th>'
+      + '</tr></thead><tbody>'
+      + rows.map(function (r) { return quoteRow(rfqItemId, r); }).join('')
+      + '</tbody></table>';
+  }
+
+  function quoteRow(rfqItemId, r) {
+    var isArchived = r.status === 'archived';
+    var actions = isArchived
+      ? '<span class="badge">Đã lưu trữ</span>'
+      : '<button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.openQuoteForm(\''
+          + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\')">Sửa</button>'
+        + ' <button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.archiveQuote(\''
+          + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\')">Lưu trữ</button>';
+    return '<tr>'
+      + '<td>' + API.esc(r.supplier_name || r.supplier_id || '-') + '</td>'
+      + '<td>' + API.esc(r.manufacturer || '-') + '</td>'
+      + '<td class="num">' + API.esc(r.quoted_price ? Number(r.quoted_price).toLocaleString('vi-VN') : '-') + '</td>'
+      + '<td>' + API.esc(r.currency || 'VND') + '</td>'
+      + '<td class="num">' + API.esc(r.exchange_rate && Number(r.exchange_rate) !== 1 ? Number(r.exchange_rate).toLocaleString('vi-VN') : '') + '</td>'
+      + '<td class="num">' + API.esc(r.tax_rate ? r.tax_rate + '%' : '') + '</td>'
+      + '<td class="num"><strong>' + API.esc(r.price_vnd_incl_tax ? API.money(r.price_vnd_incl_tax) : '-') + '</strong></td>'
+      + '<td>' + API.esc(r.lead_time || '') + '</td>'
+      + '<td>' + API.esc(r.valid_until || '') + '</td>'
+      + '<td>' + API.esc(r.warranty || '') + '</td>'
+      + '<td class="muted">' + API.esc(r.note || '') + '</td>'
+      + '<td class="nowrap">' + actions + '</td>'
+      + '</tr>';
+  }
+
+  function openQuoteForm(rfqItemId, quoteId) {
+    var fetchRow = quoteId
+      ? API.get('getSupplierQuotes', { rfqItemId: rfqItemId }).then(function (data) {
+          return (data.rows || []).find(function (r) { return r.quote_id === quoteId; }) || {};
+        })
+      : Promise.resolve({});
+    fetchRow.then(function (r) {
+      Utils.openModal(
+        r.quote_id ? 'Sửa báo giá' : 'Thêm báo giá',
+        quoteFields(r),
+        async function (form) {
+          try {
+            form.rfqItemId = rfqItemId;
+            if (r.quote_id) form.quoteId = r.quote_id;
+            await API.call(r.quote_id ? 'updateSupplierQuote' : 'createSupplierQuote', form);
+            Utils.closeModal();
+            API.toast('Đã lưu báo giá', 'success');
+            await load(true);
+          } catch (err) {
+            API.error(err);
+          }
+        }
+      );
+      Auth.applyRoleUI();
+    }).catch(API.error);
+  }
+
+  async function archiveQuote(rfqItemId, quoteId) {
+    try {
+      await API.call('archiveSupplierQuote', { quoteId: quoteId });
+      Utils.closeModal();
+      API.toast('Đã lưu trữ báo giá', 'success');
+      await load(true);
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  function quoteFields(r) {
+    var currency = r.currency || 'VND';
+    return ''
+      + input('supplierName', 'Tên nhà cung cấp', r.supplier_name || '', 'placeholder="VD: SKF Vietnam"')
+      + input('manufacturer', 'Hãng sản xuất', r.manufacturer || '', 'placeholder="VD: SKF"')
+      + input('quoteDate', 'Ngày báo giá', r.quote_date || '', 'type="date"')
+      + input('quotedPrice', 'Giá báo (theo tiền tệ)', r.quoted_price || '', 'inputmode="decimal" placeholder="0"')
+      + '<label>Tiền tệ<select name="currency">'
+      + option('VND', 'VND', currency)
+      + option('USD', 'USD', currency)
+      + option('EUR', 'EUR', currency)
+      + option('JPY', 'JPY', currency)
+      + option('CNY', 'CNY', currency)
+      + option('SGD', 'SGD', currency)
+      + option('KRW', 'KRW', currency)
+      + '</select></label>'
+      + input('exchangeRate', 'Tỷ giá (1 đơn vị ngoại tệ = ? VND)', r.exchange_rate || 1, 'inputmode="decimal" placeholder="1"')
+      + input('taxRate', 'Thuế suất (%)', r.tax_rate || 0, 'inputmode="decimal" placeholder="0"')
+      + input('leadTime', 'Thời gian giao hàng', r.lead_time || '', 'placeholder="VD: 4-6 tuần"')
+      + input('validUntil', 'Hiệu lực đến', r.valid_until || '', 'type="date"')
+      + input('warranty', 'Bảo hành', r.warranty || '', 'placeholder="VD: 12 tháng"')
+      + textarea('note', 'Ghi chú', r.note || '');
+  }
+
   window.RfqItemsModule = {
     load: load,
     openCreate: openCreate,
     openEdit: openEdit,
     openClarificationForm: openClarificationForm,
+    openQuoteForm: openQuoteForm,
+    archiveQuote: archiveQuote,
   };
 })();
