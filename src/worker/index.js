@@ -12,6 +12,7 @@ import { handleSupplierQuotes } from './handlers/supplier-quotes.js';
 import { handleTechnicalClarifications } from './handlers/technical-clarifications.js';
 import { handlePriceHistory } from './handlers/price-history.js';
 import { handleContracts } from './handlers/contracts.js';
+import { handleDashboard } from './handlers/dashboard.js';
 import { actorFromRequest, validateActorSession, validateSecret } from './lib/auth.js';
 import { json, readJson } from './lib/utils.js';
 
@@ -29,6 +30,7 @@ const IMPORT_ACTIONS = ['getImportTemplates', 'saveImportTemplate', 'commitImpor
 const ITEM_ACTIONS = ['searchMasterItems', 'getMasterItemDetail', 'suggestMasterItemsForRfqItem', 'createMasterItem', 'updateMasterItem', 'linkRfqItemToMaster', 'unlinkRfqItemFromMaster'];
 const PRICE_HISTORY_ACTIONS = ['searchPriceHistory', 'getPriceHistorySummary', 'exportPriceHistoryCsv'];
 const CONTRACT_ACTIONS = ['getContracts', 'getContractDetail', 'getContractItemsForRfqItem', 'createContract', 'updateContract', 'archiveContract', 'addContractItem', 'updateContractItem', 'archiveContractItem', 'createContractFromRfqItem'];
+const DASHBOARD_V2_ACTIONS = ['getDashboardV2'];
 const PUBLIC_ACTIONS = ['authLogin', 'initSetup'];
 
 export default {
@@ -62,6 +64,7 @@ export default {
     else if (ITEM_ACTIONS.includes(action)) res = await handleItems(action, request, env, ctx, actor);
     else if (PRICE_HISTORY_ACTIONS.includes(action)) res = await handlePriceHistory(action, request, env, ctx, actor);
     else if (CONTRACT_ACTIONS.includes(action)) res = await handleContracts(action, request, env, ctx, actor);
+    else if (DASHBOARD_V2_ACTIONS.includes(action)) res = await handleDashboard(action, request, env, ctx, actor);
     else res = json({ ok: false, error: 'Unknown action' }, 400);
     return cors(res);
   },
