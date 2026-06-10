@@ -19,6 +19,17 @@
     return data;
   }
 
+  async function upload(formData) {
+    var res = await fetch('/api/upload', {
+      method: 'POST',
+      credentials: 'include',
+      body: formData,
+    });
+    var data = await res.json().catch(function () { return { ok: false, error: 'Loi upload' }; });
+    if (!res.ok || data.ok === false) throw new Error(data.error || 'Loi upload');
+    return data;
+  }
+
   function esc(value) {
     return String(value == null ? '' : value).replace(/[&<>"']/g, function (m) {
       return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[m];
@@ -43,5 +54,5 @@
     toast(err && err.message ? err.message : String(err || 'Co loi'), 'error');
   }
 
-  window.API = { call: call, get: get, esc: esc, money: money, toast: toast, error: error };
+  window.API = { call: call, get: get, upload: upload, esc: esc, money: money, toast: toast, error: error };
 })();

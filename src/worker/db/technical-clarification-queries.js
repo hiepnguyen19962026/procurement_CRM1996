@@ -1,6 +1,6 @@
 export async function listTechnicalClarificationsSQL(db, rfqItemId) {
   const res = await db.prepare(
-    `SELECT tc.*, mf.file_name AS attachment_file_name, mf.public_url AS attachment_public_url
+    `SELECT tc.*, mf.file_name AS attachment_file_name
      FROM technical_clarifications tc
      LEFT JOIN media_files mf ON mf.file_id = tc.attachment_file_id
      WHERE tc.rfq_item_id = ? AND tc.deleted_at IS NULL

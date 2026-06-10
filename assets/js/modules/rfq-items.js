@@ -87,24 +87,35 @@
   }
 
   function openCreate() {
-    openForm({}, [], [], []);
+    state.currentMedia = {};
+    openForm({}, [], [], [], {});
   }
 
   async function openEdit(id) {
-    var row = (state.rows || []).find(function (r) { return r.rfq_item_id === id; }) || {};
+    var row = (state.rows || []).find(function (r) { return r.rfq_item_id === id; }) || { rfq_item_id: id };
     try {
       var results = await Promise.all([
         API.get('getTechnicalClarifications', { rfqItemId: id }),
         API.get('getSupplierQuotes', { rfqItemId: id }),
         API.get('getPricingDecisions', { rfqItemId: id }).catch(function () { return { rows: [] }; }),
+        API.get('getMediaFiles', { ownerType: 'rfq_item', ownerId: id }).catch(function () { return { rows: [] }; }),
       ]);
-      openForm(row, results[0].rows || [], results[1].rows || [], results[2].rows || []);
+      var quotes = results[1].rows || [];
+      var quoteMedia = await loadQuoteMedia(quotes);
+      state.currentMedia = {
+        itemFiles: results[3].rows || [],
+        quoteFiles: quoteMedia,
+      };
+      openForm(row, results[0].rows || [], quotes, results[2].rows || [], {
+        itemFiles: results[3].rows || [],
+        quoteFiles: quoteMedia,
+      });
     } catch (err) {
       API.error(err);
     }
   }
 
-  function openForm(r, clarifications, quotes, pricingDecisions) {
+  function openForm(r, clarifications, quotes, pricingDecisions, media) {
     Utils.openModal(r.rfq_item_id ? 'Sửa dòng vật tư' : 'Thêm dòng vật tư', fields(r, clarifications || [], quotes || [], pricingDecisions || []), async function (data) {
       try {
         if (r.rfq_item_id) data.rfqItemId = r.rfq_item_id;
@@ -118,6 +129,17 @@
       }
     });
     Auth.applyRoleUI();
+  }
+
+  async function loadQuoteMedia(quotes) {
+    var map = {};
+    await Promise.all((quotes || []).map(function (q) {
+      if (!q.quote_id) return Promise.resolve();
+      return API.get('getMediaFiles', { ownerType: 'quote', ownerId: q.quote_id })
+        .then(function (data) { map[q.quote_id] = data.rows || []; })
+        .catch(function () { map[q.quote_id] = []; });
+    }));
+    return map;
   }
 
   function openClarificationForm(rfqItemId, clarificationId) {
@@ -185,9 +207,23 @@
       + option('da_final', 'Đã final', status)
       + '</select></label>'
       + textarea('originFullText', 'Cột tổng hợp gốc để đối chiếu/export', r.origin_full_text)
+      + itemAttachmentSection(r, (state.currentMedia && state.currentMedia.itemFiles) || [])
       + technicalSection(r, clarifications)
-      + quotesSection(r, quotes || [], latestDecision)
+      + quotesSection(r, quotes || [], latestDecision, (state.currentMedia && state.currentMedia.quoteFiles) || {})
       + pricingSection(r, pricingDecisions || []);
+  }
+
+  function itemAttachmentSection(item, files) {
+    if (!item.rfq_item_id) return '';
+    var inputId = mediaInputId('rfq_item', item.rfq_item_id);
+    return '<section class="modal-section media-section">'
+      + '<div class="section-head"><h4>Tài liệu dòng vật tư</h4>'
+      + '<div data-write>'
+      + '<input id="' + inputId + '" type="file" accept="application/pdf,.pdf" style="max-width:220px">'
+      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'rfq_item\', \'' + API.esc(item.rfq_item_id) + '\', \'document_pdf\', \'' + inputId + '\', \'' + API.esc(item.rfq_item_id) + '\')">Upload PDF</button>'
+      + '</div></div>'
+      + mediaList(files)
+      + '</section>';
   }
 
   function technicalSection(item, rows) {
@@ -203,7 +239,7 @@
       ? '<div class="muted">' + API.esc(r.old_model || '-') + ' -> ' + API.esc(r.proposed_model || '-') + '</div>'
       : '';
     var attachment = r.attachment_file_id
-      ? '<a href="' + API.esc(r.attachment_public_url || '#') + '" target="_blank" rel="noopener">' + API.esc(r.attachment_file_name || r.attachment_file_id) + '</a>'
+      ? '<span>' + API.esc(r.attachment_file_name || r.attachment_file_id) + '</span>'
       : '';
     return '<article class="timeline-item">'
       + '<div class="timeline-top"><strong>' + API.esc(r.title) + '</strong><span>' + API.esc(formatDate(r.created_at)) + '</span></div>'
@@ -292,7 +328,7 @@
 
   // --- Supplier Quotes ---
 
-  function quotesSection(item, rows, latestDecision) {
+  function quotesSection(item, rows, latestDecision, quoteFiles) {
     if (!item.rfq_item_id) return '';
     var activeRows = rows.filter(function (r) { return r.status !== 'archived'; });
     var archivedRows = rows.filter(function (r) { return r.status === 'archived'; });
@@ -301,29 +337,30 @@
       + '<button type="button" data-write onclick="RfqItemsModule.openQuoteForm(\'' + API.esc(item.rfq_item_id) + '\')">+ Thêm báo giá</button></div>'
       + (activeRows.length >= 2 ? comparisonTable(item.rfq_item_id, activeRows, latestDecision) : '')
       + (activeRows.length
-        ? '<div class="quotes-table-wrap">' + quotesTable(item.rfq_item_id, activeRows, latestDecision) + '</div>'
+        ? '<div class="quotes-table-wrap">' + quotesTable(item.rfq_item_id, activeRows, latestDecision, quoteFiles) + '</div>'
         : '<div class="empty-state small">Chưa có báo giá.</div>')
       + (archivedRows.length
         ? '<details class="archived-quotes"><summary>Đã lưu trữ (' + archivedRows.length + ')</summary>'
-          + '<div class="quotes-table-wrap">' + quotesTable(item.rfq_item_id, archivedRows, null) + '</div>'
+          + '<div class="quotes-table-wrap">' + quotesTable(item.rfq_item_id, archivedRows, null, quoteFiles) + '</div>'
           + '</details>'
         : '')
       + '</section>';
   }
 
-  function quotesTable(rfqItemId, rows, latestDecision) {
+  function quotesTable(rfqItemId, rows, latestDecision, quoteFiles) {
     return '<table class="quotes-mini-table">'
       + '<thead><tr>'
       + '<th>Nhà CC</th><th>Hãng SX</th><th>Giá báo</th><th>T.tệ</th><th>Tỷ giá</th>'
-      + '<th>Thuế</th><th>VND + Thuế</th><th>Giao hàng</th><th>Hiệu lực</th><th>Bảo hành</th><th>Ghi chú</th><th></th>'
+      + '<th>Thuế</th><th>VND + Thuế</th><th>Giao hàng</th><th>Hiệu lực</th><th>Bảo hành</th><th>File PDF</th><th>Ghi chú</th><th></th>'
       + '</tr></thead><tbody>'
-      + rows.map(function (r) { return quoteRow(rfqItemId, r, latestDecision); }).join('')
+      + rows.map(function (r) { return quoteRow(rfqItemId, r, latestDecision, quoteFiles && quoteFiles[r.quote_id] || []); }).join('')
       + '</tbody></table>';
   }
 
-  function quoteRow(rfqItemId, r, latestDecision) {
+  function quoteRow(rfqItemId, r, latestDecision, files) {
     var isArchived = r.status === 'archived';
     var isSelectedBase = !isArchived && latestDecision && latestDecision.base_quote_id === r.quote_id;
+    var inputId = mediaInputId('quote', r.quote_id);
     var actions = isArchived
       ? '<span class="badge">Đã lưu trữ</span>'
       : '<button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.openQuoteForm(\''
@@ -347,9 +384,61 @@
       + '<td>' + API.esc(r.lead_time || '') + '</td>'
       + '<td>' + API.esc(r.valid_until || '') + '</td>'
       + '<td>' + API.esc(r.warranty || '') + '</td>'
+      + '<td>' + quoteFileCell(rfqItemId, r.quote_id, inputId, files) + '</td>'
       + '<td class="muted">' + API.esc(r.note || '') + '</td>'
       + '<td class="nowrap">' + actions + '</td>'
       + '</tr>';
+  }
+
+  function quoteFileCell(rfqItemId, quoteId, inputId, files) {
+    return '<div class="quote-file-cell">'
+      + mediaList(files)
+      + '<div data-write style="margin-top:6px">'
+      + '<input id="' + inputId + '" type="file" accept="application/pdf,.pdf" style="max-width:170px">'
+      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'quote\', \'' + API.esc(quoteId) + '\', \'quote_pdf\', \'' + inputId + '\', \'' + API.esc(rfqItemId) + '\')">Upload</button>'
+      + '</div></div>';
+  }
+
+  function mediaList(files) {
+    if (!files || !files.length) return '<div class="empty-state small">Chưa có file PDF.</div>';
+    return '<ul class="media-list" style="margin:0;padding-left:18px;font-size:12px">'
+      + files.map(function (f) {
+        return '<li><strong>' + API.esc(f.file_name || f.file_id) + '</strong>'
+          + ' <span class="muted">(' + API.esc(formatSize(f.size_bytes)) + ', ' + API.esc(formatDate(f.created_at)) + ')</span></li>';
+      }).join('')
+      + '</ul>';
+  }
+
+  async function uploadMediaFile(ownerType, ownerId, fileKind, inputId, rfqItemId) {
+    var input = document.getElementById(inputId);
+    var file = input && input.files && input.files[0];
+    if (!file) {
+      API.toast('Chọn file PDF trước khi upload', 'warn');
+      return;
+    }
+    var form = new FormData();
+    form.append('ownerType', ownerType);
+    form.append('ownerId', ownerId);
+    form.append('fileKind', fileKind);
+    form.append('file', file);
+    try {
+      await API.upload(form);
+      API.toast('Đã upload file PDF', 'success');
+      await openEdit(rfqItemId);
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  function mediaInputId(ownerType, ownerId) {
+    return 'media_' + ownerType + '_' + String(ownerId || '').replace(/[^A-Za-z0-9_-]/g, '_');
+  }
+
+  function formatSize(value) {
+    var n = Number(value || 0);
+    if (!n) return '0 KB';
+    if (n < 1024 * 1024) return Math.ceil(n / 1024) + ' KB';
+    return (n / 1024 / 1024).toFixed(1) + ' MB';
   }
 
   function openQuoteForm(rfqItemId, quoteId) {
@@ -888,6 +977,7 @@
     openQuoteForm: openQuoteForm,
     archiveQuote: archiveQuote,
     openPricingForm: openPricingForm,
+    uploadMediaFile: uploadMediaFile,
     downloadTemplate: downloadTemplate,
     exportCsv: exportCsv,
     importCsv: importCsv,
