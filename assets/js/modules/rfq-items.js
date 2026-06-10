@@ -131,19 +131,26 @@
     openForm({}, [], [], [], {});
   }
 
+  function safeGet(action, params, fallback) {
+    return API.get(action, params).catch(function (err) {
+      console.warn('[rfq-items] safeGet ' + action + ' failed:', err && err.message);
+      return fallback;
+    });
+  }
+
   async function openEdit(id) {
     var row = (state.rows || []).find(function (r) { return r.rfq_item_id === id; }) || { rfq_item_id: id };
     try {
       var results = await Promise.all([
-        API.get('getTechnicalClarifications', { rfqItemId: id }),
-        API.get('getSupplierQuotes', { rfqItemId: id }),
-        API.get('getPricingDecisions', { rfqItemId: id }).catch(function () { return { rows: [] }; }),
-        API.get('getMediaFiles', { ownerType: 'rfq_item', ownerId: id }).catch(function () { return { rows: [] }; }),
-        row.item_id ? API.get('getMasterItemDetail', { itemId: row.item_id }).catch(function () { return { item: null }; }) : Promise.resolve({ item: null }),
-        API.get('suggestMasterItemsForRfqItem', { rfqItemId: id }).catch(function () { return { rows: [] }; }),
+        safeGet('getTechnicalClarifications', { rfqItemId: id }, { rows: [] }),
+        safeGet('getSupplierQuotes', { rfqItemId: id }, { rows: [] }),
+        safeGet('getPricingDecisions', { rfqItemId: id }, { rows: [] }),
+        safeGet('getMediaFiles', { ownerType: 'rfq_item', ownerId: id }, { rows: [] }),
+        row.item_id ? safeGet('getMasterItemDetail', { itemId: row.item_id }, { item: null }) : Promise.resolve({ item: null }),
+        safeGet('suggestMasterItemsForRfqItem', { rfqItemId: id }, { rows: [], _failed: true }),
       ]);
       var quotes = results[1].rows || [];
-      var quoteMedia = await loadQuoteMedia(quotes);
+      var quoteMedia = await loadQuoteMedia(quotes).catch(function () { return {}; });
       state.currentMedia = {
         itemFiles: results[3].rows || [],
         quoteFiles: quoteMedia,
@@ -151,13 +158,16 @@
       state.currentMaster = {
         item: results[4].item || null,
         suggestions: results[5].rows || [],
+        suggestionsFailed: !!(results[5] && results[5]._failed),
       };
       openForm(row, results[0].rows || [], quotes, results[2].rows || [], {
         itemFiles: results[3].rows || [],
         quoteFiles: quoteMedia,
       });
     } catch (err) {
+      // Critical failure — show error but still attempt to render with bare row data
       API.error(err);
+      openForm(row, [], [], [], { itemFiles: [], quoteFiles: {} });
     }
   }
 
@@ -292,6 +302,7 @@
     if (!item.rfq_item_id) return '';
     var linked = master && master.item;
     var suggestions = (master && master.suggestions) || [];
+    var suggestionsFailed = !!(master && master.suggestionsFailed);
     var suffix = String(item.rfq_item_id || '').replace(/[^A-Za-z0-9_-]/g, '_');
     var searchId = 'master_search_' + suffix;
     var resultsId = 'master_results_' + suffix;
@@ -312,7 +323,10 @@
           + '<label style="margin:0">T&#236;m master item<input id="' + searchId + '" value="' + API.esc([item.ma_vat_tu, item.ten_vat_tu].filter(Boolean).join(' ')) + '"></label>'
           + '<button type="button" onclick="RfqItemsModule.searchMasterItemsForLink(\'' + API.esc(item.rfq_item_id) + '\', \'' + searchId + '\', \'' + resultsId + '\')">T&#236;m</button>'
           + '</div>'
-          + '<div id="' + resultsId + '" style="margin-top:8px">' + masterSuggestionList(item.rfq_item_id, suggestions) + '</div>')
+          + (suggestionsFailed
+            ? '<div style="margin-top:8px;font-size:12px;color:var(--text-muted);padding:6px 8px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px">⚠ Không tải được gợi ý master item.</div>'
+            : '<div id="' + resultsId + '" style="margin-top:8px">' + masterSuggestionList(item.rfq_item_id, suggestions) + '</div>')
+          )
       + '</section>';
   }
 

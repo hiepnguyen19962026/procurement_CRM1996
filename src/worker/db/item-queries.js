@@ -110,9 +110,11 @@ export async function suggestItemsSQL(db, params) {
     conds.push('ma_vat_tu = ?');
     binds.push(maVatTu);
   }
-  if (normalizedNeedle) {
+  // Cap needle length to avoid oversized LIKE patterns
+  const needle = normalizedNeedle ? normalizedNeedle.slice(0, 120) : '';
+  if (needle) {
     conds.push('normalized_search LIKE ?');
-    binds.push(`%${normalizedNeedle}%`);
+    binds.push(`%${needle}%`);
   }
   if (nameLike) {
     conds.push('ten_vat_tu LIKE ?');
@@ -141,30 +143,31 @@ export async function suggestItemsSQL(db, params) {
 
   if (!conds.length) return [];
 
-  const exactCode = maVatTu || '';
-  const searchLike = normalizedNeedle ? `%${normalizedNeedle}%` : '';
+  // Use simple SQL — score in JS to avoid D1 issues with complex CASE WHEN expressions
   const res = await db.prepare(
-    `SELECT *,
-       CASE WHEN ma_vat_tu != '' AND ma_vat_tu = ? THEN 100 ELSE 0 END
-       + CASE WHEN ? != '' AND normalized_search LIKE ? THEN 30 ELSE 0 END
-       + CASE WHEN ? != '' AND ten_vat_tu LIKE ? THEN 15 ELSE 0 END
-       + CASE WHEN ? != '' AND required_model LIKE ? THEN 12 ELSE 0 END
-       + CASE WHEN ? != '' AND manufacturer LIKE ? THEN 8 ELSE 0 END
-       + CASE WHEN ? != '' AND brand LIKE ? THEN 6 ELSE 0 END AS match_score
-     FROM items
-     WHERE status = ? AND (${conds.join(' OR ')})
-     ORDER BY match_score DESC, updated_at DESC, item_id DESC
+    `SELECT * FROM items
+     WHERE status = 'active' AND (${conds.join(' OR ')})
+     ORDER BY updated_at DESC, item_id DESC
      LIMIT ?`
-  ).bind(
-    exactCode,
-    searchLike, searchLike,
-    nameLike || '', `%${nameLike || ''}%`,
-    modelLike || '', `%${modelLike || ''}%`,
-    manufacturerLike || '', `%${manufacturerLike || ''}%`,
-    brandLike || '', `%${brandLike || ''}%`,
-    'active',
-    ...binds,
-    limit
-  ).all();
-  return res.results || [];
+  ).bind(...binds, limit).all();
+
+  const rows = res.results || [];
+  // Score and re-sort in JS
+  const needleLower = needle.toLowerCase();
+  const nameLower = (nameLike || '').toLowerCase();
+  const modelLower = (modelLike || '').toLowerCase();
+  const mfgLower = (manufacturerLike || '').toLowerCase();
+  const brandLower = (brandLike || '').toLowerCase();
+  return rows
+    .map(function (row) {
+      var score = 0;
+      if (maVatTu && row.ma_vat_tu === maVatTu) score += 100;
+      if (needleLower && (row.normalized_search || '').includes(needleLower)) score += 30;
+      if (nameLower && (row.ten_vat_tu || '').toLowerCase().includes(nameLower)) score += 15;
+      if (modelLower && (row.required_model || '').toLowerCase().includes(modelLower)) score += 12;
+      if (mfgLower && (row.manufacturer || '').toLowerCase().includes(mfgLower)) score += 8;
+      if (brandLower && (row.brand || '').toLowerCase().includes(brandLower)) score += 6;
+      return Object.assign({}, row, { match_score: score });
+    })
+    .sort(function (a, b) { return b.match_score - a.match_score; });
 }
