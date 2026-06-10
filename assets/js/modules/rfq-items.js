@@ -31,7 +31,32 @@
   }
 
   function render() {
-    document.getElementById('itemRows').innerHTML = (state.rows || []).map(function (r) {
+    var rows = state.rows || [];
+    var rfqFilter = (document.getElementById('itemRfqId').value || '').trim();
+    if (!rows.length && rfqFilter) {
+      var rfqMeta = (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === rfqFilter; }) || null;
+      var rfqInfo = rfqMeta
+        ? '<div style="margin-bottom:14px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;text-align:left">'
+          + '<div style="font-weight:600;margin-bottom:4px">' + API.esc(rfqMeta.rfq_id) + '</div>'
+          + (rfqMeta.ten_goi ? '<div style="color:var(--text-muted)">Tên gói: <span style="color:var(--text)">' + API.esc(rfqMeta.ten_goi) + '</span></div>' : '')
+          + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
+          + '</div>'
+        : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="12" style="padding:0;border:0">'
+        + '<div class="empty-state" style="margin:8px;border-radius:8px">'
+        + '<div style="width:100%">'
+        + rfqInfo
+        + '<p style="margin:0 0 14px;font-size:14px;font-weight:500">RFQ chưa có dòng vật tư.</p>'
+        + '<div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">'
+        + '<button onclick="RfqItemsModule.downloadTemplate()">Tải template CSV</button>'
+        + '<button data-write onclick="RfqItemsModule.importCsv()">Upload CSV</button>'
+        + '</div></div></div>'
+        + '</td></tr>';
+      document.getElementById('itemMore').classList.add('hidden');
+      Auth.applyRoleUI();
+      return;
+    }
+    document.getElementById('itemRows').innerHTML = rows.map(function (r) {
       return '<tr>'
         + renderCell(r.stt_goc, true)
         + renderCell(r.ma_mua_sam, true)
@@ -380,13 +405,14 @@
 
   // --- CSV Template / Import ---
 
+  // Business-friendly template — rfqItemId/rfqId/originFullText hidden (still supported on import)
   var TEMPLATE_HEADERS = [
-    'rfqItemId', 'rfqId', 'STT', 'Mã mua sắm', 'Mã vật tư',
+    'STT', 'Mã mua sắm', 'Mã vật tư',
     'Tên vật tư / Danh mục hàng hóa', 'Ký mã hiệu / Model', 'Nhãn hiệu',
     'Năm sản xuất', 'Xuất xứ', 'Hãng sản xuất', 'Quy cách / thông số kỹ thuật',
     'Vật liệu', 'Phụ tùng chuyên dụng', 'Yêu cầu kỹ thuật bổ sung',
     'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền',
-    'Thời gian giao hàng', 'Ghi chú', 'Cột tổng hợp gốc để đối chiếu/export',
+    'Thời gian giao hàng', 'Ghi chú',
   ];
 
   var HEADER_MAP = {
@@ -413,9 +439,67 @@
     'Thời gian giao hàng': 'deliveryTime',
     'Ghi chú': 'note',
     'Cột tổng hợp gốc để đối chiếu/export': 'originFullText',
+    'rfqItemId (Không sửa)': 'rfqItemId',
   };
 
   var csvState = { headers: null, rows: null };
+
+  // Export: all business columns + rfqItemId at far right for round-trip bulk update
+  var EXPORT_HEADERS = TEMPLATE_HEADERS.concat(['rfqItemId (Không sửa)']);
+
+  function rowToExportValues(r) {
+    return [
+      r.stt_goc, r.ma_mua_sam, r.ma_vat_tu,
+      r.ten_vat_tu,
+      val(r, 'required_model', 'quy_cach_model_yeu_cau'),
+      val(r, 'brand', 'nhan_hieu'),
+      val(r, 'manufacture_year', 'nam_san_xuat'),
+      val(r, 'origin_country', 'xuat_xu'),
+      val(r, 'manufacturer', 'hang_goc_nsx_goc'),
+      val(r, 'technical_params', 'thong_so_ky_thuat'),
+      r.vat_lieu, r.phu_tung_chuyen_dung, r.yeu_cau_ky_thuat_bo_sung,
+      val(r, 'unit', 'don_vi'),
+      val(r, 'quantity', 'so_luong'),
+      r.thue_suat,
+      r.don_gia_truoc_thue || r.don_gia_sau_thue,
+      r.thanh_tien_sau_thue,
+      r.delivery_time,
+      r.note,
+      r.rfq_item_id,
+    ];
+  }
+
+  async function exportCsv() {
+    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
+    if (!rfqId) { API.toast('Lọc theo RFQ trước khi xuất CSV', 'warn'); return; }
+    try {
+      var allRows = [], cursor = '', page = 0, maxPages = 20;
+      while (page < maxPages) {
+        var data = await API.get('getRfqItems', { rfqId: rfqId, cursor: cursor, limit: 50 });
+        allRows = allRows.concat(data.rows || []);
+        if (!data.hasMore) break;
+        cursor = data.nextCursor || '';
+        page++;
+      }
+      if (!allRows.length) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
+      var csv = '﻿'
+        + EXPORT_HEADERS.map(csvQuote).join(',') + '\r\n'
+        + allRows.map(function (r) { return rowToExportValues(r).map(csvQuote).join(','); }).join('\r\n')
+        + '\r\n';
+      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'rfq-items-' + rfqId + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
+      API.toast('Đã xuất ' + allRows.length + ' dòng', 'success');
+    } catch (err) {
+      API.error(err);
+    }
+  }
 
   function csvQuote(value) {
     var s = String(value == null ? '' : value);
@@ -426,10 +510,13 @@
   }
 
   function downloadTemplate() {
-    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
     var exampleRow = TEMPLATE_HEADERS.map(function (h) {
-      if (h === 'rfqId') return csvQuote(rfqId);
-      if (h === 'Tên vật tư / Danh mục hàng hóa') return csvQuote('VÍ DỤ: Vòng bi SKF 6205-2RS');
+      if (h === 'STT') return '1';
+      if (h === 'Tên vật tư / Danh mục hàng hóa') return csvQuote('Vòng bi SKF 6205-2RS');
+      if (h === 'Ký mã hiệu / Model') return 'SKF 6205-2RS';
+      if (h === 'Nhãn hiệu') return 'SKF';
+      if (h === 'Hãng sản xuất') return 'SKF AB';
+      if (h === 'Xuất xứ') return csvQuote('Thụy Điển');
       if (h === 'Đơn vị tính') return 'cái';
       if (h === 'Khối lượng') return '10';
       return '';
@@ -549,6 +636,7 @@
     for (var i = 0; i < rows.length; i++) {
       var payload = csvRowToPayload(headers, rows[i]);
       var rowNum = i + 2; // 1-based + header row
+      if (!payload.rfqId) payload.rfqId = (document.getElementById('itemRfqId').value || '').trim();
       if (!payload.rfqId) { errs.push('Dòng ' + rowNum + ': Thiếu rfqId'); continue; }
       if (!payload.tenVatTu) { errs.push('Dòng ' + rowNum + ': Thiếu Tên vật tư'); continue; }
       var action = payload.rfqItemId ? 'updateRfqItem' : 'createRfqItem';
@@ -561,8 +649,20 @@
       if (area) area.innerHTML = '<p style="color:var(--text-muted)">Đang import... ' + (ok + errs.length) + '/' + rows.length + '</p>';
     }
     await load(true);
-    var color = errs.length && ok === 0 ? 'var(--red)' : (errs.length ? 'var(--primary)' : 'var(--green)');
-    var summary = '<p style="font-weight:600;color:' + color + ';margin-bottom:0.4rem">Hoàn tất: ' + ok + ' thành công' + (errs.length ? ', ' + errs.length + ' lỗi.' : '.') + '</p>';
+    if (ok > 0 && typeof RfqsModule !== 'undefined') await RfqsModule.load(true);
+    var importRfqId = (document.getElementById('itemRfqId').value || '').trim();
+    var rfqRow = importRfqId ? (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === importRfqId; }) : null;
+    var totalCount = rfqRow ? Number(rfqRow.item_count || 0) : state.rows.length;
+    var borderColor = errs.length && ok === 0 ? 'var(--red)' : (errs.length ? 'var(--primary)' : 'var(--green)');
+    var rfqLine = rfqRow
+      ? '<p style="margin:0 0 6px;font-size:12px;color:var(--text-muted)">RFQ: <strong>' + API.esc(rfqRow.rfq_id) + '</strong>' + (rfqRow.ten_goi ? ' — ' + API.esc(rfqRow.ten_goi) : '') + '</p>'
+      : (importRfqId ? '<p style="margin:0 0 6px;font-size:12px;color:var(--text-muted)">RFQ: <strong>' + API.esc(importRfqId) + '</strong></p>' : '');
+    var summary = '<div style="border-left:3px solid ' + borderColor + ';padding-left:10px;margin-bottom:0.5rem">'
+      + rfqLine
+      + '<p style="margin:2px 0;font-size:13px"><strong>Đã thêm / cập nhật:</strong> ' + ok + ' dòng vật tư</p>'
+      + '<p style="margin:2px 0;font-size:13px"><strong>Lỗi:</strong> ' + errs.length + '</p>'
+      + '<p style="margin:2px 0;font-size:13px"><strong>Tổng số dòng hiện tại:</strong> ' + totalCount + '</p>'
+      + '</div>';
     var errList = errs.length
       ? '<ul style="font-size:12px;color:var(--red);margin:0;padding-left:1.2em">'
         + errs.slice(0, 20).map(function (e) { return '<li>' + API.esc(e) + '</li>'; }).join('')
@@ -582,6 +682,7 @@
     openQuoteForm: openQuoteForm,
     archiveQuote: archiveQuote,
     downloadTemplate: downloadTemplate,
+    exportCsv: exportCsv,
     importCsv: importCsv,
     _onCsvFileChange: _onCsvFileChange,
   };

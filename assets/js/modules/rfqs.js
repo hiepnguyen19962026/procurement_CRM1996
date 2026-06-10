@@ -13,7 +13,7 @@
   }
   function render() {
     document.getElementById('rfqRows').innerHTML = (state.rows || []).map(function (r) {
-      return '<tr><td>' + API.esc(r.rfq_id) + '</td><td>' + API.esc(r.ma_goi_tbmt) + '</td><td>' + API.esc(r.ten_goi) + '</td><td>' + API.esc(r.client_name || r.nha_may_cdt) + '</td><td>' + valueOrDash(r.ngay_nhan_hoac_dang_tai) + '</td><td>' + valueOrDash(r.ngay_het_han) + '</td><td>' + API.esc(itemCountLabel(r.item_count)) + '</td><td>' + API.money(r.du_toan) + '</td><td><span class="badge">' + API.esc(statusLabel(r.trang_thai_goi)) + '</span></td><td>' + noteCell(r.note) + '</td><td><button data-write onclick="RfqsModule.openEdit(\'' + API.esc(r.rfq_id) + '\')">Sửa</button></td></tr>';
+      return '<tr><td>' + API.esc(r.rfq_id) + '</td><td>' + API.esc(r.ma_goi_tbmt) + '</td><td>' + API.esc(r.ten_goi) + '</td><td>' + API.esc(r.client_name || r.nha_may_cdt) + '</td><td>' + valueOrDash(r.ngay_nhan_hoac_dang_tai) + '</td><td>' + valueOrDash(r.ngay_het_han) + '</td><td><button class="badge badge-items" onclick="RfqsModule.drillDown(\'' + API.esc(r.rfq_id) + '\')">' + API.esc(itemCountLabel(r.item_count)) + '</button></td><td>' + API.money(r.du_toan) + '</td><td><span class="badge">' + API.esc(statusLabel(r.trang_thai_goi)) + '</span></td><td>' + noteCell(r.note) + '</td><td><button data-write onclick="RfqsModule.openEdit(\'' + API.esc(r.rfq_id) + '\')">Sửa</button></td></tr>';
     }).join('');
     document.getElementById('rfqMore').classList.toggle('hidden', !state.hasMore);
     Auth.applyRoleUI();
@@ -43,7 +43,7 @@
   }
   function itemCountLabel(value) {
     var count = Number(value || 0);
-    return count + ' dòng';
+    return '📋 ' + count + ' dòng';
   }
   function statusLabel(value) {
     return {
@@ -55,5 +55,10 @@
       tham_khao: 'Tham khảo',
     }[value] || value || '';
   }
-  window.RfqsModule = { load: load, openCreate: openCreate, openEdit: openEdit };
+  function drillDown(rfqId) {
+    document.getElementById('itemRfqId').value = rfqId;
+    var navBtn = document.querySelector('.nav button[data-screen="items"]');
+    if (navBtn) navBtn.click();
+  }
+  window.RfqsModule = { load: load, openCreate: openCreate, openEdit: openEdit, drillDown: drillDown };
 })();
