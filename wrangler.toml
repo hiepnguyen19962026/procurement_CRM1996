@@ -6,11 +6,11 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "procurement-crm-db"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "049be798-4464-48d2-899b-c23840a458a8"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "REPLACE_WITH_KV_NAMESPACE_ID"
+id = "4e8198ec805841ee922034753906de41"
 
 [[r2_buckets]]
 binding = "MEDIA"
