@@ -3,6 +3,7 @@ import {
   getSupplierQuoteSQL,
   insertSupplierQuoteSQL,
   listSupplierQuotesSQL,
+  searchSupplierQuotesSQL,
   updateSupplierQuoteSQL,
 } from '../db/supplier-quote-queries.js';
 import { getRfqItemSQL } from '../db/rfq-item-queries.js';
@@ -14,9 +15,10 @@ import { json, makeId, nowIso, readJson } from '../lib/utils.js';
 const VALID_CURRENCY = new Set(['VND', 'USD', 'EUR', 'JPY', 'CNY', 'SGD', 'KRW']);
 
 export async function handleSupplierQuotes(action, request, env, ctx, actor) {
-  if (action === 'getSupplierQuotes') return listQuotes(request, env, actor);
-  if (action === 'createSupplierQuote') return saveQuote(request, env, ctx, actor, false);
-  if (action === 'updateSupplierQuote') return saveQuote(request, env, ctx, actor, true);
+  if (action === 'getSupplierQuotes')    return listQuotes(request, env, actor);
+  if (action === 'searchSupplierQuotes') return searchQuotes(request, env, actor);
+  if (action === 'createSupplierQuote')  return saveQuote(request, env, ctx, actor, false);
+  if (action === 'updateSupplierQuote')  return saveQuote(request, env, ctx, actor, true);
   if (action === 'archiveSupplierQuote') return archiveQuote(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown supplier quote action' }, 400);
 }
@@ -29,6 +31,70 @@ async function listQuotes(request, env, actor) {
   if (!rfqItemId) return json({ ok: false, error: 'Thieu ma dong vat tu' }, 400);
   const rows = await listSupplierQuotesSQL(env.DB, rfqItemId);
   return json({ ok: true, rows });
+}
+
+async function searchQuotes(request, env, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+
+  const rawLimit = cleanNumber(body.limit);
+  const limit = rawLimit > 0 ? Math.min(Math.floor(rawLimit), 200) : 50;
+
+  const status = cleanString(body.status || '', 20);
+  if (status && status !== 'active' && status !== 'archived') {
+    return json({ ok: false, error: 'status phai la active, archived, hoac de trong' }, 400);
+  }
+
+  const validUntilFrom = cleanString(body.validUntilFrom || '', 20);
+  const validUntilTo   = cleanString(body.validUntilTo   || '', 20);
+  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
+  if (validUntilFrom && !dateRe.test(validUntilFrom)) {
+    return json({ ok: false, error: 'validUntilFrom phai la YYYY-MM-DD' }, 400);
+  }
+  if (validUntilTo && !dateRe.test(validUntilTo)) {
+    return json({ ok: false, error: 'validUntilTo phai la YYYY-MM-DD' }, 400);
+  }
+
+  const priceMinRaw = body.priceMin !== undefined && body.priceMin !== '' ? cleanNumber(body.priceMin) : null;
+  const priceMaxRaw = body.priceMax !== undefined && body.priceMax !== '' ? cleanNumber(body.priceMax) : null;
+
+  let cursorCreatedAt = null;
+  let cursorQuoteId   = null;
+  const cursorRaw = cleanString(body.cursor || '', 120);
+  if (cursorRaw) {
+    const parts = cursorRaw.split('|');
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      cursorCreatedAt = parts[0];
+      cursorQuoteId   = parts[1];
+    }
+  }
+
+  const params = {
+    q:              cleanString(body.q            || '', 200),
+    supplierName:   cleanString(body.supplierName || '', 180),
+    manufacturer:   cleanString(body.manufacturer || '', 180),
+    status,
+    priceMin:       priceMinRaw,
+    priceMax:       priceMaxRaw,
+    validUntilFrom,
+    validUntilTo,
+    rfqId:          cleanString(body.rfqId     || '', 80),
+    rfqItemId:      cleanString(body.rfqItemId || '', 80),
+    cursorCreatedAt,
+    cursorQuoteId,
+    limit: limit + 1,
+  };
+
+  const all = await searchSupplierQuotesSQL(env.DB, params);
+  const hasMore = all.length > limit;
+  const rows = hasMore ? all.slice(0, limit) : all;
+  let nextCursor = null;
+  if (hasMore && rows.length > 0) {
+    const last = rows[rows.length - 1];
+    nextCursor = last.created_at + '|' + last.quote_id;
+  }
+  return json({ ok: true, rows, hasMore, nextCursor });
 }
 
 async function saveQuote(request, env, ctx, actor, isUpdate) {

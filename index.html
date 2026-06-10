@@ -34,6 +34,7 @@
         <button data-screen="items" data-title="Dòng vật tư"><span>◇</span>Dòng vật tư</button>
         <button data-screen="clients" data-title="Khách hàng / CĐT"><span>◎</span>Khách hàng / CĐT</button>
         <button data-screen="suppliers" data-title="Nhà cung cấp"><span>◌</span>Nhà cung cấp</button>
+        <button data-screen="quotes" data-title="Báo giá NCC"><span>◈</span>Báo giá NCC</button>
         <div class="nav-section">Hệ thống</div>
         <button data-screen="audit" data-title="Nhật ký hệ thống" data-role-only="admin,manager"><span>☷</span>Nhật ký hệ thống</button>
         <button data-screen="accounts" data-title="Tài khoản" data-role-only="admin"><span>○</span>Tài khoản</button>
@@ -102,6 +103,51 @@
           <div class="panel"><div class="toolbar"><input id="supplierSearch" placeholder="Tìm nhà cung cấp, liên hệ"><button onclick="SuppliersModule.load(true)">Tìm kiếm</button></div><div class="table-wrap"><table><thead><tr><th>ID</th><th>Tên</th><th>Loại</th><th>Quốc gia</th><th>Liên hệ</th><th>Email</th><th></th></tr></thead><tbody id="supplierRows"></tbody></table></div><p><button id="supplierMore" class="hidden" onclick="SuppliersModule.load(false)">Tải thêm</button></p></div>
         </section>
 
+        <section class="screen" id="screen-quotes">
+          <div class="page-head">
+            <div><h2>Báo giá NCC</h2><p>Tra cứu lịch sử báo giá nhà cung cấp theo vật tư, hãng sản xuất, và gói thầu.</p></div>
+          </div>
+          <div class="panel">
+            <div class="toolbar" style="flex-wrap:wrap;gap:6px">
+              <input id="sqSearch" placeholder="Tìm NCC, hãng, vật tư, model, mã gói..." style="flex:2;min-width:180px">
+              <input id="sqSupplier" placeholder="Nhà cung cấp">
+              <input id="sqManufacturer" placeholder="Hãng sản xuất">
+              <select id="sqStatus">
+                <option value="">Tất cả trạng thái</option>
+                <option value="active">Active</option>
+                <option value="archived">Archived</option>
+              </select>
+              <input id="sqPriceMin" placeholder="Giá min (VND)" style="width:110px" inputmode="numeric">
+              <input id="sqPriceMax" placeholder="Giá max (VND)" style="width:110px" inputmode="numeric">
+              <input id="sqValidFrom" placeholder="Hiệu lực từ" style="width:110px" onfocus="this.type='date'" onblur="if(!this.value)this.type='text'" type="text">
+              <input id="sqValidTo"   placeholder="Hiệu lực đến" style="width:110px" onfocus="this.type='date'" onblur="if(!this.value)this.type='text'" type="text">
+              <button class="primary" onclick="SupplierQuotesModule.search()">Tìm kiếm</button>
+              <button onclick="SupplierQuotesModule.reset()">Xóa lọc</button>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Gói / RFQ</th>
+                    <th>Vật tư</th>
+                    <th>Model</th>
+                    <th>NCC</th>
+                    <th>Hãng</th>
+                    <th style="text-align:right">Giá sau thuế</th>
+                    <th>Giao hàng</th>
+                    <th>Hiệu lực</th>
+                    <th>Bảo hành</th>
+                    <th>Trạng thái</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody id="sqRows"></tbody>
+              </table>
+            </div>
+            <p><button id="sqMore" class="hidden" onclick="SupplierQuotesModule.loadMore()">Tải thêm</button></p>
+          </div>
+        </section>
+
         <section class="screen" id="screen-audit">
           <div class="page-head"><div><h2>Nhật ký hệ thống</h2><p>Lịch sử thao tác và thay đổi dữ liệu.</p></div></div>
           <div class="panel"><div class="toolbar"><input id="auditSearch" placeholder="Tìm hành động, người thao tác, nội dung"><button onclick="AuditModule.load(true)">Tìm kiếm</button></div><div class="table-wrap"><table><thead><tr><th>Thời gian</th><th>Người thao tác</th><th>Hành động</th><th>Nội dung</th></tr></thead><tbody id="auditRows"></tbody></table></div><p><button id="auditMore" class="hidden" onclick="AuditModule.load(false)">Tải thêm</button></p></div>
@@ -132,6 +178,7 @@
   <script src="/assets/js/modules/suppliers.js"></script>
   <script src="/assets/js/modules/rfqs.js"></script>
   <script src="/assets/js/modules/rfq-items.js"></script>
+  <script src="/assets/js/modules/supplier-quotes.js"></script>
   <script src="/assets/js/modules/audit.js"></script>
   <script src="/assets/js/modules/accounts.js"></script>
   <script>
@@ -154,6 +201,7 @@
       if (screen === 'items') RfqItemsModule.load(true);
       if (screen === 'clients') ClientsModule.load(true);
       if (screen === 'suppliers') SuppliersModule.load(true);
+      if (screen === 'quotes') SupplierQuotesModule.load(true);
       if (screen === 'audit') AuditModule.load(true);
       if (screen === 'accounts') AccountsModule.load(true);
     });
