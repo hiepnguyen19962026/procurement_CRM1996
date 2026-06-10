@@ -144,11 +144,11 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.48); display: grid; place-items: center; padding: 18px; z-index: 20; }
 .modal { width: min(92vw, 1800px); max-height: 92vh; background: white; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-md); display: flex; flex-direction: column; overflow: hidden; }
 /* form must be a flex column to let modal-body scroll and modal-actions stick to bottom */
-#modalForm { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow: hidden; }
+#modalForm { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; overflow: hidden; }
 .modal-head, .modal-actions { display: flex; justify-content: space-between; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .modal-head { background: #fffaf5; }
 .modal-actions { border-top: 1px solid var(--border); border-bottom: 0; justify-content: flex-end; gap: 8px; background: #fafafa; }
-.modal-body { padding: 10px 16px 14px; flex: 1 1 0; min-height: 0; overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0 8px; align-content: start; }
+.modal-body { padding: 10px 16px 14px; flex: 0 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0 8px; align-content: start; }
 .modal-body label { margin-bottom: 6px; font-size: 13px; }
 /* fallback for labels without explicit span class */
 .modal-body label:not([class]) { grid-column: span 3; }
