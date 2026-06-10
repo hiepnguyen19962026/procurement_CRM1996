@@ -273,9 +273,7 @@
       + '<input value="' + API.esc(statusLabel(status)) + '" readonly tabindex="-1">'
       + '<input type="hidden" name="trangThaiDong" value="' + API.esc(status) + '">'
       + '</label>'
-      + '<label class="span-3 readonly-field">Xác nhận kỹ thuật'
-      + '<input value="' + API.esc(technicalStatusLabel(techStatus)) + '" readonly tabindex="-1">'
-      + '</label>'
+      + latestClarificationSummary(r, clarifications)
       // Full-width specification fields
       + textarea('technicalParams', 'Quy cách / thông số kỹ thuật', val(r, 'technical_params', 'thong_so_ky_thuat'), '', 'span-12 compact-ta')
       + textarea('yeuCauKyThuatBoSung', 'Yêu cầu kỹ thuật bổ sung', r.yeu_cau_ky_thuat_bo_sung, '', 'span-12 compact-ta')
@@ -432,10 +430,10 @@
     var propSpec = (r.proposed_manufacturer || r.proposed_origin)
       ? '<div style="font-size:12px;color:var(--text-muted)">' + API.esc([r.proposed_manufacturer, r.proposed_origin].filter(Boolean).join(' · ')) + '</div>'
       : '';
-    return '<article class="timeline-item" style="display:grid;grid-template-columns:140px 1fr auto;gap:8px;align-items:start;padding:8px 10px;margin-bottom:6px">'
+    return '<article class="timeline-item" style="display:grid;grid-template-columns:130px 1fr auto;gap:8px;align-items:start;padding:7px 9px;margin-bottom:4px">'
       + '<div style="display:flex;flex-direction:column;gap:3px">'
-      + '<span class="badge" style="font-size:11px;white-space:nowrap">' + API.esc(typeLabel(r.clarification_type)) + '</span>'
-      + '<span class="badge" style="font-size:11px;white-space:nowrap">' + API.esc(technicalStatusLabel(r.status_after)) + '</span>'
+      + '<span class="' + typeBadgeClass(r.clarification_type) + '" style="font-size:11px;padding:2px 7px;white-space:nowrap">' + API.esc(typeLabel(r.clarification_type)) + '</span>'
+      + '<span class="' + statusBadgeClass(r.status_after) + '" style="font-size:11px;padding:2px 7px;white-space:nowrap">' + API.esc(technicalStatusLabel(r.status_after)) + '</span>'
       + '<span style="font-size:11px;color:var(--text-muted);margin-top:2px">' + API.esc(formatDate(r.created_at)) + '</span>'
       + '</div>'
       + '<div style="min-width:0">'
@@ -475,9 +473,57 @@
       + input('proposedModel', 'Model đề xuất / final', r.proposed_model || item.quy_cach_final, '', 'span-3')
       + input('proposedManufacturer', 'Hãng SX đề xuất', r.proposed_manufacturer || item.hang_final, '', 'span-3')
       + input('proposedOrigin', 'Xuất xứ đề xuất', r.proposed_origin || item.xuat_xu_final, '', 'span-3')
-      + input('attachmentFileId', 'File đính kèm (file_id)', r.attachment_file_id, '', 'span-4')
       + textarea('rawNote', 'Ghi chú gốc', r.raw_note, '', 'span-12 compact-ta')
       + '<label class="check"><input type="checkbox" name="updateFinal"> Cập nhật quy cách final cho vật tư này</label>';
+    // Note: attachment upload for technical_clarification owner_type not yet implemented in backend.
+  }
+
+  function latestClarificationSummary(item, clarifications) {
+    var rfqItemId = item.rfq_item_id || '';
+    var escId = API.esc(rfqItemId);
+    if (!clarifications || !clarifications.length) {
+      return '<div class="span-3" data-latest-clarification style="font-size:12px">'
+        + '<div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Xác nhận kỹ thuật</div>'
+        + '<span class="clar-summary-empty">Chưa có trao đổi kỹ thuật.</span>'
+        + (rfqItemId ? '<div style="margin-top:6px"><button type="button" style="font-size:12px;min-height:28px;padding:3px 10px" onclick="RfqItemsModule.openClarificationForm(\'' + escId + '\')">+ Thêm trao đổi</button></div>' : '')
+        + '</div>';
+    }
+    var c = clarifications[0];
+    var preview = (c.content || '').slice(0, 80) + ((c.content || '').length > 80 ? '…' : '');
+    return '<div class="span-3" data-latest-clarification style="font-size:12px">'
+      + '<div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Xác nhận kỹ thuật</div>'
+      + '<div class="clar-summary">'
+      + '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">'
+      + '<span class="' + typeBadgeClass(c.clarification_type) + '" style="font-size:11px;padding:2px 7px">' + API.esc(typeLabel(c.clarification_type)) + '</span>'
+      + '<span class="' + statusBadgeClass(c.status_after) + '" style="font-size:11px;padding:2px 7px">' + API.esc(technicalStatusLabel(c.status_after)) + '</span>'
+      + '</div>'
+      + '<div style="font-weight:600;margin-bottom:2px">' + API.esc(c.title || '') + '</div>'
+      + (preview ? '<div style="color:var(--text-muted);margin-bottom:2px">' + API.esc(preview) + '</div>' : '')
+      + '<div style="color:var(--text-muted)">' + API.esc(formatDate(c.created_at)) + '</div>'
+      + (rfqItemId ? '<div style="margin-top:5px"><button type="button" data-open-clarification-timeline style="font-size:12px;min-height:26px;padding:2px 10px" onclick="RfqItemsModule.openClarificationTimeline(\'' + escId + '\')">Xem trao đổi (' + API.esc(String(clarifications.length)) + ')</button></div>' : '')
+      + '</div>'
+      + '</div>';
+  }
+
+  function typeBadgeClass(type) {
+    return {
+      ask_supplier: 'badge-orange',
+      supplier_reply: 'badge-green',
+      ask_client: 'badge-blue',
+      client_reply: 'badge-blue',
+      replacement_proposal: 'badge-amber',
+      final_confirm: 'badge-green',
+    }[type] || 'badge-grey';
+  }
+
+  function statusBadgeClass(status) {
+    return {
+      waiting_supplier: 'badge-orange',
+      waiting_client: 'badge-blue',
+      need_more_info: 'badge-amber',
+      final_confirmed: 'badge-green',
+      rejected: 'badge-red',
+    }[status] || 'badge-grey';
   }
 
   function statusLabel(value) {

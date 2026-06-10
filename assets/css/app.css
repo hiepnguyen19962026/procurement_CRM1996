@@ -99,6 +99,15 @@ tbody tr:last-child td { border-bottom: 0; }
 td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .badge { display: inline-block; background: var(--primary-bg); color: var(--primary-dk); border: 1px solid var(--primary-border); border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; }
 .badge-items { background: var(--green-bg); color: var(--green); border-color: #86efac; min-height: 0; padding: 3px 8px; box-shadow: none; font-size: 12px; font-weight: 500; border-radius: 999px; }
+.badge-orange { background: #fff7ed; color: #c2410c; border: 1px solid #fdba74; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
+.badge-blue   { background: #eff6ff; color: #1d4ed8; border: 1px solid #93c5fd; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
+.badge-green  { background: #f0fdf4; color: #15803d; border: 1px solid #86efac; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
+.badge-amber  { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
+.badge-red    { background: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
+.badge-grey   { background: #f9fafb; color: #6b7280; border: 1px solid #d1d5db; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
+/* latest clarification summary panel inside item form */
+.clar-summary { border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; background: #f8fafc; font-size: 12px; }
+.clar-summary-empty { color: var(--text-muted); font-size: 12px; }
 .badge-items:hover { background: #d1fae5; color: #15803d; border-color: #4ade80; }
 .rfq-note { display: block; max-width: 280px; white-space: normal; overflow-wrap: anywhere; }
 .muted-cell { color: var(--text-muted); }
@@ -134,6 +143,8 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 
 .modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.48); display: grid; place-items: center; padding: 18px; z-index: 20; }
 .modal { width: min(92vw, 1800px); max-height: 92vh; background: white; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-md); display: flex; flex-direction: column; overflow: hidden; }
+/* form must be a flex column to let modal-body scroll and modal-actions stick to bottom */
+#modalForm { display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow: hidden; }
 .modal-head, .modal-actions { display: flex; justify-content: space-between; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .modal-head { background: #fffaf5; }
 .modal-actions { border-top: 1px solid var(--border); border-bottom: 0; justify-content: flex-end; gap: 8px; background: #fafafa; }
