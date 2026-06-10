@@ -87,7 +87,7 @@
   }
 
   function openCreate() {
-    openForm({}, [], []);
+    openForm({}, [], [], []);
   }
 
   async function openEdit(id) {
@@ -96,15 +96,16 @@
       var results = await Promise.all([
         API.get('getTechnicalClarifications', { rfqItemId: id }),
         API.get('getSupplierQuotes', { rfqItemId: id }),
+        API.get('getPricingDecisions', { rfqItemId: id }).catch(function () { return { rows: [] }; }),
       ]);
-      openForm(row, results[0].rows || [], results[1].rows || []);
+      openForm(row, results[0].rows || [], results[1].rows || [], results[2].rows || []);
     } catch (err) {
       API.error(err);
     }
   }
 
-  function openForm(r, clarifications, quotes) {
-    Utils.openModal(r.rfq_item_id ? 'Sửa dòng vật tư' : 'Thêm dòng vật tư', fields(r, clarifications || [], quotes || []), async function (data) {
+  function openForm(r, clarifications, quotes, pricingDecisions) {
+    Utils.openModal(r.rfq_item_id ? 'Sửa dòng vật tư' : 'Thêm dòng vật tư', fields(r, clarifications || [], quotes || [], pricingDecisions || []), async function (data) {
       try {
         if (r.rfq_item_id) data.rfqItemId = r.rfq_item_id;
         await API.call(r.rfq_item_id ? 'updateRfqItem' : 'createRfqItem', data);
@@ -150,8 +151,9 @@
     return '<label>' + API.esc(label) + '<textarea name="' + API.esc(name) + '" ' + (attrs || '') + '>' + API.esc(value) + '</textarea></label>';
   }
 
-  function fields(r, clarifications, quotes) {
+  function fields(r, clarifications, quotes, pricingDecisions) {
     var status = r.trang_thai_dong || 'chua_xu_ly';
+    var latestDecision = (pricingDecisions || [])[0] || null;
     return ''
       + input('rfqId', 'RFQ ID', r.rfq_id, 'required')
       + input('sttGoc', 'STT', r.stt_goc)
@@ -184,7 +186,8 @@
       + '</select></label>'
       + textarea('originFullText', 'Cột tổng hợp gốc để đối chiếu/export', r.origin_full_text)
       + technicalSection(r, clarifications)
-      + quotesSection(r, quotes || []);
+      + quotesSection(r, quotes || [], latestDecision)
+      + pricingSection(r, pricingDecisions || []);
   }
 
   function technicalSection(item, rows) {
@@ -289,44 +292,52 @@
 
   // --- Supplier Quotes ---
 
-  function quotesSection(item, rows) {
+  function quotesSection(item, rows, latestDecision) {
     if (!item.rfq_item_id) return '';
     var activeRows = rows.filter(function (r) { return r.status !== 'archived'; });
     var archivedRows = rows.filter(function (r) { return r.status === 'archived'; });
     return '<section class="modal-section quotes-section">'
       + '<div class="section-head"><h4>Báo giá nhà cung cấp</h4>'
       + '<button type="button" data-write onclick="RfqItemsModule.openQuoteForm(\'' + API.esc(item.rfq_item_id) + '\')">+ Thêm báo giá</button></div>'
+      + (activeRows.length >= 2 ? comparisonTable(item.rfq_item_id, activeRows, latestDecision) : '')
       + (activeRows.length
-        ? '<div class="quotes-table-wrap">' + quotesTable(item.rfq_item_id, activeRows) + '</div>'
+        ? '<div class="quotes-table-wrap">' + quotesTable(item.rfq_item_id, activeRows, latestDecision) + '</div>'
         : '<div class="empty-state small">Chưa có báo giá.</div>')
       + (archivedRows.length
         ? '<details class="archived-quotes"><summary>Đã lưu trữ (' + archivedRows.length + ')</summary>'
-          + '<div class="quotes-table-wrap">' + quotesTable(item.rfq_item_id, archivedRows) + '</div>'
+          + '<div class="quotes-table-wrap">' + quotesTable(item.rfq_item_id, archivedRows, null) + '</div>'
           + '</details>'
         : '')
       + '</section>';
   }
 
-  function quotesTable(rfqItemId, rows) {
+  function quotesTable(rfqItemId, rows, latestDecision) {
     return '<table class="quotes-mini-table">'
       + '<thead><tr>'
       + '<th>Nhà CC</th><th>Hãng SX</th><th>Giá báo</th><th>T.tệ</th><th>Tỷ giá</th>'
       + '<th>Thuế</th><th>VND + Thuế</th><th>Giao hàng</th><th>Hiệu lực</th><th>Bảo hành</th><th>Ghi chú</th><th></th>'
       + '</tr></thead><tbody>'
-      + rows.map(function (r) { return quoteRow(rfqItemId, r); }).join('')
+      + rows.map(function (r) { return quoteRow(rfqItemId, r, latestDecision); }).join('')
       + '</tbody></table>';
   }
 
-  function quoteRow(rfqItemId, r) {
+  function quoteRow(rfqItemId, r, latestDecision) {
     var isArchived = r.status === 'archived';
+    var isSelectedBase = !isArchived && latestDecision && latestDecision.base_quote_id === r.quote_id;
     var actions = isArchived
       ? '<span class="badge">Đã lưu trữ</span>'
       : '<button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.openQuoteForm(\''
           + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\')">Sửa</button>'
         + ' <button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.archiveQuote(\''
-          + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\')">Lưu trữ</button>';
-    return '<tr>'
-      + '<td>' + API.esc(r.supplier_name || r.supplier_id || '-') + '</td>'
+          + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\')">Lưu trữ</button>'
+        + ' <button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.openPricingForm(\''
+          + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\', \'' + API.esc(r.supplier_name || '') + '\', '
+          + (r.price_vnd_incl_tax || 0) + ')">Chọn làm base</button>';
+    var baseLabel = isSelectedBase
+      ? ' <span class="badge" style="background:var(--primary-bg);border-color:var(--primary-border);color:var(--primary-dk)">★ base</span>'
+      : '';
+    return '<tr' + (isSelectedBase ? ' style="background:var(--primary-bg)"' : '') + '>'
+      + '<td>' + API.esc(r.supplier_name || r.supplier_id || '-') + baseLabel + '</td>'
       + '<td>' + API.esc(r.manufacturer || '-') + '</td>'
       + '<td class="num">' + API.esc(r.quoted_price ? Number(r.quoted_price).toLocaleString('vi-VN') : '-') + '</td>'
       + '<td>' + API.esc(r.currency || 'VND') + '</td>'
@@ -401,6 +412,201 @@
       + input('validUntil', 'Hiệu lực đến', r.valid_until || '', 'type="date"')
       + input('warranty', 'Bảo hành', r.warranty || '', 'placeholder="VD: 12 tháng"')
       + textarea('note', 'Ghi chú', r.note || '');
+  }
+
+  // --- Price Comparison ---
+
+  function comparisonTable(rfqItemId, activeRows, latestDecision) {
+    var baseQuoteId = latestDecision ? latestDecision.base_quote_id : null;
+    var sorted = activeRows.slice().sort(function (a, b) {
+      return (a.price_vnd_incl_tax || 0) - (b.price_vnd_incl_tax || 0);
+    });
+    var minPrice = sorted.length ? (sorted[0].price_vnd_incl_tax || 0) : 0;
+    return '<div style="margin-bottom:10px">'
+      + '<p style="font-size:12px;color:var(--text-muted);margin:0 0 6px">So sánh giá (sắp xếp theo VND + thuế tăng dần)</p>'
+      + '<table class="quotes-mini-table">'
+      + '<thead><tr><th>Nhà CC</th><th>Hãng SX</th><th>VND + Thuế</th><th>Giao hàng</th><th>Bảo hành</th><th></th></tr></thead>'
+      + '<tbody>'
+      + sorted.map(function (r) {
+          var isMin = minPrice > 0 && (r.price_vnd_incl_tax || 0) === minPrice;
+          var isBase = baseQuoteId && r.quote_id === baseQuoteId;
+          return '<tr' + (isMin ? ' style="background:var(--green-bg)"' : '') + '>'
+            + '<td>' + API.esc(r.supplier_name || r.supplier_id || '-')
+              + (isBase ? ' <span class="badge" style="background:var(--primary-bg);border-color:var(--primary-border);color:var(--primary-dk)">★ base</span>' : '')
+              + '</td>'
+            + '<td>' + API.esc(r.manufacturer || '-') + '</td>'
+            + '<td><strong' + (isMin ? ' style="color:var(--green)"' : '') + '>'
+              + API.esc(r.price_vnd_incl_tax ? API.money(r.price_vnd_incl_tax) : '-') + '</strong></td>'
+            + '<td>' + API.esc(r.lead_time || '') + '</td>'
+            + '<td>' + API.esc(r.warranty || '') + '</td>'
+            + '<td><button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.openPricingForm(\''
+              + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\', \'' + API.esc(r.supplier_name || '') + '\', '
+              + (r.price_vnd_incl_tax || 0) + ')">Chọn làm base</button></td>'
+            + '</tr>';
+        }).join('')
+      + '</tbody></table>'
+      + '</div>';
+  }
+
+  // --- Pricing Decisions ---
+
+  function pricingSection(item, pricingRows) {
+    if (!item.rfq_item_id) return '';
+    return '<section class="modal-section pricing-section" data-role-only="admin,manager,purchasing">'
+      + '<div class="section-head"><h4>Cân giá / Quyết định giá</h4>'
+      + '<button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.openPricingForm(\''
+      + API.esc(item.rfq_item_id) + '\')">+ Tạo phiên cân giá</button>'
+      + '</div>'
+      + (pricingRows.length
+        ? pricingRows.map(function (r, i) { return pricingRow(r, i === 0); }).join('')
+        : '<div class="empty-state small">Chưa có phiên cân giá.</div>')
+      + '</section>';
+  }
+
+  function pricingRow(r, isLatest) {
+    var riskBg     = r.risk_level === 'high' ? '#fef2f2' : r.risk_level === 'medium' ? '#fffbeb' : 'var(--green-bg)';
+    var riskBorder = r.risk_level === 'high' ? '#fecaca' : r.risk_level === 'medium' ? '#fde68a' : '#86efac';
+    var riskColor  = r.risk_level === 'high' ? 'var(--red)' : r.risk_level === 'medium' ? '#92400e' : 'var(--green)';
+    return '<article class="timeline-item"' + (isLatest ? ' style="border-color:var(--primary-border)"' : '') + '>'
+      + '<div class="timeline-top">'
+      + '<strong>Phiên v' + r.version
+        + (isLatest ? ' <span class="badge">Mới nhất</span>' : '')
+        + '</strong>'
+      + '<span>' + API.esc(formatDate(r.created_at)) + '</span>'
+      + '</div>'
+      + '<div style="margin-bottom:6px">'
+      + (r.selection_reason
+        ? '<span class="badge" style="margin-right:4px">' + API.esc(selectionReasonLabel(r.selection_reason)) + '</span>'
+        : '')
+      + (r.risk_level
+        ? '<span class="badge" style="background:' + riskBg + ';border-color:' + riskBorder + ';color:' + riskColor + '">'
+          + API.esc(riskLevelLabel(r.risk_level)) + '</span>'
+        : '')
+      + '</div>'
+      + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">'
+      + 'Báo giá gốc: <strong style="color:var(--text)">' + API.esc(r.supplier_name || r.base_quote_id || '-') + '</strong>'
+      + ' — Giá gốc: <strong style="color:var(--text)">' + (r.base_price_vnd_incl_tax ? API.money(r.base_price_vnd_incl_tax) : '-') + '</strong> VND'
+      + '</div>'
+      + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">'
+      + 'Markup: <strong style="color:var(--text)">x' + (r.markup_rate || '-') + '</strong>'
+      + ' → Đơn giá đề xuất: <strong style="color:var(--primary-dk)">' + (r.proposed_unit_price ? API.money(r.proposed_unit_price) : '-') + '</strong> VND'
+      + ' | Tổng: <strong style="color:var(--primary-dk)">' + (r.proposed_line_total ? API.money(r.proposed_line_total) : '-') + '</strong> VND'
+      + '</div>'
+      + (r.risk_note ? '<div style="font-size:12px;color:var(--text-muted)">Rủi ro: ' + API.esc(r.risk_note) + '</div>' : '')
+      + (r.pricing_note ? '<p style="font-size:12px;margin:4px 0 0">' + API.esc(r.pricing_note) + '</p>' : '')
+      + '</article>';
+  }
+
+  function selectionReasonLabel(value) {
+    return {
+      lowest_price:    'Giá thấp nhất',
+      better_lead_time: 'Giao hàng nhanh hơn',
+      better_warranty: 'Bảo hành tốt hơn',
+      preferred_brand: 'Hãng ưu tiên',
+      client_approved: 'CĐT chấp thuận',
+      available_stock: 'Có hàng sẵn',
+      other:           'Lý do khác',
+    }[value] || value || '-';
+  }
+
+  function riskLevelLabel(value) {
+    return {
+      low:    'Rủi ro thấp',
+      medium: 'Rủi ro trung bình',
+      high:   'Rủi ro cao',
+    }[value] || value || '-';
+  }
+
+  function openPricingForm(rfqItemId, baseQuoteId, supplierName, basePriceVndInclTax) {
+    if (baseQuoteId) {
+      Utils.openModal(
+        'Tạo phiên cân giá',
+        pricingFormHtml(baseQuoteId, null, supplierName, basePriceVndInclTax),
+        async function (form) {
+          try {
+            form.rfqItemId   = rfqItemId;
+            await API.call('createPricingDecision', form);
+            Utils.closeModal();
+            API.toast('Đã lưu phiên cân giá', 'success');
+            await load(true);
+          } catch (err) {
+            API.error(err);
+          }
+        }
+      );
+      Auth.applyRoleUI();
+    } else {
+      API.get('getSupplierQuotes', { rfqItemId: rfqItemId }).then(function (data) {
+        var activeQuotes = (data.rows || []).filter(function (q) { return q.status !== 'archived'; });
+        if (!activeQuotes.length) {
+          API.toast('Không có báo giá active. Thêm báo giá trước.', 'warn');
+          return;
+        }
+        Utils.openModal(
+          'Tạo phiên cân giá',
+          pricingFormHtml(null, activeQuotes, null, 0),
+          async function (form) {
+            try {
+              form.rfqItemId = rfqItemId;
+              await API.call('createPricingDecision', form);
+              Utils.closeModal();
+              API.toast('Đã lưu phiên cân giá', 'success');
+              await load(true);
+            } catch (err) {
+              API.error(err);
+            }
+          }
+        );
+        Auth.applyRoleUI();
+      }).catch(API.error);
+    }
+  }
+
+  function pricingFormHtml(baseQuoteId, activeQuotes, supplierName, basePriceVndInclTax) {
+    var baseSection = baseQuoteId
+      ? '<input type="hidden" name="baseQuoteId" value="' + API.esc(baseQuoteId) + '">'
+        + '<div style="background:var(--primary-bg);border:1px solid var(--primary-border);border-radius:9px;padding:10px 13px;margin-bottom:10px;font-size:13px;grid-column:1/-1">'
+        + '<strong>Báo giá gốc:</strong> ' + API.esc(supplierName || baseQuoteId)
+        + (basePriceVndInclTax ? ' — ' + API.money(basePriceVndInclTax) + ' VND' : '')
+        + '</div>'
+      : '<label style="grid-column:1/-1">Chọn báo giá gốc'
+        + '<select name="baseQuoteId" required>'
+        + '<option value="">-- Chọn báo giá --</option>'
+        + (activeQuotes || []).map(function (q) {
+            return '<option value="' + API.esc(q.quote_id) + '">'
+              + API.esc(q.supplier_name || q.quote_id)
+              + (q.price_vnd_incl_tax ? ' — ' + API.money(q.price_vnd_incl_tax) + ' VND' : '')
+              + '</option>';
+          }).join('')
+        + '</select></label>';
+
+    var markupOptions = [1.0, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0];
+
+    return baseSection
+      + '<label>Hệ số markup<select name="markupRate">'
+      + markupOptions.map(function (v) {
+          return '<option value="' + v + '"' + (v === 1.4 ? ' selected' : '') + '>'
+            + 'x' + v + ' (' + Math.round((v - 1) * 100) + '% biên độ)'
+            + '</option>';
+        }).join('')
+      + '</select></label>'
+      + '<label>Lý do chọn báo giá<select name="selectionReason">'
+      + option('', '-- Chọn lý do --', '')
+      + option('lowest_price',    'Giá thấp nhất', '')
+      + option('better_lead_time','Giao hàng nhanh hơn', '')
+      + option('better_warranty', 'Bảo hành tốt hơn', '')
+      + option('preferred_brand', 'Hãng ưu tiên', '')
+      + option('client_approved', 'CĐT chấp thuận', '')
+      + option('available_stock', 'Có hàng sẵn', '')
+      + option('other',           'Lý do khác', '')
+      + '</select></label>'
+      + '<label>Mức độ rủi ro<select name="riskLevel">'
+      + option('low',    'Thấp', 'low')
+      + option('medium', 'Trung bình', '')
+      + option('high',   'Cao', '')
+      + '</select></label>'
+      + '<label>Ghi chú rủi ro<textarea name="riskNote" placeholder="Mô tả rủi ro nếu có"></textarea></label>'
+      + '<label>Ghi chú cân giá (bắt buộc nếu chọn "Lý do khác")<textarea name="pricingNote" placeholder="Ghi chú bổ sung hoặc lý do cụ thể"></textarea></label>';
   }
 
   // --- CSV Template / Import ---
@@ -681,6 +887,7 @@
     openClarificationForm: openClarificationForm,
     openQuoteForm: openQuoteForm,
     archiveQuote: archiveQuote,
+    openPricingForm: openPricingForm,
     downloadTemplate: downloadTemplate,
     exportCsv: exportCsv,
     importCsv: importCsv,

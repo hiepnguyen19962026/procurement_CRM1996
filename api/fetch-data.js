@@ -4,8 +4,8 @@ const COOKIE_NAME = 'procurement_sess';
 const JWT_EXPIRES = 7 * 24 * 60 * 60;
 const PUBLIC_ACTIONS = new Set(['authLogin', 'initSetup', 'logout']);
 const VIEW_ACTIONS = ['ping', 'logout', 'getSession', 'changePassword', 'getDashboard', 'getClients', 'getSuppliers', 'getRfqs', 'getRfqItems', 'getMediaFiles', 'getTechnicalClarifications', 'getSupplierQuotes'];
-const PURCHASING_ACTIONS = [...VIEW_ACTIONS, 'createClient', 'updateClient', 'createSupplier', 'updateSupplier', 'createRfq', 'updateRfq', 'createRfqItem', 'updateRfqItem', 'createTechnicalClarification', 'createSupplierQuote'];
-const MANAGER_ACTIONS = [...PURCHASING_ACTIONS, 'updateTechnicalClarification', 'deleteTechnicalClarification', 'updateSupplierQuote', 'archiveSupplierQuote', 'getAuditLogs'];
+const PURCHASING_ACTIONS = [...VIEW_ACTIONS, 'createClient', 'updateClient', 'createSupplier', 'updateSupplier', 'createRfq', 'updateRfq', 'createRfqItem', 'updateRfqItem', 'createTechnicalClarification', 'createSupplierQuote', 'getPricingDecisions'];
+const MANAGER_ACTIONS = [...PURCHASING_ACTIONS, 'updateTechnicalClarification', 'deleteTechnicalClarification', 'updateSupplierQuote', 'archiveSupplierQuote', 'getAuditLogs', 'createPricingDecision'];
 const ADMIN_ACTIONS = [...MANAGER_ACTIONS, 'getAccounts', 'createAccount', 'updateAccount'];
 
 export default async function handler(request) {
