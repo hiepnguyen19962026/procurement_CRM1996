@@ -42,7 +42,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="12" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="11" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -56,12 +56,20 @@
       Auth.applyRoleUI();
       return;
     }
+    var canWrite = Utils.roleCanWrite();
     document.getElementById('itemRows').innerHTML = rows.map(function (r) {
+      var nameInner = '<strong>' + API.esc(r.ten_vat_tu) + '</strong>'
+        + '<div class="muted">' + API.esc(val(r, 'technical_params', 'thong_so_ky_thuat')) + '</div>';
+      var nameCell = canWrite
+        ? '<td><span class="link-edit" onclick="RfqItemsModule.openEdit(\'' + API.esc(r.rfq_item_id) + '\')">'
+          + '<strong>' + API.esc(r.ten_vat_tu) + '</strong></span>'
+          + '<div class="muted">' + API.esc(val(r, 'technical_params', 'thong_so_ky_thuat')) + '</div></td>'
+        : '<td>' + nameInner + '</td>';
       return '<tr>'
         + renderCell(r.stt_goc, true)
         + renderCell(r.ma_mua_sam, true)
         + renderCell(r.ma_vat_tu, true)
-        + '<td><strong>' + API.esc(r.ten_vat_tu) + '</strong><div class="muted">' + API.esc(val(r, 'technical_params', 'thong_so_ky_thuat')) + '</div></td>'
+        + nameCell
         + renderCell(val(r, 'required_model', 'quy_cach_model_yeu_cau'), true)
         + renderCell(val(r, 'brand', 'nhan_hieu'), true)
         + renderCell(val(r, 'manufacturer', 'hang_goc_nsx_goc'), true)
@@ -69,7 +77,6 @@
         + renderCell((val(r, 'quantity', 'so_luong') || 0) + ' ' + (val(r, 'unit', 'don_vi') || ''), false)
         + '<td>' + technicalSummary(r) + '</td>'
         + '<td><span class="badge">' + API.esc(statusLabel(r.trang_thai_dong)) + '</span></td>'
-        + '<td><button data-write onclick="RfqItemsModule.openEdit(\'' + API.esc(r.rfq_item_id) + '\')">Sửa</button></td>'
         + '</tr>';
     }).join('');
     document.getElementById('itemMore').classList.toggle('hidden', !state.hasMore);

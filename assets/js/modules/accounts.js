@@ -12,7 +12,13 @@
   }
   function render() {
     document.getElementById('accountRows').innerHTML = (state.rows || []).map(function (r) {
-      return '<tr><td>' + API.esc(maskId(r.user_id)) + '</td><td>' + API.esc(r.username) + '</td><td>' + API.esc(r.display_name) + '</td><td>' + API.esc(roleLabel(r.role)) + '</td><td>' + API.esc(statusLabel(r.status)) + '</td><td><button onclick="AccountsModule.openEdit(\'' + API.esc(r.user_id) + '\')">Sửa</button></td></tr>';
+      return '<tr>'
+        + '<td>' + API.esc(maskId(r.user_id)) + '</td>'
+        + '<td>' + API.esc(r.username) + '</td>'
+        + '<td><span class="link-edit" onclick="AccountsModule.openEdit(\'' + API.esc(r.user_id) + '\')">' + API.esc(r.display_name) + '</span></td>'
+        + '<td>' + API.esc(roleLabel(r.role)) + '</td>'
+        + '<td>' + API.esc(statusLabel(r.status)) + '</td>'
+        + '</tr>';
     }).join('');
     document.getElementById('accountMore').classList.toggle('hidden', !state.hasMore);
   }

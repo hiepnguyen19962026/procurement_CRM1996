@@ -12,8 +12,18 @@
     } catch (err) { API.error(err); }
   }
   function render() {
+    var canWrite = Utils.roleCanWrite();
     document.getElementById('clientRows').innerHTML = (state.rows || []).map(function (r) {
-      return '<tr><td>' + API.esc(r.client_id) + '</td><td>' + API.esc(r.client_name) + '</td><td>' + API.esc(r.plant_name) + '</td><td>' + API.esc(r.province) + '</td><td>' + API.esc(r.note) + '</td><td><button data-write onclick="ClientsModule.openEdit(\'' + API.esc(r.client_id) + '\')">Sửa</button></td></tr>';
+      var nameCell = canWrite
+        ? '<span class="link-edit" onclick="ClientsModule.openEdit(\'' + API.esc(r.client_id) + '\')">' + API.esc(r.client_name) + '</span>'
+        : API.esc(r.client_name);
+      return '<tr>'
+        + '<td>' + API.esc(r.client_id) + '</td>'
+        + '<td>' + nameCell + '</td>'
+        + '<td>' + API.esc(r.plant_name) + '</td>'
+        + '<td>' + API.esc(r.province) + '</td>'
+        + '<td>' + API.esc(r.note) + '</td>'
+        + '</tr>';
     }).join('');
     document.getElementById('clientMore').classList.toggle('hidden', !state.hasMore);
     Auth.applyRoleUI();

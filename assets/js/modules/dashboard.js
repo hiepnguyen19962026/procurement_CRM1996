@@ -1,11 +1,47 @@
 (function () {
+  var _lastData = null;
+
   async function load() {
     try {
       var data = await API.get('getDashboardV2', {});
-      var d = data.data || {};
-      renderStats(d);
-      renderPanels(d);
+      _lastData = data.data || {};
+      renderStats(_lastData);
+      renderPanels(_lastData);
     } catch (err) { API.error(err); }
+  }
+
+  function openNsxStats() {
+    if (!_lastData) {
+      API.toast('Đang tải dữ liệu, vui lòng thử lại.', 'info');
+      return;
+    }
+    var quotes = _lastData.quotes || {};
+    var top = quotes.top_suppliers || [];
+    var byChannel = quotes.by_channel || [];
+    var topHtml = top.length
+      ? '<div class="table-wrap" style="margin-bottom:14px"><table style="min-width:0"><thead><tr>'
+        + '<th>Nhà cung cấp</th><th style="text-align:right">Số báo giá</th>'
+        + '</tr></thead><tbody>'
+        + top.map(function (r) {
+            return '<tr><td>' + API.esc(r.name) + '</td>'
+              + '<td style="text-align:right;font-weight:600">' + r.cnt + '</td></tr>';
+          }).join('')
+        + '</tbody></table></div>'
+      : '<p style="color:var(--text-muted);margin:0 0 14px">Chưa có dữ liệu báo giá.</p>';
+    var channelHtml = byChannel.length
+      ? '<p style="font-size:13px;font-weight:600;margin:0 0 8px">Theo kênh nguồn</p>'
+        + '<div style="display:flex;flex-wrap:wrap;gap:6px">'
+        + byChannel.map(function (c) {
+            return '<span class="badge">' + API.esc(channelLabel(c.channel))
+              + ': <strong>' + c.cnt + '</strong></span>';
+          }).join('')
+        + '</div>'
+      : '';
+    Utils.openModal(
+      'Thống kê nhà cung cấp (NSX)',
+      '<div style="grid-column:1/-1">' + topHtml + channelHtml + '</div>',
+      function () { Utils.closeModal(); }
+    );
   }
 
   // ── Metric cards ──────────────────────────────────────────────────────────
@@ -256,5 +292,5 @@
     }[value] || value || 'Không rõ';
   }
 
-  window.DashboardModule = { load: load };
+  window.DashboardModule = { load: load, openNsxStats: openNsxStats };
 })();

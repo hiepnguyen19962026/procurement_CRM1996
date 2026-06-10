@@ -12,8 +12,19 @@
     } catch (err) { API.error(err); }
   }
   function render() {
+    var canWrite = Utils.roleCanWrite();
     document.getElementById('supplierRows').innerHTML = (state.rows || []).map(function (r) {
-      return '<tr><td>' + API.esc(r.supplier_id) + '</td><td>' + API.esc(r.supplier_name) + '</td><td>' + API.esc(typeLabel(r.supplier_type)) + '</td><td>' + API.esc(r.country) + '</td><td>' + API.esc(r.contact_name) + '<br>' + API.esc(r.phone) + '</td><td>' + API.esc(r.email) + '</td><td><button data-write onclick="SuppliersModule.openEdit(\'' + API.esc(r.supplier_id) + '\')">Sửa</button></td></tr>';
+      var nameCell = canWrite
+        ? '<span class="link-edit" onclick="SuppliersModule.openEdit(\'' + API.esc(r.supplier_id) + '\')">' + API.esc(r.supplier_name) + '</span>'
+        : API.esc(r.supplier_name);
+      return '<tr>'
+        + '<td>' + API.esc(r.supplier_id) + '</td>'
+        + '<td>' + nameCell + '</td>'
+        + '<td>' + API.esc(typeLabel(r.supplier_type)) + '</td>'
+        + '<td>' + API.esc(r.country) + '</td>'
+        + '<td>' + API.esc(r.contact_name) + '<br>' + API.esc(r.phone) + '</td>'
+        + '<td>' + API.esc(r.email) + '</td>'
+        + '</tr>';
     }).join('');
     document.getElementById('supplierMore').classList.toggle('hidden', !state.hasMore);
     Auth.applyRoleUI();

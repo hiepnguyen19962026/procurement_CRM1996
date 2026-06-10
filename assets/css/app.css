@@ -144,6 +144,16 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .toast.error { background: var(--red); }
 .toast.success { background: var(--green); }
 
+/* hamburger sidebar collapse — desktop only */
+@media (min-width: 861px) {
+  .sidebar-collapsed.is-auth .app { grid-template-columns: 1fr; }
+  .sidebar-collapsed .sidebar { display: none; }
+}
+
+/* clickable identifier cells in tables */
+span.link-edit { cursor: pointer; }
+span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
+
 @media (max-width: 1100px) {
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid { grid-template-columns: 1fr; }

@@ -58,18 +58,36 @@
   }
 
   async function restoreSession() {
+    var res, data;
     try {
-      var data = await API.call('getSession', {});
-      if (!data.ok || !data.user) throw new Error('No session');
+      res = await fetch('/api/fetch-data', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ action: 'getSession' }),
+      });
+      data = await res.json().catch(function () { return null; });
+    } catch {
+      // Network unreachable — do not destroy session; cookie may still be valid
+      API.toast('Không kết nối được server. Tải lại trang để thử lại.', 'error');
+      return;
+    }
+    // 401 = JWT expired/missing; 400 + ok:false = session invalidated in DB
+    if (res.status === 401 || (res.status === 400 && data && data.ok === false)) {
+      sessionStorage.removeItem('procurement_session');
+      AppState.set('user', null);
+      document.body.classList.remove('is-auth');
+      return;
+    }
+    if (data && data.ok && data.user) {
       save(data.user);
       applyRoleUI();
       showApp();
       DashboardModule.load();
-    } catch {
-      sessionStorage.removeItem('procurement_session');
-      AppState.set('user', null);
-      document.body.classList.remove('is-auth');
+      return;
     }
+    // Server error (5xx) or unexpected response — do not destroy session
+    API.toast('Server gặp lỗi tạm thời. Tải lại trang để thử lại.', 'error');
   }
 
   async function init() {

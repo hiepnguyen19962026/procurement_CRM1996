@@ -12,8 +12,27 @@
     } catch (err) { API.error(err); }
   }
   function render() {
+    var canWrite = Utils.roleCanWrite();
     document.getElementById('rfqRows').innerHTML = (state.rows || []).map(function (r) {
-      return '<tr><td>' + API.esc(r.rfq_id) + '</td><td>' + API.esc(r.ma_goi_tbmt) + '</td><td>' + API.esc(r.ten_goi) + '</td><td>' + API.esc(r.client_name || r.nha_may_cdt) + '</td><td>' + valueOrDash(r.ngay_nhan_hoac_dang_tai) + '</td><td>' + valueOrDash(r.ngay_het_han) + '</td><td><button class="badge badge-items" onclick="RfqsModule.drillDown(\'' + API.esc(r.rfq_id) + '\')">' + API.esc(itemCountLabel(r.item_count)) + '</button></td><td>' + API.money(r.du_toan) + '</td><td><span class="badge">' + API.esc(statusLabel(r.trang_thai_goi)) + '</span></td><td>' + noteCell(r.note) + '</td><td><button data-write onclick="RfqsModule.openEdit(\'' + API.esc(r.rfq_id) + '\')">Sửa</button></td></tr>';
+      var maGoi = r.ma_goi_tbmt ? API.esc(r.ma_goi_tbmt) : '<span class="muted">—</span>';
+      var maGoiCell = canWrite
+        ? '<span class="link-edit" onclick="RfqsModule.openEdit(\'' + API.esc(r.rfq_id) + '\')">' + maGoi + '</span>'
+        : maGoi;
+      var tenGoiCell = canWrite
+        ? '<span class="link-edit" onclick="RfqsModule.openEdit(\'' + API.esc(r.rfq_id) + '\')">' + API.esc(r.ten_goi) + '</span>'
+        : API.esc(r.ten_goi);
+      return '<tr>'
+        + '<td>' + API.esc(r.rfq_id) + '</td>'
+        + '<td>' + maGoiCell + '</td>'
+        + '<td>' + tenGoiCell + '</td>'
+        + '<td>' + API.esc(r.client_name || r.nha_may_cdt) + '</td>'
+        + '<td>' + valueOrDash(r.ngay_nhan_hoac_dang_tai) + '</td>'
+        + '<td>' + valueOrDash(r.ngay_het_han) + '</td>'
+        + '<td><button class="badge badge-items" onclick="RfqsModule.drillDown(\'' + API.esc(r.rfq_id) + '\')">' + API.esc(itemCountLabel(r.item_count)) + '</button></td>'
+        + '<td>' + API.money(r.du_toan) + '</td>'
+        + '<td><span class="badge">' + API.esc(statusLabel(r.trang_thai_goi)) + '</span></td>'
+        + '<td>' + noteCell(r.note) + '</td>'
+        + '</tr>';
     }).join('');
     document.getElementById('rfqMore').classList.toggle('hidden', !state.hasMore);
     Auth.applyRoleUI();
