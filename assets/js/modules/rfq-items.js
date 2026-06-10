@@ -218,7 +218,8 @@
       + technicalSection(r, clarifications)
       + quotesSection(r, quotes || [], latestDecision, (state.currentMedia && state.currentMedia.quoteFiles) || {})
       + pricingSection(r, pricingDecisions || [])
-      + priceHistorySection(r);
+      + priceHistorySection(r)
+      + contractSection(r);
   }
 
   function masterItemSection(item, master) {
@@ -1019,6 +1020,110 @@
       + '</div>';
   }
 
+  // --- Contracts ---
+
+  function contractSection(item) {
+    if (!item.rfq_item_id) return '';
+    var suffix = String(item.rfq_item_id).replace(/[^A-Za-z0-9_-]/g, '_');
+    var containerId = 'ctr_' + suffix;
+    return '<section class="modal-section" style="border-top:1px solid var(--border);padding-top:14px">'
+      + '<div class="section-head"><h4>H&#7907;p &#273;&#7891;ng</h4>'
+      + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
+      + '<button type="button" onclick="RfqItemsModule.loadContractItems(\'' + API.esc(item.rfq_item_id) + '\')">Xem H&#272; d&#242;ng n&#224;y</button>'
+      + '<button type="button" data-write onclick="RfqItemsModule.openContractFromRfqItemModal(\'' + API.esc(item.rfq_item_id) + '\')">T&#7841;o H&#272; t&#7915; d&#242;ng n&#224;y</button>'
+      + '</div></div>'
+      + '<div id="' + containerId + '" class="empty-state small">Nh&#7845;n &#8220;Xem H&#272; d&#242;ng n&#224;y&#8221; &#273;&#7875; t&#7843;i d&#7919; li&#7879;u.</div>'
+      + '</section>';
+  }
+
+  async function loadContractItems(rfqItemId) {
+    var suffix = String(rfqItemId).replace(/[^A-Za-z0-9_-]/g, '_');
+    var container = document.getElementById('ctr_' + suffix);
+    if (!container) return;
+    container.textContent = 'Đang tải...';
+    try {
+      var data = await API.get('getContractItemsForRfqItem', { rfqItemId: rfqItemId });
+      var rows = data.rows || [];
+      if (!rows.length) {
+        container.innerHTML = '<div class="empty-state small">D&#242;ng n&#224;y ch&#432;a c&#243; trong h&#7907;p &#273;&#7891;ng n&#224;o.</div>';
+        return;
+      }
+      container.innerHTML = contractItemsTable(rows);
+    } catch (err) {
+      container.textContent = 'Lỗi tải hợp đồng.';
+      API.error(err);
+    }
+  }
+
+  function contractItemsTable(rows) {
+    return '<div class="quotes-table-wrap">'
+      + '<table class="quotes-mini-table">'
+      + '<thead><tr>'
+      + '<th>S&#7889; H&#272;</th><th>T&#234;n H&#272;</th><th>Ng&#224;y k&#253;</th>'
+      + '<th>Nh&#224; CC</th><th>SL H&#272;</th><th>&#272;&#417;n gi&#225; H&#272;</th><th>Th&#224;nh ti&#7873;n H&#272;</th><th>T.t&#7879;</th><th>Tr&#7841;ng th&#225;i</th>'
+      + '</tr></thead><tbody>'
+      + rows.map(function (r) {
+          var statusBadge = r.contract_status === 'archived'
+            ? '<span class="badge" style="opacity:0.6">L&#432;u tr&#7919;</span>'
+            : '<span class="badge" style="background:var(--green-bg);border-color:#86efac;color:var(--green)">Hi&#7879;u l&#7921;c</span>';
+          return '<tr>'
+            + '<td><strong>' + API.esc(r.contract_no || '-') + '</strong>'
+              + (r.contract_id ? '<div class="muted" style="font-size:11px">' + API.esc(r.contract_id) + '</div>' : '')
+              + '</td>'
+            + '<td>' + API.esc(r.contract_name || '') + '</td>'
+            + '<td>' + API.esc(r.signed_date || '') + '</td>'
+            + '<td>' + API.esc(r.supplier_name || '') + '</td>'
+            + '<td class="num">' + API.esc(r.contract_quantity != null ? Number(r.contract_quantity).toLocaleString('vi-VN') : '-') + (r.unit ? ' ' + API.esc(r.unit) : '') + '</td>'
+            + '<td class="num">' + API.esc(r.contract_unit_price ? API.money(r.contract_unit_price) : '-') + '</td>'
+            + '<td class="num"><strong>' + API.esc(r.contract_line_total ? API.money(r.contract_line_total) : '-') + '</strong></td>'
+            + '<td>' + API.esc(r.contract_currency || 'VND') + '</td>'
+            + '<td>' + statusBadge + '</td>'
+            + '</tr>';
+        }).join('')
+      + '</tbody></table></div>';
+  }
+
+  function openContractFromRfqItemModal(rfqItemId) {
+    var item = (state.rows || []).find(function (r) { return r.rfq_item_id === rfqItemId; }) || { rfq_item_id: rfqItemId };
+    var currency = 'VND';
+    var html = ''
+      + input('contractNo', 'Số hợp đồng', '', 'required placeholder="VD: HD-2026-001"')
+      + input('contractName', 'Tên hợp đồng', '', 'placeholder="VD: Hợp đồng cung cấp vòng bi"')
+      + input('signedDate', 'Ngày ký', '', 'type="date"')
+      + input('effectiveDate', 'Ngày có hiệu lực', '', 'type="date"')
+      + input('expiryDate', 'Ngày hết hạn', '', 'type="date"')
+      + '<label>Ti&#7873;n t&#7879;<select name="currency">'
+      + option('VND', 'VND', currency)
+      + option('USD', 'USD', currency)
+      + option('EUR', 'EUR', currency)
+      + option('JPY', 'JPY', currency)
+      + option('CNY', 'CNY', currency)
+      + option('SGD', 'SGD', currency)
+      + option('KRW', 'KRW', currency)
+      + '</select></label>'
+      + '<div style="background:var(--primary-bg);border:1px solid var(--primary-border);border-radius:9px;padding:10px 13px;margin-bottom:10px;font-size:13px">'
+      + '<strong>D&#242;ng v&#7853;t t&#432;:</strong> ' + API.esc(item.ten_vat_tu || rfqItemId)
+      + (item.ma_vat_tu ? ' <span class="badge">' + API.esc(item.ma_vat_tu) + '</span>' : '')
+      + '</div>'
+      + input('contractQuantity', 'Số lượng HĐ', val(item, 'quantity', 'so_luong') || '', 'inputmode="decimal" placeholder="0"')
+      + input('contractUnitPrice', 'Đơn giá HĐ (VND)', '', 'inputmode="numeric" placeholder="0"')
+      + textarea('note', 'Ghi chú', '');
+    Utils.openModal('Tạo hợp đồng từ dòng vật tư', html, async function (form) {
+      try {
+        form.rfqItemId = rfqItemId;
+        var data = await API.call('createContractFromRfqItem', form);
+        Utils.closeModal();
+        API.toast('Đã tạo hợp đồng ' + (data.contract && data.contract.contract_no || ''), 'success');
+        var suffix = String(rfqItemId).replace(/[^A-Za-z0-9_-]/g, '_');
+        var container = document.getElementById('ctr_' + suffix);
+        if (container) await loadContractItems(rfqItemId);
+      } catch (err) {
+        API.error(err);
+      }
+    });
+    Auth.applyRoleUI();
+  }
+
   // --- CSV Template / Import ---
 
   // Business-friendly template — rfqItemId/rfqId/originFullText hidden (still supported on import)
@@ -1566,5 +1671,7 @@
     commitImportMapping: commitImportMapping,
     loadPriceHistory: loadPriceHistory,
     exportPriceHistory: exportPriceHistory,
+    loadContractItems: loadContractItems,
+    openContractFromRfqItemModal: openContractFromRfqItemModal,
   };
 })();
