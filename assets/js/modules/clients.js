@@ -145,17 +145,17 @@
         }).join('')
       + '</select>';
 
-    var profileHtml = '<label>Tên CĐT / khách hàng<input name="clientName" required value="' + API.esc(r.client_name || '') + '"></label>'
-      + '<label>Tên pháp nhân<input name="legalName" value="' + API.esc(r.legal_name || '') + '"></label>'
-      + '<label>MST (Mã số thuế)<input name="taxCode" value="' + API.esc(r.tax_code || '') + '"></label>'
-      + '<label>Loại hình' + typeSel + '</label>'
-      + '<label>Nhà máy<input name="plantName" value="' + API.esc(r.plant_name || '') + '"></label>'
-      + '<label>Tỉnh / thành<input name="province" value="' + API.esc(r.province || '') + '"></label>'
-      + '<label>Địa chỉ<input name="address" value="' + API.esc(r.address || '') + '"></label>'
-      + '<label>Email<input name="email" type="email" value="' + API.esc(r.email || '') + '"></label>'
-      + '<label>SĐT<input name="phone" value="' + API.esc(r.phone || '') + '"></label>'
-      + '<label>Website<input name="website" value="' + API.esc(r.website || '') + '"></label>'
-      + '<label>Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>';
+    var profileHtml = '<label class="field-md">Tên CĐT / khách hàng<input name="clientName" required value="' + API.esc(r.client_name || '') + '"></label>'
+      + '<label class="field-md">Tên pháp nhân<input name="legalName" value="' + API.esc(r.legal_name || '') + '"></label>'
+      + '<label class="field-sm">MST (Mã số thuế)<input name="taxCode" value="' + API.esc(r.tax_code || '') + '"></label>'
+      + '<label class="field-sm">Loại hình' + typeSel + '</label>'
+      + '<label class="field-sm">Nhà máy<input name="plantName" value="' + API.esc(r.plant_name || '') + '"></label>'
+      + '<label class="field-sm">Tỉnh / thành<input name="province" value="' + API.esc(r.province || '') + '"></label>'
+      + '<label class="field-lg">Địa chỉ<input name="address" value="' + API.esc(r.address || '') + '"></label>'
+      + '<label class="field-sm">Email<input name="email" type="email" value="' + API.esc(r.email || '') + '"></label>'
+      + '<label class="field-sm">SĐT<input name="phone" value="' + API.esc(r.phone || '') + '"></label>'
+      + '<label class="field-sm">Website<input name="website" value="' + API.esc(r.website || '') + '"></label>'
+      + '<label class="field-full">Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>';
 
     if (!cid) return profileHtml;
 

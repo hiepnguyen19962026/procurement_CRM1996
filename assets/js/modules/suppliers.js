@@ -74,7 +74,21 @@
     });
   }
   function fields(r) {
-    return '<label>Tên nhà cung cấp<input name="supplierName" required value="' + API.esc(r.supplier_name) + '"></label><label>Loại<select name="supplierType"><option value="unknown">Chưa phân loại</option><option value="manufacturer">Nhà sản xuất</option><option value="distributor">Nhà phân phối</option><option value="trader">Thương mại</option></select></label><label>Quốc gia<input name="country" value="' + API.esc(r.country) + '"></label><label>Người liên hệ<input name="contactName" value="' + API.esc(r.contact_name) + '"></label><label>Email<input name="email" value="' + API.esc(r.email) + '"></label><label>Điện thoại<input name="phone" value="' + API.esc(r.phone) + '"></label><label>Zalo<input name="zalo" value="' + API.esc(r.zalo) + '"></label><label>Wechat<input name="wechat" value="' + API.esc(r.wechat) + '"></label><label>Ghi chú<textarea name="note">' + API.esc(r.note) + '</textarea></label>';
+    var sel = (r.supplier_type || 'unknown');
+    return '<label class="field-md">Tên nhà cung cấp<input name="supplierName" required value="' + API.esc(r.supplier_name) + '"></label>'
+      + '<label class="field-sm">Loại<select name="supplierType">'
+      + '<option value="unknown"' + (sel === 'unknown' ? ' selected' : '') + '>Chưa phân loại</option>'
+      + '<option value="manufacturer"' + (sel === 'manufacturer' ? ' selected' : '') + '>Nhà sản xuất</option>'
+      + '<option value="distributor"' + (sel === 'distributor' ? ' selected' : '') + '>Nhà phân phối</option>'
+      + '<option value="trader"' + (sel === 'trader' ? ' selected' : '') + '>Thương mại</option>'
+      + '</select></label>'
+      + '<label class="field-sm">Quốc gia<input name="country" value="' + API.esc(r.country) + '"></label>'
+      + '<label class="field-sm">Người liên hệ<input name="contactName" value="' + API.esc(r.contact_name) + '"></label>'
+      + '<label class="field-sm">Email<input name="email" value="' + API.esc(r.email) + '"></label>'
+      + '<label class="field-xs">Điện thoại<input name="phone" value="' + API.esc(r.phone) + '"></label>'
+      + '<label class="field-xs">Zalo<input name="zalo" value="' + API.esc(r.zalo) + '"></label>'
+      + '<label class="field-xs">Wechat<input name="wechat" value="' + API.esc(r.wechat) + '"></label>'
+      + '<label class="field-full">Ghi chú<textarea name="note">' + API.esc(r.note) + '</textarea></label>';
   }
   function typeLabel(value) {
     return {

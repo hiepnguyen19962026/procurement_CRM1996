@@ -58,7 +58,24 @@
     });
   }
   function fields(r) {
-    return '<label>Tài khoản<input name="username" ' + (r.user_id ? 'disabled' : 'required') + ' value="' + API.esc(r.username) + '"></label><label>Tên hiển thị<input name="displayName" required value="' + API.esc(r.display_name) + '"></label><label>Mật khẩu mới<input name="password" type="password" ' + (r.user_id ? '' : 'required') + '></label><label>Vai trò<select name="role"><option value="viewer">Viewer</option><option value="purchasing">Purchasing</option><option value="manager">Manager</option><option value="admin">Admin</option></select></label><label>Trạng thái<select name="status"><option value="active">Hoạt động</option><option value="inactive">Không hoạt động</option><option value="frozen">Tạm khóa</option><option value="archived">Lưu trữ</option></select></label><label class="check"><input type="checkbox" name="forceLogout" value="1"> Buộc đăng xuất</label>';
+    var role = r.role || 'viewer';
+    var status = r.status || 'active';
+    return '<label class="field-sm">Tài khoản<input name="username" ' + (r.user_id ? 'disabled' : 'required') + ' value="' + API.esc(r.username) + '"></label>'
+      + '<label class="field-sm">Tên hiển thị<input name="displayName" required value="' + API.esc(r.display_name) + '"></label>'
+      + '<label class="field-sm">Mật khẩu mới<input name="password" type="password" ' + (r.user_id ? '' : 'required') + '></label>'
+      + '<label class="field-sm">Vai trò<select name="role">'
+      + '<option value="viewer"' + (role === 'viewer' ? ' selected' : '') + '>Viewer</option>'
+      + '<option value="purchasing"' + (role === 'purchasing' ? ' selected' : '') + '>Purchasing</option>'
+      + '<option value="manager"' + (role === 'manager' ? ' selected' : '') + '>Manager</option>'
+      + '<option value="admin"' + (role === 'admin' ? ' selected' : '') + '>Admin</option>'
+      + '</select></label>'
+      + '<label class="field-sm">Trạng thái<select name="status">'
+      + '<option value="active"' + (status === 'active' ? ' selected' : '') + '>Hoạt động</option>'
+      + '<option value="inactive"' + (status === 'inactive' ? ' selected' : '') + '>Không hoạt động</option>'
+      + '<option value="frozen"' + (status === 'frozen' ? ' selected' : '') + '>Tạm khóa</option>'
+      + '<option value="archived"' + (status === 'archived' ? ' selected' : '') + '>Lưu trữ</option>'
+      + '</select></label>'
+      + '<label class="check"><input type="checkbox" name="forceLogout" value="1"> Buộc đăng xuất</label>';
   }
   function maskId(id) {
     var value = String(id || '');

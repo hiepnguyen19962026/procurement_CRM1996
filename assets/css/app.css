@@ -133,16 +133,27 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .empty-state { min-height: 150px; display: grid; place-items: center; color: var(--text-muted); border: 1px dashed var(--border-mid); border-radius: 10px; background: #fcfcfd; font-size: 13px; text-align: center; padding: 18px; }
 
 .modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.48); display: grid; place-items: center; padding: 18px; z-index: 20; }
-.modal { width: min(78vw, 1400px); max-height: 88vh; overflow: auto; background: white; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-md); }
-.modal-head, .modal-actions { display: flex; justify-content: space-between; align-items: center; padding: 15px 18px; border-bottom: 1px solid var(--border); }
+.modal { width: min(90vw, 1700px); max-height: 92vh; overflow: auto; background: white; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-md); }
+.modal-head, .modal-actions { display: flex; justify-content: space-between; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--border); }
 .modal-head { background: #fffaf5; }
 .modal-actions { border-top: 1px solid var(--border); border-bottom: 0; justify-content: flex-end; gap: 8px; background: #fafafa; }
-.modal-body { padding: 14px 18px; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0 10px; overflow-x: hidden; }
+.modal-body { padding: 12px 18px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 0 10px; overflow-x: hidden; }
 .modal-body label { margin-bottom: 8px; }
-.modal-body label:has(textarea) { grid-column: span 2; }
+/* fallback span for unclassed textarea labels — explicit field-* classes override this */
+.modal-body label:has(textarea):not([class*="field-"]) { grid-column: span 3; }
 .modal-body .check { grid-column: 1 / -1; }
-.modal-body textarea { min-height: 58px; }
-.field-ro { background: var(--bg) !important; cursor: not-allowed !important; color: var(--text-muted); }
+.modal-body textarea { min-height: 54px; }
+/* ── form grid field-span classes ─────────────────────────────────────────── */
+.field-xs  { grid-column: span 1; }
+.field-sm  { grid-column: span 2; }
+.field-md  { grid-column: span 3; }
+.field-lg  { grid-column: span 4; }
+.field-xl  { grid-column: span 5; }
+.field-full { grid-column: 1 / -1; }
+/* xs inputs are inherently small; cap their visual width so STT/year/qty don't sprawl */
+.field-xs input, .field-xs select { max-width: 80px; }
+/* readonly: grey bg + blocked editing; allow text selection for copy */
+.field-readonly input:not([type="hidden"]), .field-readonly select, .field-readonly textarea { background: var(--bg) !important; cursor: not-allowed !important; color: var(--text-muted); }
 .badge-clickable { cursor: pointer; }
 .badge-clickable:hover { opacity: 0.82; text-decoration: underline; }
 .modal-head h3 { margin: 0; font-size: 18px; font-weight: 600; }
@@ -166,6 +177,8 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dashboard-grid { grid-template-columns: 1fr; }
   .quick-search { display: none; }
+  .modal-body { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .field-lg, .field-xl { grid-column: span 3; }
 }
 
 @media (max-width: 860px) {
@@ -183,6 +196,7 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
   .toolbar input, .toolbar select { max-width: 100%; flex: 1 1 220px; }
   .metrics { grid-template-columns: 1fr; }
   .modal-body { grid-template-columns: 1fr; }
+  .field-sm, .field-md, .field-lg, .field-xl { grid-column: 1 / -1; }
 }
 
 /* ── custom datepicker ─────────────────────────────────────────────────────── */

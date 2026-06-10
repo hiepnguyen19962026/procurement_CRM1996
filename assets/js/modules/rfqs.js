@@ -221,14 +221,14 @@
       + '<small id="rfq-cac-helper" style="color:var(--text-muted);display:block;margin-top:2px">' + initHelper + '</small>'
       + '</div>';
 
-    var base = '<label>Tên gói *<input name="tenGoi" required value="' + API.esc(r.ten_goi || '') + '"></label>'
-      + '<label>Mã gói / TBMT<input name="maGoiTbmt" value="' + API.esc(r.ma_goi_tbmt || '') + '"></label>'
-      + '<label>CĐT / pháp nhân phát thầu' + clientAc + '</label>'
-      + '<label>Ngày nhận / đăng tải<input name="ngayNhanHoacDangTai" type="date" value="' + API.esc(r.ngay_nhan_hoac_dang_tai || '') + '"></label>'
-      + '<label>Ngày hết hạn<input name="ngayHetHan" type="date" value="' + API.esc(r.ngay_het_han || '') + '"></label>'
-      + '<label>Dự toán (VNĐ)<input name="duToan" inputmode="numeric" value="' + API.esc(r.du_toan || '') + '"></label>'
-      + '<label>Trạng thái' + statSel + '</label>'
-      + '<label>Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>';
+    var base = '<label class="field-lg">Tên gói *<input name="tenGoi" required value="' + API.esc(r.ten_goi || '') + '"></label>'
+      + '<label class="field-sm">Mã gói / TBMT<input name="maGoiTbmt" value="' + API.esc(r.ma_goi_tbmt || '') + '"></label>'
+      + '<label class="field-md">CĐT / pháp nhân phát thầu' + clientAc + '</label>'
+      + '<label class="field-sm">Ngày nhận / đăng tải<input name="ngayNhanHoacDangTai" type="date" value="' + API.esc(r.ngay_nhan_hoac_dang_tai || '') + '"></label>'
+      + '<label class="field-sm">Ngày hết hạn<input name="ngayHetHan" type="date" value="' + API.esc(r.ngay_het_han || '') + '"></label>'
+      + '<label class="field-sm">Dự toán (VNĐ)<input name="duToan" inputmode="numeric" value="' + API.esc(r.du_toan || '') + '"></label>'
+      + '<label class="field-sm">Trạng thái' + statSel + '</label>'
+      + '<label class="field-full">Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>';
 
     if (r.rfq_id) base += rfqContactsSection(r.rfq_id, rfqContacts, clientContacts, r.client_id || '');
     return base;
