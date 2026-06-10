@@ -5,6 +5,7 @@ import { handleMedia } from './handlers/media.js';
 import { handleRfqs } from './handlers/rfqs.js';
 import { handleRfqItems } from './handlers/rfq-items.js';
 import { handleSuppliers } from './handlers/suppliers.js';
+import { handleTechnicalClarifications } from './handlers/technical-clarifications.js';
 import { actorFromRequest, validateActorSession, validateSecret } from './lib/auth.js';
 import { json, readJson } from './lib/utils.js';
 
@@ -13,6 +14,7 @@ const CLIENT_ACTIONS = ['getClients', 'createClient', 'updateClient'];
 const SUPPLIER_ACTIONS = ['getSuppliers', 'createSupplier', 'updateSupplier'];
 const RFQ_ACTIONS = ['getDashboard', 'getRfqs', 'createRfq', 'updateRfq'];
 const RFQ_ITEM_ACTIONS = ['getRfqItems', 'createRfqItem', 'updateRfqItem'];
+const TECHNICAL_CLARIFICATION_ACTIONS = ['getTechnicalClarifications', 'createTechnicalClarification', 'updateTechnicalClarification', 'deleteTechnicalClarification'];
 const AUDIT_ACTIONS = ['getAuditLogs'];
 const MEDIA_ACTIONS = ['getMediaFiles', 'uploadMedia'];
 const PUBLIC_ACTIONS = ['authLogin', 'initSetup'];
@@ -39,6 +41,7 @@ export default {
     else if (SUPPLIER_ACTIONS.includes(action)) res = await handleSuppliers(action, request, env, ctx, actor);
     else if (RFQ_ACTIONS.includes(action)) res = await handleRfqs(action, request, env, ctx, actor);
     else if (RFQ_ITEM_ACTIONS.includes(action)) res = await handleRfqItems(action, request, env, ctx, actor);
+    else if (TECHNICAL_CLARIFICATION_ACTIONS.includes(action)) res = await handleTechnicalClarifications(action, request, env, ctx, actor);
     else if (AUDIT_ACTIONS.includes(action)) res = await handleAudit(action, request, env, ctx, actor);
     else if (MEDIA_ACTIONS.includes(action)) res = await handleMedia(action, request, env, ctx, actor);
     else res = json({ ok: false, error: 'Unknown action' }, 400);
