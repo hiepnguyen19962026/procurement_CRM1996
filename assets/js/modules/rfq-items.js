@@ -830,6 +830,26 @@
   };
 
   var csvState = { headers: null, rows: null };
+  var importMapState = { headers: null, rows: null, fileName: '', templates: [] };
+
+  var IMPORT_TARGET_FIELDS = [
+    ['', '- Không import -'],
+    ['rfq_item_id', 'rfq_item_id (update)'],
+    ['ten_vat_tu', 'Tên vật tư *'],
+    ['stt_goc', 'STT'],
+    ['ma_vat_tu', 'Mã vật tư'],
+    ['required_model', 'Quy cách / Model'],
+    ['manufacturer', 'HSX / Hãng sản xuất'],
+    ['brand', 'Nhãn hiệu'],
+    ['origin_country', 'Xuất xứ'],
+    ['unit', 'Đơn vị'],
+    ['quantity', 'Số lượng'],
+    ['yeu_cau_ky_thuat_bo_sung', 'Yêu cầu kỹ thuật bổ sung'],
+    ['don_gia_sau_thue', 'Đơn giá'],
+    ['thanh_tien_sau_thue', 'Thành tiền'],
+    ['delivery_time', 'Thời gian cấp / deadline'],
+    ['origin_full_text', 'Cột tổng hợp gốc'],
+  ];
 
   // Export: all business columns + rfqItemId at far right for round-trip bulk update
   var EXPORT_HEADERS = TEMPLATE_HEADERS.concat(['rfqItemId (Không sửa)']);
@@ -959,6 +979,235 @@
     return payload;
   }
 
+  function openImportMapping() {
+    importMapState = { headers: null, rows: null, fileName: '', templates: [] };
+    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
+    var html = ''
+      + '<div class="modal-section" style="border-top:0;margin-top:0;padding-top:0">'
+      + '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">'
+      + '<label>RFQ ID<input id="importMapRfqId" value="' + API.esc(rfqId) + '" placeholder="RFQ ID"></label>'
+      + '<label>Owner key<input id="importOwnerKey" placeholder="VD: nha_may_a" onblur="RfqItemsModule.loadImportTemplates()"></label>'
+      + '<label>Template<select id="importTemplateSelect" onchange="RfqItemsModule.applyImportTemplate()"><option value="">Chưa chọn template</option></select></label>'
+      + '<label>Tên template<input id="importTemplateName" placeholder="VD: Owner A - danh sách vật tư"></label>'
+      + '</div>'
+      + '<label>CSV file<input type="file" id="importMapCsvFile" accept=".csv,text/csv" onchange="RfqItemsModule._onImportMapFileChange(this)"></label>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px">'
+      + '<button type="button" onclick="RfqItemsModule.loadImportTemplates()">Load template</button>'
+      + '<button type="button" onclick="RfqItemsModule.saveImportTemplate()">Lưu template</button>'
+      + '<button type="button" class="primary" onclick="RfqItemsModule.commitImportMapping()">Validate / Commit</button>'
+      + '</div>'
+      + '<div id="importMapArea" style="color:var(--text-muted);font-size:13px">Chọn CSV để xem preview và map cột.</div>'
+      + '</div>';
+    Utils.openModal('Import CSV nâng cao', html, async function () {
+      await commitImportMapping();
+    });
+  }
+
+  function _onImportMapFileChange(input) {
+    var area = document.getElementById('importMapArea');
+    if (!input || !input.files || !input.files[0]) return;
+    importMapState.fileName = input.files[0].name || '';
+    area.textContent = 'Đang đọc file...';
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var all = parseCsv(e.target.result);
+        if (!all.length) { area.textContent = 'File trống.'; return; }
+        importMapState.headers = all[0];
+        importMapState.rows = all.slice(1).filter(function (r) { return r.some(function (c) { return c !== ''; }); });
+        renderImportMapping();
+      } catch (err) {
+        area.textContent = 'Lỗi đọc file: ' + (err.message || String(err));
+      }
+    };
+    reader.onerror = function () { area.textContent = 'Không đọc được file.'; };
+    reader.readAsText(input.files[0], 'UTF-8');
+  }
+
+  function renderImportMapping() {
+    var area = document.getElementById('importMapArea');
+    if (!area || !importMapState.headers) return;
+    var headers = importMapState.headers;
+    var rows = importMapState.rows || [];
+    var mappingRows = headers.map(function (h, i) {
+      return '<tr><td style="white-space:nowrap">' + API.esc(h) + '</td>'
+        + '<td><select data-map-header="' + API.esc(h) + '">' + importTargetOptions(guessTargetField(h)) + '</select></td>'
+        + '<td class="muted">' + API.esc(sampleColumn(rows, i)) + '</td></tr>';
+    }).join('');
+    var previewRows = rows.slice(0, 20);
+    var previewHead = headers.map(function (h) { return '<th>' + API.esc(h) + '</th>'; }).join('');
+    var previewBody = previewRows.map(function (r) {
+      return '<tr>' + headers.map(function (h, i) {
+        return '<td>' + API.esc(r[i] || '') + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    area.innerHTML = ''
+      + '<p style="margin:0 0 8px;color:var(--text-muted)">File: <strong>' + API.esc(importMapState.fileName || '-') + '</strong> - '
+      + rows.length + ' dòng dữ liệu. Preview ' + previewRows.length + ' dòng đầu.</p>'
+      + '<div style="overflow:auto;max-height:230px;margin-bottom:12px"><table class="quotes-mini-table"><thead><tr><th>Source Header</th><th>Target Field</th><th>Mẫu dữ liệu</th></tr></thead><tbody>'
+      + mappingRows + '</tbody></table></div>'
+      + '<div style="overflow:auto;max-height:220px"><table class="quotes-mini-table"><thead><tr>' + previewHead + '</tr></thead><tbody>' + previewBody + '</tbody></table></div>';
+  }
+
+  function importTargetOptions(current) {
+    return IMPORT_TARGET_FIELDS.map(function (pair) {
+      return '<option value="' + API.esc(pair[0]) + '"' + (pair[0] === current ? ' selected' : '') + '>' + API.esc(pair[1]) + '</option>';
+    }).join('');
+  }
+
+  function sampleColumn(rows, index) {
+    for (var i = 0; i < Math.min(rows.length, 5); i++) {
+      if (rows[i] && rows[i][index]) return rows[i][index];
+    }
+    return '';
+  }
+
+  function currentImportMapping() {
+    var mapping = {};
+    Array.prototype.forEach.call(document.querySelectorAll('#importMapArea select[data-map-header]'), function (sel) {
+      if (sel.value) mapping[sel.getAttribute('data-map-header')] = sel.value;
+    });
+    return mapping;
+  }
+
+  function guessTargetField(header) {
+    var h = normalizeHeader(header);
+    if (h === 'rfqitemid' || h === 'rfq_item_id') return 'rfq_item_id';
+    if (h === 'stt' || h === 'sttgoc') return 'stt_goc';
+    if (h.indexOf('mavattu') >= 0 || h.indexOf('mahang') >= 0) return 'ma_vat_tu';
+    if (h.indexOf('tenvattu') >= 0 || h.indexOf('danhmuchanghoa') >= 0 || h === 'tenhang') return 'ten_vat_tu';
+    if (h.indexOf('quycach') >= 0 || h.indexOf('model') >= 0 || h.indexOf('kymahieu') >= 0) return 'required_model';
+    if (h === 'hsx' || h.indexOf('hangsanxuat') >= 0) return 'manufacturer';
+    if (h.indexOf('nhanhieu') >= 0) return 'brand';
+    if (h.indexOf('xuatxu') >= 0) return 'origin_country';
+    if (h.indexOf('donvi') >= 0 || h === 'dvt') return 'unit';
+    if (h.indexOf('soluong') >= 0 || h.indexOf('khoiluong') >= 0) return 'quantity';
+    if (h.indexOf('yeucaukythuat') >= 0) return 'yeu_cau_ky_thuat_bo_sung';
+    if (h.indexOf('dongia') >= 0) return 'don_gia_sau_thue';
+    if (h.indexOf('thanhtien') >= 0) return 'thanh_tien_sau_thue';
+    if (h.indexOf('deadline') >= 0 || h.indexOf('thoigiancap') >= 0 || h.indexOf('giaohang') >= 0) return 'delivery_time';
+    return '';
+  }
+
+  function normalizeHeader(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase()
+      .replace(/[^a-z0-9_]+/g, '');
+  }
+
+  async function loadImportTemplates() {
+    var ownerKey = (document.getElementById('importOwnerKey') || {}).value || '';
+    var select = document.getElementById('importTemplateSelect');
+    if (!select) return;
+    try {
+      var data = await API.get('getImportTemplates', ownerKey ? { ownerKey: ownerKey } : {});
+      importMapState.templates = data.rows || [];
+      select.innerHTML = '<option value="">Chưa chọn template</option>' + importMapState.templates.map(function (t) {
+        return '<option value="' + API.esc(t.template_id) + '">' + API.esc(t.template_name) + '</option>';
+      }).join('');
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  function applyImportTemplate() {
+    var templateId = (document.getElementById('importTemplateSelect') || {}).value || '';
+    var template = (importMapState.templates || []).find(function (t) { return t.template_id === templateId; });
+    if (!template) return;
+    var owner = document.getElementById('importOwnerKey');
+    var name = document.getElementById('importTemplateName');
+    if (owner) owner.value = template.owner_key || '';
+    if (name) name.value = template.template_name || '';
+    var mapping = template.mappingJson || {};
+    Array.prototype.forEach.call(document.querySelectorAll('#importMapArea select[data-map-header]'), function (sel) {
+      var header = sel.getAttribute('data-map-header');
+      sel.value = mapping[header] || '';
+    });
+  }
+
+  async function saveImportTemplate() {
+    var ownerKey = (document.getElementById('importOwnerKey') || {}).value || '';
+    var templateName = (document.getElementById('importTemplateName') || {}).value || '';
+    var templateId = (document.getElementById('importTemplateSelect') || {}).value || '';
+    var mapping = currentImportMapping();
+    if (!ownerKey || !templateName) { API.toast('Nhập owner key và tên template', 'warn'); return; }
+    if (!Object.keys(mapping).length) { API.toast('Chưa map cột nào', 'warn'); return; }
+    try {
+      await API.call('saveImportTemplate', { ownerKey: ownerKey, templateName: templateName, templateId: templateId, mappingJson: mapping });
+      API.toast('Đã lưu template import', 'success');
+      await loadImportTemplates();
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  function mappedRowsForCommit(mapping) {
+    var headers = importMapState.headers || [];
+    return (importMapState.rows || []).map(function (row, idx) {
+      var raw = {};
+      var mapped = {};
+      headers.forEach(function (h, colIdx) {
+        var value = row[colIdx] !== undefined ? row[colIdx] : '';
+        raw[h] = value;
+        if (mapping[h]) mapped[mapping[h]] = value;
+      });
+      return { sourceRowNumber: idx + 2, rawRow: raw, mapped: mapped };
+    });
+  }
+
+  async function commitImportMapping() {
+    var area = document.getElementById('importMapArea');
+    var rfqId = (document.getElementById('importMapRfqId') || {}).value || '';
+    var ownerKey = (document.getElementById('importOwnerKey') || {}).value || '';
+    var templateId = (document.getElementById('importTemplateSelect') || {}).value || '';
+    if (!rfqId) { API.toast('Thiếu RFQ ID', 'warn'); return; }
+    if (!importMapState.rows || !importMapState.rows.length) { API.toast('Chưa chọn CSV', 'warn'); return; }
+    var mapping = currentImportMapping();
+    if (Object.keys(mapping).indexOf('ten_vat_tu') < 0 && Object.values(mapping).indexOf('ten_vat_tu') < 0) {
+      API.toast('Cần map cột Tên vật tư', 'warn');
+      return;
+    }
+    if (area) area.insertAdjacentHTML('afterbegin', '<p style="color:var(--text-muted)">Đang commit import...</p>');
+    try {
+      var data = await API.call('commitImportRows', {
+        rfqId: rfqId,
+        ownerKey: ownerKey,
+        templateId: templateId,
+        sourceFileName: importMapState.fileName,
+        rows: mappedRowsForCommit(mapping),
+      });
+      renderImportResult(data.summary || {});
+      await load(true);
+      if (typeof RfqsModule !== 'undefined') await RfqsModule.load(true);
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  function renderImportResult(summary) {
+    var area = document.getElementById('importMapArea');
+    if (!area) return;
+    var errors = summary.rowErrors || [];
+    var html = '<div style="border-left:3px solid ' + (summary.errors ? 'var(--primary)' : 'var(--green)') + ';padding-left:10px;margin-bottom:10px">'
+      + '<p style="margin:2px 0"><strong>Import job:</strong> ' + API.esc(summary.jobId || '') + '</p>'
+      + '<p style="margin:2px 0"><strong>Tổng:</strong> ' + Number(summary.totalRows || 0)
+      + ' | Tạo mới: ' + Number(summary.created || 0)
+      + ' | Cập nhật: ' + Number(summary.updated || 0)
+      + ' | Bỏ qua: ' + Number(summary.skipped || 0)
+      + ' | Lỗi: ' + Number(summary.errors || 0) + '</p>'
+      + '</div>';
+    if (errors.length) {
+      html += '<ul style="font-size:12px;color:var(--red);margin:0 0 10px;padding-left:1.2em">'
+        + errors.slice(0, 30).map(function (e) { return '<li>Dòng ' + API.esc(e.sourceRowNumber) + ': ' + API.esc(e.error) + '</li>'; }).join('')
+        + '</ul>';
+    }
+    area.insertAdjacentHTML('afterbegin', html);
+  }
+
   function importCsv() {
     csvState.headers = null;
     csvState.rows = null;
@@ -1074,6 +1323,12 @@
     downloadTemplate: downloadTemplate,
     exportCsv: exportCsv,
     importCsv: importCsv,
+    openImportMapping: openImportMapping,
     _onCsvFileChange: _onCsvFileChange,
+    _onImportMapFileChange: _onImportMapFileChange,
+    loadImportTemplates: loadImportTemplates,
+    applyImportTemplate: applyImportTemplate,
+    saveImportTemplate: saveImportTemplate,
+    commitImportMapping: commitImportMapping,
   };
 })();

@@ -1,6 +1,7 @@
 import { handleAccounts } from './handlers/accounts.js';
 import { handleAudit } from './handlers/audit.js';
 import { handleClients } from './handlers/clients.js';
+import { handleImports } from './handlers/imports.js';
 import { handleMedia } from './handlers/media.js';
 import { handleRfqs } from './handlers/rfqs.js';
 import { handleRfqItems } from './handlers/rfq-items.js';
@@ -21,6 +22,7 @@ const SUPPLIER_QUOTE_ACTIONS = ['getSupplierQuotes', 'searchSupplierQuotes', 'cr
 const PRICING_DECISION_ACTIONS = ['getPricingDecisions', 'createPricingDecision'];
 const AUDIT_ACTIONS = ['getAuditLogs'];
 const MEDIA_ACTIONS = ['getMediaFiles', 'uploadMedia', 'getMediaFileContent'];
+const IMPORT_ACTIONS = ['getImportTemplates', 'saveImportTemplate', 'commitImportRows', 'getImportJob', 'getImportJobRows'];
 const PUBLIC_ACTIONS = ['authLogin', 'initSetup'];
 
 export default {
@@ -50,6 +52,7 @@ export default {
     else if (PRICING_DECISION_ACTIONS.includes(action)) res = await handlePricingDecisions(action, request, env, ctx, actor);
     else if (AUDIT_ACTIONS.includes(action)) res = await handleAudit(action, request, env, ctx, actor);
     else if (MEDIA_ACTIONS.includes(action)) res = await handleMedia(action, request, env, ctx, actor);
+    else if (IMPORT_ACTIONS.includes(action)) res = await handleImports(action, request, env, ctx, actor);
     else res = json({ ok: false, error: 'Unknown action' }, 400);
     return cors(res);
   },
