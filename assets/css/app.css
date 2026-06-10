@@ -178,3 +178,47 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
   .metrics { grid-template-columns: 1fr; }
   .modal-body { grid-template-columns: 1fr; }
 }
+
+/* ── custom datepicker ─────────────────────────────────────────────────────── */
+.dp-wrap { position: relative; }
+.dp-trigger { width: 100%; text-align: left; font-size: 13px; min-height: 36px; border: 1px solid var(--border); border-radius: 9px; padding: 8px 11px; background: white; color: var(--text); box-shadow: var(--shadow-sm); font-weight: 400; display: flex; align-items: center; }
+.dp-trigger:hover { border-color: var(--primary-border); background: var(--primary-bg); color: var(--primary-dk); }
+.dp-hidden { display: none !important; }
+.dp-cal { position: absolute; top: calc(100% + 4px); left: 0; z-index: 60; background: white; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow-md); padding: 10px; min-width: 256px; }
+.dp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.dp-label { font-weight: 600; font-size: 13px; }
+.dp-nav { min-height: 0; padding: 4px 8px; font-size: 20px; line-height: 1; box-shadow: none; border-color: transparent; background: transparent; color: var(--text-muted); }
+.dp-nav:hover { background: var(--primary-bg); color: var(--primary-dk); border-color: var(--primary-border); }
+.dp-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
+.dp-dow { text-align: center; font-size: 11px; font-weight: 600; color: var(--text-muted); padding: 4px 0; }
+.dp-day { min-height: 0; padding: 5px 3px; font-size: 12px; text-align: center; box-shadow: none; border-color: transparent; background: transparent; border-radius: 6px; width: 100%; }
+.dp-day:hover { background: var(--primary-bg); color: var(--primary-dk); border-color: var(--primary-border); }
+.dp-sel { background: var(--primary) !important; color: white !important; border-color: var(--primary) !important; font-weight: 700; }
+.dp-today { font-weight: 700; color: var(--primary-dk); }
+
+/* ── client autocomplete ───────────────────────────────────────────────────── */
+.ac-wrap { position: relative; }
+.ac-input { width: 100%; }
+.ac-drop { position: absolute; top: calc(100% + 2px); left: 0; right: 0; z-index: 60; background: white; border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md); max-height: 240px; overflow-y: auto; }
+.ac-item { padding: 8px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--border); }
+.ac-item:last-child { border-bottom: 0; }
+.ac-item:hover, .ac-item:focus { background: var(--primary-bg); outline: none; }
+.ac-item small { color: var(--text-muted); font-size: 12px; }
+
+/* ── rfq status quick-edit popover ─────────────────────────────────────────── */
+.rfq-stat-btn { cursor: pointer; }
+.rfq-stat-btn:hover { background: var(--primary); color: white; border-color: var(--primary); }
+.rfq-stat-pop { position: fixed; background: white; border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-md); z-index: 50; min-width: 160px; padding: 4px; }
+.rfq-stat-item { display: block; width: 100%; text-align: left; min-height: 0; padding: 7px 12px; font-size: 12px; box-shadow: none; border-color: transparent; background: transparent; border-radius: 7px; }
+.rfq-stat-item:hover { background: var(--primary-bg); color: var(--primary-dk); border-color: var(--primary-border); }
+.rfq-stat-item.active { font-weight: 700; color: var(--primary-dk); }
+
+/* ── rfq table column sizing ───────────────────────────────────────────────── */
+#screen-rfqs td:nth-child(1) { width: 110px; }
+#screen-rfqs td:nth-child(2) { max-width: 140px; overflow-wrap: anywhere; }
+#screen-rfqs td:nth-child(3) { min-width: 160px; }
+#screen-rfqs td:nth-child(4) { min-width: 130px; }
+#screen-rfqs td:nth-child(5), #screen-rfqs td:nth-child(6) { width: 105px; }
+#screen-rfqs td:nth-child(7) { width: 90px; }
+#screen-rfqs td:nth-child(8) { width: 150px; font-variant-numeric: tabular-nums; }
+#screen-rfqs td:nth-child(9) { width: 130px; }

@@ -13,8 +13,12 @@
     document.getElementById('modalBody').innerHTML = bodyHtml;
     modal.classList.remove('hidden');
     modal._onSubmit = onSubmit;
+    var submitBtn = document.getElementById('modalSubmit');
+    if (submitBtn) submitBtn.classList.toggle('hidden', !onSubmit);
     setTimeout(function () {
-      var first = modal.querySelector('input,select,textarea');
+      var body = document.getElementById('modalBody');
+      if (typeof Datepicker !== 'undefined') Datepicker.init(body);
+      var first = modal.querySelector('input:not([type="hidden"]),select,textarea');
       if (first) first.focus();
     }, 0);
   }

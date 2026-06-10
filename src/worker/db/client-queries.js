@@ -19,8 +19,9 @@ export async function listClientsSQL(db, { q, cursor, sortBy, sortDir, limit }) 
   const binds = [];
   const where = [];
   if (q) {
-    where.push('(normalized_search LIKE ? OR client_name LIKE ? OR client_id = ?)');
-    binds.push(`%${q}%`, `%${q}%`, q);
+    // LIKE on client_id: SQLite LIKE is case-insensitive for ASCII, so 'cl-2026%' matches 'CL-2026-00001'
+    where.push('(normalized_search LIKE ? OR client_name LIKE ? OR client_id LIKE ?)');
+    binds.push(`%${q}%`, `%${q}%`, `${q}%`);
   }
   if (cursor) {
     const c = parseCursor(cursor);
