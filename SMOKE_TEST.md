@@ -1,119 +1,224 @@
-# Smoke Test
+# Phase 1 Smoke Test
 
-Run after migrations, Worker deploy, Vercel env vars, and first admin setup.
+Run these after logging in on the Vercel production site as `admin`, `manager`, or `purchasing`.
 
-Open the site, press F12, and use the browser console.
+Open DevTools -> Console. Run each block in order.
 
-## Session
+## 0. Session
 
 ```js
 Auth.session()
 ```
 
-Expected: current user object with `role`.
+Expected: a user object with role `admin`, `manager`, or `purchasing`.
 
-## Dashboard
+## 1. Ping
+
+Action: `ping`
 
 ```js
-await API.get('getDashboard', {})
+await API.call('ping', {})
 ```
 
-Expected: `{ ok: true, summary: ... }`.
+Expected: `{ ok: true, pong: true }`.
 
-## Create Client
+## 2. Create Client
+
+Action: `createClient`
 
 ```js
-await API.call('createClient', {
-  clientName: 'Test CDT',
-  plantName: 'Test Plant',
+window.smoke = window.smoke || {};
+smoke.client = await API.call('createClient', {
+  clientName: 'Smoke CDT ' + Date.now(),
+  plantName: 'Smoke Plant',
   province: 'Ha Noi',
-  note: 'Smoke test'
-})
+  note: 'Phase 1 smoke test'
+});
+smoke.client
 ```
 
-Then:
+Expected: `{ ok: true, client: ... }`.
+
+## 3. List Clients
+
+Action: `getClients`
 
 ```js
-await API.get('getClients', { q: 'test', limit: 5 })
+smoke.clients = await API.get('getClients', {
+  q: smoke.client.client.client_name,
+  limit: 5
+});
+smoke.clients
 ```
 
-## Create Supplier
+Expected: `rows` includes the created client.
+
+## 4. Create Supplier
+
+Action: `createSupplier`
 
 ```js
-await API.call('createSupplier', {
-  supplierName: 'Test Supplier',
+smoke.supplier = await API.call('createSupplier', {
+  supplierName: 'Smoke Supplier ' + Date.now(),
   supplierType: 'trader',
   country: 'VN',
-  contactName: 'Buyer Contact',
-  phone: '0900000000'
-})
+  contactName: 'Smoke Contact',
+  email: 'smoke@example.com',
+  phone: '0900000000',
+  note: 'Phase 1 smoke test'
+});
+smoke.supplier
 ```
 
-Then:
+Expected: `{ ok: true, supplier: ... }`.
+
+## 5. List Suppliers
+
+Action: `getSuppliers`
 
 ```js
-await API.get('getSuppliers', { q: 'test', limit: 5 })
+smoke.suppliers = await API.get('getSuppliers', {
+  q: smoke.supplier.supplier.supplier_name,
+  limit: 5
+});
+smoke.suppliers
 ```
 
-## Create RFQ
+Expected: `rows` includes the created supplier.
+
+## 6. Create RFQ
+
+Action: `createRfq`
 
 ```js
-const rfq = await API.call('createRfq', {
-  tenGoi: 'Smoke RFQ',
-  maGoiTbmt: 'TBMT-SMOKE',
-  nhaMayCdt: 'Test Plant',
-  trangThaiGoi: 'dang_khao_gia'
-})
-rfq
+smoke.rfq = await API.call('createRfq', {
+  clientId: smoke.client.client.client_id,
+  tenGoi: 'Smoke RFQ ' + Date.now(),
+  maGoiTbmt: 'TBMT-SMOKE-' + Date.now(),
+  nhaMayCdt: 'Smoke Plant',
+  ngayNhanHoacDangTai: '2026-06-10',
+  ngayHetHan: '2026-06-30',
+  duToan: 1000000,
+  trangThaiGoi: 'dang_khao_gia',
+  note: 'Phase 1 smoke test'
+});
+smoke.rfq
 ```
 
-## Create RFQ Item
+Expected: `{ ok: true, rfq: ... }`.
 
-Use the `rfq.rfq.rfq_id` from the previous result:
+## 7. List RFQs
+
+Action: `getRfqs`
 
 ```js
-await API.call('createRfqItem', {
-  rfqId: rfq.rfq.rfq_id,
-  maVatTu: 'VT-SMOKE',
-  tenVatTu: 'Vong bi smoke test',
+smoke.rfqs = await API.get('getRfqs', {
+  q: smoke.rfq.rfq.ten_goi,
+  limit: 5
+});
+smoke.rfqs
+```
+
+Expected: `rows` includes the created RFQ.
+
+## 8. Create RFQ Item
+
+Action: `createRfqItem`
+
+```js
+smoke.item = await API.call('createRfqItem', {
+  rfqId: smoke.rfq.rfq.rfq_id,
+  sttGoc: '1',
+  maMuaSam: 'MS-SMOKE',
+  maVatTu: 'VT-SMOKE-' + Date.now(),
+  tenVatTu: 'Smoke bearing 6310',
   quyCachModelYeuCau: 'SKF 6310',
+  hangGocNsxGoc: 'SKF',
+  xuatXu: 'EU',
   soLuong: 2,
   donVi: 'cai',
-  trangThaiDong: 'dang_hoi_gia'
-})
+  trangThaiDong: 'dang_hoi_gia',
+  thongSoKyThuat: 'Phase 1 smoke test item'
+});
+smoke.item
 ```
 
-Then:
+Expected: `{ ok: true, item: ... }`.
+
+## 9. List RFQ Items
+
+Action: `getRfqItems`
 
 ```js
-await API.get('getRfqItems', { q: '6310', limit: 5 })
+smoke.items = await API.get('getRfqItems', {
+  q: '6310',
+  rfqId: smoke.rfq.rfq.rfq_id,
+  limit: 5
+});
+smoke.items
 ```
 
-## Audit Log
+Expected: `rows` includes the created RFQ item.
 
-Admin or manager:
+## 10. Dashboard Summary
+
+Action: `getDashboard`
 
 ```js
-await API.get('getAuditLogs', { limit: 10 })
+smoke.dashboard = await API.get('getDashboard', {});
+smoke.dashboard
 ```
 
-Expected: rows for create client, supplier, RFQ, and RFQ item.
+Expected: `summary.rfqs`, `summary.items`, and `summary.suppliers` are numbers.
 
-## Role Check
+## 11. Audit Log
 
-Login as a `viewer`, then run:
+Action: `getAuditLogs`
 
 ```js
-await API.call('createSupplier', { supplierName: 'Should fail' })
+smoke.audit = await API.get('getAuditLogs', {
+  q: smoke.rfq.rfq.rfq_id,
+  limit: 20
+});
+smoke.audit
 ```
 
-Expected: 403 or `Khong co quyen`.
+Expected for `admin` or `manager`: `{ ok: true, rows: ... }`. At least one row should reference the RFQ or related mutation.
 
-## Pagination
+For `purchasing`, this action should be blocked by role:
 
 ```js
-const p1 = await API.get('getRfqItems', { limit: 2 })
-await API.get('getRfqItems', { limit: 2, cursor: p1.nextCursor })
+await API.get('getAuditLogs', { limit: 1 })
 ```
 
-Expected: second request works when `p1.hasMore` is true.
+Expected: `Khong co quyen`.
+
+## 12. Upload Disabled In Phase 1
+
+Endpoint: `/api/upload`
+
+```js
+const fd = new FormData();
+fd.append('file', new Blob(['smoke'], { type: 'text/plain' }), 'smoke.txt');
+await fetch('/api/upload', {
+  method: 'POST',
+  credentials: 'include',
+  body: fd
+}).then(async (res) => ({ status: res.status, body: await res.json() }))
+```
+
+Expected: status `501` and message that upload is disabled until MIME allowlist and magic-byte validation are implemented.
+
+## 13. Cursor Pagination
+
+Action: `getRfqItems`
+
+```js
+const page1 = await API.get('getRfqItems', { limit: 2 });
+const page2 = page1.nextCursor
+  ? await API.get('getRfqItems', { limit: 2, cursor: page1.nextCursor })
+  : null;
+({ page1, page2 })
+```
+
+Expected: first page returns at most 2 rows. Second page only runs when `nextCursor` exists.
