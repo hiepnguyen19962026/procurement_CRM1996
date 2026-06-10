@@ -99,12 +99,18 @@
         API.get('getSupplierQuotes', { rfqItemId: id }),
         API.get('getPricingDecisions', { rfqItemId: id }).catch(function () { return { rows: [] }; }),
         API.get('getMediaFiles', { ownerType: 'rfq_item', ownerId: id }).catch(function () { return { rows: [] }; }),
+        row.item_id ? API.get('getMasterItemDetail', { itemId: row.item_id }).catch(function () { return { item: null }; }) : Promise.resolve({ item: null }),
+        API.get('suggestMasterItemsForRfqItem', { rfqItemId: id }).catch(function () { return { rows: [] }; }),
       ]);
       var quotes = results[1].rows || [];
       var quoteMedia = await loadQuoteMedia(quotes);
       state.currentMedia = {
         itemFiles: results[3].rows || [],
         quoteFiles: quoteMedia,
+      };
+      state.currentMaster = {
+        item: results[4].item || null,
+        suggestions: results[5].rows || [],
       };
       openForm(row, results[0].rows || [], quotes, results[2].rows || [], {
         itemFiles: results[3].rows || [],
@@ -207,10 +213,116 @@
       + option('da_final', 'Đã final', status)
       + '</select></label>'
       + textarea('originFullText', 'Cột tổng hợp gốc để đối chiếu/export', r.origin_full_text)
+      + masterItemSection(r, state.currentMaster || {})
       + itemAttachmentSection(r, (state.currentMedia && state.currentMedia.itemFiles) || [])
       + technicalSection(r, clarifications)
       + quotesSection(r, quotes || [], latestDecision, (state.currentMedia && state.currentMedia.quoteFiles) || {})
       + pricingSection(r, pricingDecisions || []);
+  }
+
+  function masterItemSection(item, master) {
+    if (!item.rfq_item_id) return '';
+    var linked = master && master.item;
+    var suggestions = (master && master.suggestions) || [];
+    var suffix = String(item.rfq_item_id || '').replace(/[^A-Za-z0-9_-]/g, '_');
+    var searchId = 'master_search_' + suffix;
+    var resultsId = 'master_results_' + suffix;
+    return '<section class="modal-section master-item-section">'
+      + '<div class="section-head"><h4>Master v&#7853;t t&#432;</h4></div>'
+      + (linked
+        ? '<div class="timeline-item">'
+          + masterItemSummary(linked)
+          + '<div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">'
+          + '<button type="button" onclick="RfqItemsModule.refreshMasterItem(\'' + API.esc(item.rfq_item_id) + '\')">L&#224;m m&#7899;i</button>'
+          + '<button type="button" data-write onclick="RfqItemsModule.unlinkMasterItem(\'' + API.esc(item.rfq_item_id) + '\')">B&#7887; li&#234;n k&#7871;t</button>'
+          + '</div></div>'
+        : '<div class="empty-state small">Ch&#432;a li&#234;n k&#7871;t master item.</div>'
+          + '<div data-write style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">'
+          + '<button type="button" onclick="RfqItemsModule.createMasterFromRfqItem(\'' + API.esc(item.rfq_item_id) + '\')">T&#7841;o master t&#7915; d&#242;ng n&#224;y</button>'
+          + '</div>'
+          + '<div style="margin-top:10px;display:grid;grid-template-columns:minmax(180px,1fr) auto;gap:8px;align-items:end">'
+          + '<label style="margin:0">T&#236;m master item<input id="' + searchId + '" value="' + API.esc([item.ma_vat_tu, item.ten_vat_tu].filter(Boolean).join(' ')) + '"></label>'
+          + '<button type="button" onclick="RfqItemsModule.searchMasterItemsForLink(\'' + API.esc(item.rfq_item_id) + '\', \'' + searchId + '\', \'' + resultsId + '\')">T&#236;m</button>'
+          + '</div>'
+          + '<div id="' + resultsId + '" style="margin-top:8px">' + masterSuggestionList(item.rfq_item_id, suggestions) + '</div>')
+      + '</section>';
+  }
+
+  function masterItemSummary(r) {
+    return '<div>'
+      + '<strong>' + API.esc(r.item_id || '-') + '</strong>'
+      + (r.ma_vat_tu ? ' <span class="badge">' + API.esc(r.ma_vat_tu) + '</span>' : '')
+      + '<div style="margin-top:4px"><strong>' + API.esc(r.ten_vat_tu || '-') + '</strong></div>'
+      + '<div class="muted">' + API.esc([r.required_model, r.manufacturer, r.brand, r.origin_country, r.unit].filter(Boolean).join(' - ')) + '</div>'
+      + '<div class="muted" style="font-size:12px;margin-top:4px">'
+      + API.esc((r.linked_rfq_item_count || 0) + ' dong RFQ, ' + (r.quote_count || 0) + ' bao gia')
+      + '</div></div>';
+  }
+
+  function masterSuggestionList(rfqItemId, rows) {
+    if (!rows || !rows.length) return '<div class="empty-state small">Ch&#432;a c&#243; g&#7907;i &#253; ph&#249; h&#7907;p.</div>';
+    return '<div class="quotes-table-wrap"><table class="quotes-mini-table">'
+      + '<thead><tr><th>M&#227;</th><th>T&#234;n master</th><th>Quy c&#225;ch / h&#227;ng</th><th></th></tr></thead><tbody>'
+      + rows.slice(0, 10).map(function (r) {
+        return '<tr>'
+          + '<td>' + API.esc(r.ma_vat_tu || r.item_id || '-') + '</td>'
+          + '<td><strong>' + API.esc(r.ten_vat_tu || '-') + '</strong><div class="muted">' + API.esc(r.item_id || '') + '</div></td>'
+          + '<td>' + API.esc([r.required_model, r.manufacturer, r.brand, r.origin_country, r.unit].filter(Boolean).join(' - ')) + '</td>'
+          + '<td><button type="button" data-write onclick="RfqItemsModule.linkMasterItem(\'' + API.esc(rfqItemId) + '\', \'' + API.esc(r.item_id) + '\')">Link</button></td>'
+          + '</tr>';
+      }).join('')
+      + '</tbody></table></div>';
+  }
+
+  async function refreshMasterItem(rfqItemId) {
+    await openEdit(rfqItemId);
+  }
+
+  async function createMasterFromRfqItem(rfqItemId) {
+    try {
+      await API.call('createMasterItem', { sourceRfqItemId: rfqItemId });
+      API.toast('Da tao va lien ket master item', 'success');
+      await load(true);
+      await openEdit(rfqItemId);
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  async function linkMasterItem(rfqItemId, itemId) {
+    try {
+      await API.call('linkRfqItemToMaster', { rfqItemId: rfqItemId, itemId: itemId });
+      API.toast('Da lien ket master item', 'success');
+      await load(true);
+      await openEdit(rfqItemId);
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  async function unlinkMasterItem(rfqItemId) {
+    try {
+      await API.call('unlinkRfqItemFromMaster', { rfqItemId: rfqItemId });
+      API.toast('Da bo lien ket master item', 'success');
+      await load(true);
+      await openEdit(rfqItemId);
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  async function searchMasterItemsForLink(rfqItemId, inputId, targetId) {
+    var input = document.getElementById(inputId);
+    var target = document.getElementById(targetId);
+    var q = input ? input.value : '';
+    if (target) target.innerHTML = '<div class="empty-state small">&#272;ang t&#236;m...</div>';
+    try {
+      var data = await API.get('searchMasterItems', { q: q, status: 'active', limit: 10 });
+      if (target) target.innerHTML = masterSuggestionList(rfqItemId, data.rows || []);
+      Auth.applyRoleUI();
+    } catch (err) {
+      API.error(err);
+    }
   }
 
   function itemAttachmentSection(item, files) {
@@ -1318,6 +1430,11 @@
     openQuoteForm: openQuoteForm,
     archiveQuote: archiveQuote,
     openPricingForm: openPricingForm,
+    refreshMasterItem: refreshMasterItem,
+    createMasterFromRfqItem: createMasterFromRfqItem,
+    linkMasterItem: linkMasterItem,
+    unlinkMasterItem: unlinkMasterItem,
+    searchMasterItemsForLink: searchMasterItemsForLink,
     uploadMediaFile: uploadMediaFile,
     openMediaPreview: openMediaPreview,
     downloadTemplate: downloadTemplate,
