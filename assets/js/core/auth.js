@@ -57,13 +57,30 @@
     });
   }
 
-  function init() {
+  async function restoreSession() {
+    try {
+      var data = await API.call('getSession', {});
+      if (!data.ok || !data.user) throw new Error('No session');
+      save(data.user);
+      applyRoleUI();
+      showApp();
+      DashboardModule.load();
+    } catch {
+      sessionStorage.removeItem('procurement_session');
+      AppState.set('user', null);
+      document.body.classList.remove('is-auth');
+    }
+  }
+
+  async function init() {
     var user = session();
     if (user) {
       AppState.set('user', user);
       applyRoleUI();
       showApp();
+      return;
     }
+    await restoreSession();
   }
 
   window.Auth = { init: init, login: login, logout: logout, session: session, applyRoleUI: applyRoleUI };

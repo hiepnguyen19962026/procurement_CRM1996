@@ -1,7 +1,7 @@
 export const config = { runtime: 'edge' };
 
 const COOKIE_NAME = 'procurement_sess';
-const JWT_EXPIRES = 8 * 60 * 60;
+const JWT_EXPIRES = 7 * 24 * 60 * 60;
 const PUBLIC_ACTIONS = new Set(['authLogin', 'initSetup', 'logout']);
 const VIEW_ACTIONS = ['ping', 'logout', 'getSession', 'changePassword', 'getDashboard', 'getClients', 'getSuppliers', 'getRfqs', 'getRfqItems', 'getMediaFiles'];
 const PURCHASING_ACTIONS = [...VIEW_ACTIONS, 'createClient', 'updateClient', 'createSupplier', 'updateSupplier', 'createRfq', 'updateRfq', 'createRfqItem', 'updateRfqItem'];
