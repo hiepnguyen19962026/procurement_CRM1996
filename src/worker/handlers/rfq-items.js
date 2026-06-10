@@ -57,25 +57,58 @@ function v(body, camel, snake, max = 500) {
   return cleanString(body[camel] ?? body[snake], max);
 }
 
+function firstText(body, keys, max = 500) {
+  for (const key of keys) {
+    if (body[key] !== undefined && body[key] !== null) return cleanString(body[key], max);
+  }
+  return '';
+}
+
+function firstNumber(body, keys) {
+  for (const key of keys) {
+    if (body[key] !== undefined && body[key] !== null) return cleanNumber(body[key]);
+  }
+  return 0;
+}
+
 function normalizeItemRow(body, base) {
+  const requiredModel = firstText(body, ['requiredModel', 'required_model', 'quyCachModelYeuCau', 'quy_cach_model_yeu_cau'], 1000);
+  const brand = firstText(body, ['brand', 'nhanHieu', 'nhan_hieu'], 120);
+  const manufactureYear = firstText(body, ['manufactureYear', 'manufacture_year', 'namSanXuat', 'nam_san_xuat'], 40);
+  const originCountry = firstText(body, ['originCountry', 'origin_country', 'xuatXu', 'xuat_xu'], 120);
+  const manufacturer = firstText(body, ['manufacturer', 'hangGocNsxGoc', 'hang_goc_nsx_goc'], 180);
+  const technicalParams = firstText(body, ['technicalParams', 'technical_params', 'thongSoKyThuat', 'thong_so_ky_thuat'], 2000);
+  const unit = firstText(body, ['unit', 'donVi', 'don_vi'], 80);
+  const quantity = firstNumber(body, ['quantity', 'soLuong', 'so_luong']);
   const row = {
     ...base,
     stt_goc: v(body, 'sttGoc', 'stt_goc', 40),
     id_import_goc: v(body, 'idImportGoc', 'id_import_goc', 120),
     ma_mua_sam: v(body, 'maMuaSam', 'ma_mua_sam', 120),
     ma_vat_tu: v(body, 'maVatTu', 'ma_vat_tu', 120),
-    quy_cach_model_yeu_cau: v(body, 'quyCachModelYeuCau', 'quy_cach_model_yeu_cau', 1000),
-    hang_goc_nsx_goc: v(body, 'hangGocNsxGoc', 'hang_goc_nsx_goc', 180),
+    required_model: requiredModel,
+    brand,
+    manufacture_year: manufactureYear,
+    origin_country: originCountry,
+    manufacturer,
+    technical_params: technicalParams,
+    unit,
+    quantity,
+    origin_full_text: v(body, 'originFullText', 'origin_full_text', 1500),
+    delivery_time: v(body, 'deliveryTime', 'delivery_time', 180),
+    note: v(body, 'note', 'note', 1500),
+    quy_cach_model_yeu_cau: requiredModel,
+    hang_goc_nsx_goc: manufacturer,
     hang_bao_gia_nsx_bao_gia: v(body, 'hangBaoGiaNsxBaoGia', 'hang_bao_gia_nsx_bao_gia', 180),
-    nhan_hieu: v(body, 'nhanHieu', 'nhan_hieu', 120),
-    xuat_xu: v(body, 'xuatXu', 'xuat_xu', 120),
-    nam_san_xuat: v(body, 'namSanXuat', 'nam_san_xuat', 40),
+    nhan_hieu: brand,
+    xuat_xu: originCountry,
+    nam_san_xuat: manufactureYear,
     vat_lieu: v(body, 'vatLieu', 'vat_lieu', 180),
     phu_tung_chuyen_dung: v(body, 'phuTungChuyenDung', 'phu_tung_chuyen_dung', 80),
-    thong_so_ky_thuat: v(body, 'thongSoKyThuat', 'thong_so_ky_thuat', 2000),
+    thong_so_ky_thuat: technicalParams,
     yeu_cau_ky_thuat_bo_sung: v(body, 'yeuCauKyThuatBoSung', 'yeu_cau_ky_thuat_bo_sung', 1500),
-    so_luong: cleanNumber(body.soLuong ?? body.so_luong),
-    don_vi: v(body, 'donVi', 'don_vi', 80),
+    so_luong: quantity,
+    don_vi: unit,
     thue_suat: cleanNumber(body.thueSuat ?? body.thue_suat),
     don_gia_truoc_thue: cleanMoney(body.donGiaTruocThue ?? body.don_gia_truoc_thue),
     don_gia_sau_thue: cleanMoney(body.donGiaSauThue ?? body.don_gia_sau_thue),
@@ -94,8 +127,9 @@ function normalizeItemRow(body, base) {
     source_row_number: Math.trunc(cleanNumber(body.sourceRowNumber ?? body.source_row_number)),
   };
   row.normalized_search = buildSearchText([
-    row.ma_mua_sam, row.ma_vat_tu, row.ten_vat_tu, row.quy_cach_model_yeu_cau,
-    row.hang_goc_nsx_goc, row.hang_bao_gia_nsx_bao_gia, row.xuat_xu, row.thong_so_ky_thuat,
+    row.ma_mua_sam, row.ma_vat_tu, row.ten_vat_tu, row.required_model,
+    row.brand, row.manufacturer, row.origin_country, row.manufacture_year,
+    row.technical_params, row.vat_lieu, row.yeu_cau_ky_thuat_bo_sung,
   ]);
   return row;
 }

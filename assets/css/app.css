@@ -96,6 +96,10 @@ tbody tr:hover { background: #fffaf5; }
 tbody tr:last-child td { border-bottom: 0; }
 td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .badge { display: inline-block; background: var(--primary-bg); color: var(--primary-dk); border: 1px solid var(--primary-border); border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+.rfq-note { display: block; max-width: 280px; white-space: normal; overflow-wrap: anywhere; }
+.muted-cell { color: var(--text-muted); }
+#screen-items table { min-width: 2400px; }
+#screen-items td { overflow-wrap: anywhere; }
 .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
 .metric { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow-card); display: grid; grid-template-columns: 48px 1fr; gap: 14px; align-items: center; min-height: 112px; }
 .metric-icon { width: 48px; height: 48px; border-radius: 999px; display: inline-grid; place-items: center; font-size: 20px; background: var(--primary-bg); color: var(--primary); }

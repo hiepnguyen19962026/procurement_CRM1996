@@ -35,14 +35,18 @@ export async function insertRfqItemSQL(db, row) {
   return db.prepare(
     `INSERT INTO rfq_items (
       rfq_item_id, rfq_id, stt_goc, id_import_goc, ma_mua_sam, ma_vat_tu, ten_vat_tu,
+      required_model, brand, manufacture_year, origin_country, manufacturer, technical_params, unit, quantity,
+      origin_full_text, delivery_time, note,
       quy_cach_model_yeu_cau, hang_goc_nsx_goc, hang_bao_gia_nsx_bao_gia, nhan_hieu, xuat_xu, nam_san_xuat,
       vat_lieu, phu_tung_chuyen_dung, thong_so_ky_thuat, yeu_cau_ky_thuat_bo_sung, so_luong, don_vi,
       thue_suat, don_gia_truoc_thue, don_gia_sau_thue, thanh_tien_sau_thue, nguon_gia,
       trang_thai_dong, trang_thai_ky_thuat, quy_cach_final, hang_final, xuat_xu_final, ghi_chu_final,
       item_id, normalized_search, raw_row_json, source_file_id, source_sheet_name, source_row_number, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     row.rfq_item_id, row.rfq_id, row.stt_goc, row.id_import_goc, row.ma_mua_sam, row.ma_vat_tu, row.ten_vat_tu,
+    row.required_model, row.brand, row.manufacture_year, row.origin_country, row.manufacturer, row.technical_params, row.unit, row.quantity,
+    row.origin_full_text, row.delivery_time, row.note,
     row.quy_cach_model_yeu_cau, row.hang_goc_nsx_goc, row.hang_bao_gia_nsx_bao_gia, row.nhan_hieu, row.xuat_xu, row.nam_san_xuat,
     row.vat_lieu, row.phu_tung_chuyen_dung, row.thong_so_ky_thuat, row.yeu_cau_ky_thuat_bo_sung, row.so_luong, row.don_vi,
     row.thue_suat, row.don_gia_truoc_thue, row.don_gia_sau_thue, row.thanh_tien_sau_thue, row.nguon_gia,
@@ -55,6 +59,8 @@ export async function updateRfqItemSQL(db, row) {
   return db.prepare(
     `UPDATE rfq_items SET
       rfq_id = ?, stt_goc = ?, id_import_goc = ?, ma_mua_sam = ?, ma_vat_tu = ?, ten_vat_tu = ?,
+      required_model = ?, brand = ?, manufacture_year = ?, origin_country = ?, manufacturer = ?, technical_params = ?, unit = ?, quantity = ?,
+      origin_full_text = ?, delivery_time = ?, note = ?,
       quy_cach_model_yeu_cau = ?, hang_goc_nsx_goc = ?, hang_bao_gia_nsx_bao_gia = ?, nhan_hieu = ?, xuat_xu = ?, nam_san_xuat = ?,
       vat_lieu = ?, phu_tung_chuyen_dung = ?, thong_so_ky_thuat = ?, yeu_cau_ky_thuat_bo_sung = ?, so_luong = ?, don_vi = ?,
       thue_suat = ?, don_gia_truoc_thue = ?, don_gia_sau_thue = ?, thanh_tien_sau_thue = ?, nguon_gia = ?,
@@ -63,6 +69,8 @@ export async function updateRfqItemSQL(db, row) {
      WHERE rfq_item_id = ?`
   ).bind(
     row.rfq_id, row.stt_goc, row.id_import_goc, row.ma_mua_sam, row.ma_vat_tu, row.ten_vat_tu,
+    row.required_model, row.brand, row.manufacture_year, row.origin_country, row.manufacturer, row.technical_params, row.unit, row.quantity,
+    row.origin_full_text, row.delivery_time, row.note,
     row.quy_cach_model_yeu_cau, row.hang_goc_nsx_goc, row.hang_bao_gia_nsx_bao_gia, row.nhan_hieu, row.xuat_xu, row.nam_san_xuat,
     row.vat_lieu, row.phu_tung_chuyen_dung, row.thong_so_ky_thuat, row.yeu_cau_ky_thuat_bo_sung, row.so_luong, row.don_vi,
     row.thue_suat, row.don_gia_truoc_thue, row.don_gia_sau_thue, row.thanh_tien_sau_thue, row.nguon_gia,
