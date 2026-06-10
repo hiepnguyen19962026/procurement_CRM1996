@@ -104,7 +104,7 @@ async function searchQuotes(request, env, actor) {
 }
 
 async function saveQuote(request, env, ctx, actor, isUpdate) {
-  const denied = requireRole(actor, isUpdate ? MANAGE_ROLES : WRITE_ROLES);
+  const denied = requireRole(actor, WRITE_ROLES);
   if (denied) return denied;
   const body = await readJson(request);
   const now = nowIso();
@@ -118,6 +118,9 @@ async function saveQuote(request, env, ctx, actor, isUpdate) {
   const rfqItemId = cleanString(body.rfqItemId || body.rfq_item_id || (oldRow && oldRow.rfq_item_id) || '', 80);
   const item = await getRfqItemSQL(env.DB, rfqItemId);
   if (!item) return json({ ok: false, error: 'Khong tim thay dong vat tu' }, 404);
+  if (normalizeSourceChannel(body.sourceChannel ?? body.source_channel) === null) {
+    return json({ ok: false, error: 'sourceChannel khong hop le' }, 400);
+  }
 
   const row = normalizeQuote(body, {
     quote_id: isUpdate ? oldRow.quote_id : makeId('QUO'),
@@ -175,7 +178,6 @@ function normalizeQuote(body, base) {
   const priceVndInclTax = Math.round(priceVnd * (1 + taxRate / 100));
   const supplierId = cleanString(body.supplierId ?? body.supplier_id, 80);
   const sourceChannel = normalizeSourceChannel(body.sourceChannel ?? body.source_channel);
-  if (sourceChannel === null) throw new Error('sourceChannel khong hop le');
   const receivedAt = normalizeReceivedAt(body.receivedAt ?? body.received_at);
   return {
     ...base,

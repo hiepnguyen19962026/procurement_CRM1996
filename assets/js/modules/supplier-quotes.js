@@ -10,6 +10,7 @@
       supplierName:   (document.getElementById('sqSupplier')     || {}).value || '',
       manufacturer:   (document.getElementById('sqManufacturer') || {}).value || '',
       status:         (document.getElementById('sqStatus')       || {}).value || '',
+      sourceChannel:  (document.getElementById('sqSourceChannel') || {}).value || '',
       priceMin:       (document.getElementById('sqPriceMin')     || {}).value || '',
       priceMax:       (document.getElementById('sqPriceMax')     || {}).value || '',
       validUntilFrom: (document.getElementById('sqValidFrom')    || {}).value || '',
@@ -28,6 +29,8 @@
     });
     var statusEl = document.getElementById('sqStatus');
     if (statusEl) statusEl.value = '';
+    var sourceEl = document.getElementById('sqSourceChannel');
+    if (sourceEl) sourceEl.value = '';
     load(true);
   }
 
@@ -44,6 +47,7 @@
     if (filters.supplierName)   params.supplierName   = filters.supplierName;
     if (filters.manufacturer)   params.manufacturer   = filters.manufacturer;
     if (filters.status)         params.status         = filters.status;
+    if (filters.sourceChannel)  params.sourceChannel  = filters.sourceChannel;
     if (filters.priceMin)       params.priceMin       = filters.priceMin;
     if (filters.priceMax)       params.priceMax       = filters.priceMax;
     if (filters.validUntilFrom) params.validUntilFrom = filters.validUntilFrom;
@@ -89,12 +93,15 @@
       + (r.ten_goi ? '<br><small style="color:var(--text-muted)">' + API.esc(r.ten_goi) + '</small>' : '');
     var itemCell = API.esc(r.ma_vat_tu || '')
       + (r.ten_vat_tu ? '<br><small style="color:var(--text-muted)">' + API.esc(r.ten_vat_tu) + '</small>' : '');
+    var supplierCell = API.esc(r.supplier_name || '')
+      + (quoteSourceText(r) ? '<br><small style="color:var(--text-muted)">' + API.esc(quoteSourceText(r)) + '</small>' : '')
+      + (r.received_at ? '<br><small style="color:var(--text-muted)">Nhận: ' + API.esc(r.received_at) + '</small>' : '');
 
     return '<tr>' +
       '<td>' + rfqCell + '</td>' +
       '<td>' + itemCell + '</td>' +
       '<td>' + API.esc(r.required_model_display || '') + '</td>' +
-      '<td>' + API.esc(r.supplier_name || '') + '</td>' +
+      '<td>' + supplierCell + '</td>' +
       '<td>' + API.esc(r.manufacturer || '') + '</td>' +
       '<td style="text-align:right;white-space:nowrap">' + priceText + '</td>' +
       '<td>' + API.esc(r.lead_time || '') + '</td>' +
@@ -103,6 +110,23 @@
       '<td>' + statusBadge + '</td>' +
       '<td><button onclick="SupplierQuotesModule.openItem(\'' + r.rfq_item_id + '\')">Xem vật tư</button></td>' +
       '</tr>';
+  }
+
+  function quoteSourceText(r) {
+    var channel = sourceChannelLabel(r.source_channel);
+    var ref = r.source_ref || '';
+    return [channel, ref].filter(Boolean).join(' - ');
+  }
+
+  function sourceChannelLabel(value) {
+    return {
+      zalo: 'Zalo',
+      wechat: 'WeChat',
+      email: 'Email',
+      phone: 'Phone',
+      direct: 'Direct',
+      other: 'Other',
+    }[value] || '';
   }
 
   function openItem(rfqItemId) {

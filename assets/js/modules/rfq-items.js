@@ -372,7 +372,7 @@
     var inputId = mediaInputId('quote', r.quote_id, 'quote');
     var actions = isArchived
       ? '<span class="badge">Đã lưu trữ</span>'
-      : '<button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.openQuoteForm(\''
+      : '<button type="button" data-role-only="admin,manager,purchasing" onclick="RfqItemsModule.openQuoteForm(\''
           + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\')">Sửa</button>'
         + ' <button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.archiveQuote(\''
           + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\')">Lưu trữ</button>'
@@ -382,8 +382,11 @@
     var baseLabel = isSelectedBase
       ? ' <span class="badge" style="background:var(--primary-bg);border-color:var(--primary-border);color:var(--primary-dk)">★ base</span>'
       : '';
+    var sourceText = quoteSourceText(r);
     return '<tr' + (isSelectedBase ? ' style="background:var(--primary-bg)"' : '') + '>'
-      + '<td>' + API.esc(r.supplier_name || r.supplier_id || '-') + baseLabel + '</td>'
+      + '<td>' + API.esc(r.supplier_name || r.supplier_id || '-') + baseLabel
+        + (sourceText ? '<div class="muted" style="font-size:12px;margin-top:4px">' + API.esc(sourceText) + '</div>' : '')
+        + '</td>'
       + '<td>' + API.esc(r.manufacturer || '-') + '</td>'
       + '<td class="num">' + API.esc(r.quoted_price ? Number(r.quoted_price).toLocaleString('vi-VN') : '-') + '</td>'
       + '<td>' + API.esc(r.currency || 'VND') + '</td>'
@@ -394,7 +397,7 @@
       + '<td>' + API.esc(r.valid_until || '') + '</td>'
       + '<td>' + API.esc(r.warranty || '') + '</td>'
       + '<td>' + quoteFileCell(rfqItemId, r.quote_id, inputId, files) + '</td>'
-      + '<td class="muted">' + API.esc(r.note || '') + '</td>'
+      + '<td class="muted">' + API.esc([r.note, r.received_at ? ('Nhận: ' + r.received_at) : ''].filter(Boolean).join('\n')) + '</td>'
       + '<td class="nowrap">' + actions + '</td>'
       + '</tr>';
   }
@@ -532,7 +535,9 @@
 
   function quoteFields(r) {
     var currency = r.currency || 'VND';
+    var sourceChannel = r.source_channel || '';
     return ''
+      + quoteReferenceFields(r, sourceChannel)
       + input('supplierName', 'Tên nhà cung cấp', r.supplier_name || '', 'placeholder="VD: SKF Vietnam"')
       + input('manufacturer', 'Hãng sản xuất', r.manufacturer || '', 'placeholder="VD: SKF"')
       + input('quoteDate', 'Ngày báo giá', r.quote_date || '', 'type="date"')
@@ -552,6 +557,42 @@
       + input('validUntil', 'Hiệu lực đến', r.valid_until || '', 'type="date"')
       + input('warranty', 'Bảo hành', r.warranty || '', 'placeholder="VD: 12 tháng"')
       + textarea('note', 'Ghi chú', r.note || '');
+  }
+
+  function quoteReferenceFields(r, sourceChannel) {
+    return ''
+      + '<label>Nguồn báo giá<select name="sourceChannel">'
+      + sourceOption('', '-', sourceChannel)
+      + sourceOption('zalo', 'Zalo', sourceChannel)
+      + sourceOption('wechat', 'WeChat', sourceChannel)
+      + sourceOption('email', 'Email', sourceChannel)
+      + sourceOption('phone', 'Phone', sourceChannel)
+      + sourceOption('direct', 'Direct', sourceChannel)
+      + sourceOption('other', 'Other', sourceChannel)
+      + '</select></label>'
+      + input('receivedAt', 'Thời điểm nhận báo giá', r.received_at || '', 'type="datetime-local"')
+      + textarea('sourceRef', 'Ghi chú nguồn / tham chiếu', r.source_ref || '');
+  }
+
+  function sourceOption(value, label, current) {
+    return '<option value="' + API.esc(value) + '"' + (value === current ? ' selected' : '') + '>' + API.esc(label) + '</option>';
+  }
+
+  function quoteSourceText(r) {
+    var channel = sourceChannelLabel(r.source_channel);
+    var ref = r.source_ref || '';
+    return [channel, ref].filter(Boolean).join(' - ');
+  }
+
+  function sourceChannelLabel(value) {
+    return {
+      zalo: 'Zalo',
+      wechat: 'WeChat',
+      email: 'Email',
+      phone: 'Phone',
+      direct: 'Direct',
+      other: 'Other',
+    }[value] || '';
   }
 
   // --- Price Comparison ---
