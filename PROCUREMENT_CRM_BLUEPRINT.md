@@ -2,6 +2,8 @@
 
 Tài liệu này dùng làm blueprint cho web app **Procurement CRM / RFQ Price History**. Mục tiêu là quản lý dữ liệu khảo giá vật tư kỹ thuật cho purchasing: nhận danh sách vật tư từ CĐT, hỏi giá nhiều hãng/nhà cung cấp, cân giá báo CĐT, theo dõi thay đổi kỹ thuật, và tra cứu lại lịch sử giá sau vài tháng/vài năm.
 
+**Cập nhật vận hành:** bản này đã được bổ sung theo trạng thái smoke test production ngày **2026-06-10**. Mục tiêu của tài liệu sau cập nhật là giữ “sườn” nghiệp vụ để các lần sửa sau không đi lệch kiến trúc, không tạo trùng bảng/action/component, và không mở thêm module lớn khi chưa có dữ liệu thật chứng minh cần thiết.
+
 ---
 
 ## 1. Mục tiêu app
@@ -28,7 +30,7 @@ Không lấy hợp đồng làm trung tâm, vì phần lớn dữ liệu thực 
 
 ## 1A. Trạng thái triển khai hiện tại đã chốt
 
-Tính đến phase hiện tại, app đang đi đúng kiến trúc mục tiêu:
+Tính đến smoke test production ngày **2026-06-10**, app đã đi đúng kiến trúc mục tiêu:
 
 ```text
 Browser
@@ -39,9 +41,9 @@ Browser
   -> R2
 ```
 
-Frontend là Vanilla JS + PWA, không dùng framework frontend. Authentication đã hoạt động bằng JWT cookie httpOnly 7 ngày, giữ các thuộc tính bảo mật `HttpOnly`, `Secure`, `SameSite=Strict`.
+Frontend là Vanilla JS + PWA, không dùng framework frontend. Authentication dùng JWT cookie httpOnly 7 ngày, giữ các thuộc tính bảo mật `HttpOnly`, `Secure`, `SameSite=Strict`.
 
-Các nhóm nghiệp vụ đã hoạt động:
+Các nhóm nghiệp vụ đã hoạt động và đã smoke test:
 
 - Login/session/role: `admin`, `manager`, `purchasing`, `viewer`.
 - Clients.
@@ -49,23 +51,63 @@ Các nhóm nghiệp vụ đã hoạt động:
 - RFQ/gói thầu.
 - RFQ Items/dòng vật tư.
 - Technical Clarification theo timeline.
-- Supplier Quotations v1.
-- Audit log.
+- Supplier Quotations.
+- Quote reference/source note: `source_channel`, `source_ref`, `received_at`.
+- Safe upload/media evidence cho ảnh/PDF/bằng chứng báo giá.
+- Pricing Decisions/cân giá.
+- Import CSV Mapping V1A.
+- Import XLSX Mapping V1B Core:
+  - SheetJS `0.18.5` self-host tại `assets/js/vendor/xlsx.min.js`;
+  - parse XLSX ở browser;
+  - chọn sheet;
+  - preview;
+  - map cột;
+  - chunk 500 rows;
+  - giữ CSV cũ;
+  - chưa lưu file Excel gốc vào R2.
+- Import templates/jobs/rows:
+  - `import_templates`;
+  - `import_jobs`;
+  - `import_job_rows`.
+- Master Item Linking V1:
+  - dùng bảng `items`;
+  - reuse `rfq_items.item_id`;
+  - không tạo `master_items`;
+  - không auto-link.
+- Price History Search/Export V1:
+  - search lịch sử giá từ supplier quotes;
+  - gom theo `item_id` nếu đã link master item;
+  - CSV UTF-8 BOM cho Excel tiếng Việt.
+- Contract / Contract Items V1:
+  - `contracts`;
+  - `contract_items`;
+  - link về `rfq_id`, `rfq_item_id`, `item_id`, `source_quote_id`.
+- Dashboard Snapshot/Cache V2:
+  - action `getDashboardV2`;
+  - KV key `dashboard:v2`;
+  - TTL 300 giây;
+  - không aggregate frontend.
+- Audit log cho các mutation quan trọng.
 - Pagination/search cơ bản.
-- Dashboard cơ bản.
 
 Nguyên tắc triển khai đang dùng:
 
-- RFQ Item là trung tâm hệ thống.
-- Danh sách RFQ Item không load toàn bộ timeline, báo giá, ảnh, file.
+- **RFQ Item là trung tâm hệ thống.**
+- **Master Item/items là danh tính vật tư dùng lại để gom lịch sử.**
+- **Contract là kết quả cuối**, không lấy Contract làm trung tâm.
+- Danh sách RFQ Item không load toàn bộ timeline, báo giá, ảnh, file, hợp đồng, lịch sử giá.
 - Chỉ mở detail/modal của một RFQ Item mới load:
   - technical clarifications;
   - supplier quotations;
-  - ảnh/file/báo giá ở các phase sau.
-- Upload `/api/upload` vẫn khóa 501 nếu chưa hoàn thành MIME allowlist và magic-byte validation.
-- Không mở upload public trước khi hoàn thành validate file an toàn.
-
----
+  - pricing decisions;
+  - media evidence;
+  - master item suggestions/detail;
+  - price history;
+  - contract items.
+- Upload media đi qua `api/upload.js` + Worker media handler + R2.
+- Ảnh/file không lưu base64 trong D1.
+- XLSX V1B hiện chỉ parse browser-side và commit JSON, **chưa upload source Excel vào R2**.
+- Sau khi sườn đã hoàn thành, không mở module lớn mới nếu chưa có lỗi/dữ liệu thật chứng minh cần.
 
 ## 1B. Gói thầu / RFQ đã triển khai
 
@@ -301,6 +343,424 @@ Mutation create/update/archive phải ghi audit log.
 
 ---
 
+---
+
+## 1F. Quote reference/source note và media evidence đã triển khai
+
+Supplier quote hiện không chỉ lưu giá, mà còn lưu nguồn nhận báo giá để sau này truy vết:
+
+```text
+source_channel
+source_ref
+received_at
+```
+
+Kênh hợp lệ:
+
+```text
+zalo
+wechat
+email
+phone
+direct
+other
+```
+
+Ý nghĩa:
+
+- `source_channel`: báo giá đến từ kênh nào.
+- `source_ref`: ghi chú tham chiếu như email subject, tên file, đoạn chat, số Zalo/Wechat, link nội bộ.
+- `received_at`: ngày/giờ nhận báo giá.
+
+Bằng chứng báo giá không nhét vào quote row. Ảnh/PDF/screenshot lưu qua `media_files` + R2 với owner quote, ví dụ:
+
+```text
+owner_type = quote
+owner_id = quote_id
+file_kind = quote_pdf / quote_evidence_image
+```
+
+Danh sách báo giá không load file nặng. Chỉ hiện badge/count bằng chứng nếu cần. Khi mở detail mới load danh sách media.
+
+Quy tắc:
+
+- Không lưu ảnh/PDF base64 trong D1.
+- Không load bằng chứng trong RFQ Item list.
+- Quote archived vẫn là lịch sử, không hard delete.
+- Báo giá và bằng chứng phải sort mới nhất trước khi hiển thị trong các màn hình lịch sử.
+
+---
+
+## 1G. Import CSV/XLSX Mapping đã triển khai
+
+Import hiện dùng flow:
+
+```text
+CSV/XLSX file
+  -> Browser parse
+  -> Preview headers + rows
+  -> User map source headers to target fields
+  -> Reuse/save template theo owner_key
+  -> commitImportRows
+  -> Worker validate/upsert rfq_items
+  -> import_jobs + import_job_rows
+```
+
+CSV Mapping V1A:
+
+- Giữ import CSV cũ.
+- Thêm import mapping nâng cao.
+- Có owner key.
+- Có template save/reuse.
+- Có preview.
+- Có one Worker commit action.
+- Lưu `raw_row_json`.
+- Lưu `source_sheet_name = 'csv'`.
+- Lưu `source_row_number`.
+
+XLSX Mapping V1B Core:
+
+- Dùng SheetJS Community `0.18.5`, self-host trong `assets/js/vendor/xlsx.min.js`.
+- Parse XLSX ở browser, không bundle parser vào Worker.
+- Hỗ trợ `.xlsx`.
+- Không hỗ trợ `.xls`, `.xlsm`, `.ods`.
+- Có sheet selector nếu workbook có nhiều sheet.
+- Preview 20 dòng.
+- `cellDates: true`, date object convert về `YYYY-MM-DD`.
+- Commit theo chunk 500 rows để tránh quá tải Worker/D1.
+- Template mapping dùng chung cho CSV và XLSX.
+- `source_sheet_name` dùng tên sheet thật với XLSX.
+
+Chưa làm ở V1B:
+
+- Chưa upload source XLSX vào R2.
+- Chưa thêm `source_file_id` vào `import_jobs`.
+- Chưa bật Excel MIME ở `/api/upload`.
+- Chưa parse formula/macro.
+- Chưa AI automapping.
+- Chưa auto-link Master Item.
+
+Nếu sau này cần lưu file Excel gốc để audit/replay, làm V1C riêng:
+
+```text
+import_job:source_xlsx
+R2 source archive
+magic bytes ZIP + .xlsx extension
+source_file_id propagation
+migration thêm import_jobs.source_file_id
+```
+
+Không gộp V1C vào sửa lỗi nhỏ.
+
+---
+
+## 1H. Master Item Linking đã triển khai
+
+Mục tiêu của Master Item là gom các RFQ Item giống nhau ở nhiều gói thầu/nhiều năm về một danh tính vật tư dùng lại.
+
+Thiết kế đã chốt:
+
+```text
+items
+  ↑
+rfq_items.item_id
+```
+
+Không tạo bảng `master_items`.
+
+Vì sao:
+
+- Blueprint đã có `items`.
+- `rfq_items` đã có `item_id`.
+- Reuse schema hiện có, tránh tạo trùng.
+
+Nguyên tắc:
+
+- RFQ Item vẫn là dòng vật tư theo từng gói cụ thể.
+- Item/Master Item chỉ là danh tính chuẩn hóa dùng lại.
+- Không bắt buộc mọi RFQ Item phải có `item_id`.
+- Không auto-link khi import.
+- Suggestions chỉ gợi ý theo:
+  - `ma_vat_tu`;
+  - `ten_vat_tu`;
+  - `required_model`;
+  - `manufacturer`;
+  - `brand`;
+  - `origin_country`;
+  - `unit`.
+- User phải xác nhận link.
+- Có thể unlink nếu link sai.
+- Không merge/xóa RFQ Item trong V1.
+
+Actions đã có:
+
+```text
+searchMasterItems
+getMasterItemDetail
+suggestMasterItemsForRfqItem
+createMasterItem
+updateMasterItem
+linkRfqItemToMaster
+unlinkRfqItemFromMaster
+```
+
+Quyền:
+
+- `viewer`: search/detail/suggest.
+- `purchasing`: create/link/unlink.
+- `manager`/`admin`: create/update/link/unlink.
+- Không hard delete.
+
+Ứng dụng:
+
+- Price History dùng `item_id` để gom lịch sử giá.
+- Contract Items lưu `item_id` để nối hợp đồng với vật tư chuẩn.
+- Dashboard V2 tính master link coverage và top master item theo quote count.
+
+---
+
+## 1I. Price History Search/Export đã triển khai
+
+Price History là một trong các giá trị chính của CRM.
+
+Luồng dữ liệu:
+
+```text
+items
+  -> rfq_items
+  -> supplier_quotes
+  -> price history
+```
+
+Nếu RFQ Item đã link master item, lịch sử giá gom theo `item_id`. Nếu chưa link, có thể fallback theo `ma_vat_tu` hoặc `rfq_item_id`.
+
+Actions đã có:
+
+```text
+searchPriceHistory
+getPriceHistorySummary
+exportPriceHistoryCsv
+```
+
+Bộ lọc:
+
+- `itemId`;
+- `rfqItemId`;
+- `q`;
+- `maVatTu`;
+- `supplierId`;
+- `supplierName`;
+- `rfqId`;
+- `clientId`;
+- `sourceChannel`;
+- `dateFrom`;
+- `dateTo`;
+- `limit`;
+- `cursor`.
+
+Sort:
+
+```text
+COALESCE(received_at, quote_date, created_at) DESC
+quote_id DESC
+```
+
+CSV export:
+
+- Backend build CSV, không aggregate frontend.
+- UTF-8 BOM để mở đúng tiếng Việt trong Excel.
+- Giới hạn safe max rows.
+- Có các field RFQ, RFQ Item, Master Item, Supplier Quote, nguồn báo giá, evidence count.
+
+Quy tắc:
+
+- Không load toàn bộ lịch sử lên browser.
+- Không frontend join nhiều trang dữ liệu.
+- Không sửa quote cũ khi export.
+- Lịch sử giá trước khi link master item có thể chưa đầy đủ; phải link dần bằng dữ liệu thật.
+
+---
+
+## 1J. Contract / Contract Items đã triển khai
+
+Contract là kết quả cuối của quá trình RFQ/báo giá/cân giá, không phải trung tâm app.
+
+Luồng đúng:
+
+```text
+RFQ
+  -> RFQ Item
+  -> Master Item
+  -> Supplier Quotes
+  -> Pricing Decision
+  -> Contract
+  -> Contract Item
+```
+
+Actions đã có:
+
+```text
+getContracts
+getContractDetail
+getContractItemsForRfqItem
+createContract
+updateContract
+archiveContract
+addContractItem
+updateContractItem
+archiveContractItem
+createContractFromRfqItem
+```
+
+Nguyên tắc:
+
+- Không auto-create contract từ RFQ.
+- Không auto-convert toàn bộ RFQ items.
+- Contract item copy snapshot tại thời điểm ký:
+  - `rfq_item_id`;
+  - `item_id`;
+  - `source_quote_id`;
+  - mã/tên/quy cách/hãng/xuất xứ/đơn vị;
+  - supplier;
+  - quantity;
+  - unit price;
+  - line total.
+- Không mutate RFQ Item hoặc Supplier Quote khi tạo Contract Item.
+- `contract_total` tính từ active contract items.
+- Archive là soft archive.
+- Không hard delete trong vận hành thật.
+
+Quyền:
+
+- `viewer`: xem contract/detail/contract items.
+- `purchasing`: tạo/sửa contract, thêm/sửa item.
+- `manager`/`admin`: thêm quyền archive.
+
+Contract Items giúp sau này so sánh:
+
+```text
+giá báo NCC
+vs
+giá cân
+vs
+giá trúng/giá hợp đồng
+```
+
+---
+
+## 1K. Dashboard Snapshot/Cache V2 đã triển khai
+
+Dashboard không phải nơi load list lớn. Dashboard là summary nghiệp vụ, tính ở backend.
+
+Action:
+
+```text
+getDashboardV2
+```
+
+Cache:
+
+```text
+KV key: dashboard:v2
+TTL: 300 seconds
+```
+
+V1 vẫn giữ:
+
+```text
+getDashboard
+dashboard:v1
+```
+
+Dashboard V2 có:
+
+- RFQ overview:
+  - tổng RFQ;
+  - RFQ đang mở;
+  - RFQ sắp hết hạn;
+  - RFQ quá hạn;
+  - 5 RFQ mới nhất.
+- RFQ item / quote coverage:
+  - tổng dòng vật tư;
+  - dòng có báo giá;
+  - dòng chưa có báo giá;
+  - quote coverage %;
+  - dòng đã link master item;
+  - master link %.
+- Supplier quote stats:
+  - tổng quote;
+  - quote 7 ngày;
+  - quote 30 ngày;
+  - theo source channel;
+  - top suppliers.
+- Technical clarification:
+  - pending count;
+  - latest clarifications.
+- Import health:
+  - latest import jobs;
+  - import errors 30 ngày.
+- Contract stats:
+  - active contracts;
+  - contracts 30 ngày;
+  - total active contract value;
+  - latest contracts.
+- Master item stats:
+  - total active items;
+  - top master items by quote count.
+
+Quy tắc:
+
+- Không frontend aggregation.
+- Không load ảnh/file vào dashboard.
+- Không dashboard màu mè.
+- Không snapshot table ở V2; KV TTL đủ.
+- Nếu dữ liệu vừa sửa mà dashboard chưa đổi ngay, đợi TTL 5 phút hoặc thêm invalidate sau này nếu thật cần.
+
+---
+
+## 1L. Trạng thái khung hiện tại sau smoke test
+
+Full smoke test đã pass cho các nhóm:
+
+```text
+XLSX library
+Dashboard V2
+Dashboard V1 compatibility
+Contracts
+Price History
+Master Items
+Import Templates
+RFQ Items
+```
+
+Từ đây trở đi chuyển sang giai đoạn:
+
+```text
+vận hành dữ liệu thật
+  -> phát hiện lỗi thật
+  -> reproduce
+  -> xem Console/Network/API/D1
+  -> xác định root cause
+  -> targeted fix
+```
+
+Không nên mở thêm module lớn trước khi test dữ liệu thật.
+
+Các vấn đề có thể gặp khi vận hành thật:
+
+- Excel nhiều header, merged cells, sheet rác.
+- Ngày Excel sai format.
+- Cột tiếng Trung/VN map không thống nhất.
+- Duplicate RFQ Item.
+- Master Item link sai hoặc thiếu link.
+- Quote nhập sai thuế/tỷ giá/đơn vị tiền.
+- Contract quantity/unit price nhập sai.
+- Dashboard chậm phản ánh do KV cache 5 phút.
+- Ảnh quá nặng hoặc preview chậm.
+- Evidence upload thiếu magic-byte support cho một loại file mới.
+
+Cách xử lý vẫn là: không đoán, không refactor rộng, sửa đúng module.
+
 ## 2. Stack đề xuất
 
 Giữ stack quen thuộc của các web app trước:
@@ -507,7 +967,7 @@ Lý do: nếu sau này thiếu field hoặc map sai, còn dữ liệu gốc đ�
 Không cố AI tự hiểu tất cả ngay từ đầu. Làm màn hình mapping rõ ràng:
 
 ```text
-Cột Excel -> Cột chuẩn trong app
+Cột Excel/CSV -> Cột chuẩn trong app
 ```
 
 Ví dụ:
@@ -524,26 +984,61 @@ Ví dụ:
 单位 -> Đơn vị
 ```
 
-Lưu template mapping để lần sau chọn lại nhanh. Bảng:
+Bảng đã triển khai:
 
 ```text
 import_templates
-import_template_columns
 import_jobs
 import_job_rows
 ```
 
-Import flow:
+Lưu ý: blueprint ban đầu có nhắc `import_template_columns`, nhưng production V1A/V1B đang dùng `mapping_json` trong `import_templates`, không tách bảng columns riêng. Không tạo thêm bảng `import_template_columns` nếu chưa có lý do rõ ràng.
 
-1. Upload Excel vào R2.
-2. Parse preview 20 dòng đầu.
-3. User map cột.
-4. Validate dữ liệu.
-5. Import vào `rfq_items`.
-6. Lưu `raw_row_json`.
-7. Ghi audit log.
+Import flow hiện tại:
 
----
+1. User chọn CSV hoặc XLSX ở browser.
+2. CSV parse bằng parser frontend hiện có.
+3. XLSX parse bằng SheetJS `0.18.5` ở browser.
+4. Nếu XLSX có nhiều sheet, user chọn sheet.
+5. Preview headers + 20 dòng đầu.
+6. User map source headers -> normalized target fields.
+7. User có thể save/reuse template theo `owner_key`.
+8. Frontend validate tối thiểu có `ten_vat_tu`.
+9. Frontend chunk rows tối đa 500 dòng/batch.
+10. Gọi `commitImportRows`.
+11. Worker validate/upsert vào `rfq_items`.
+12. Lưu `raw_row_json`, `mapped_json`, `source_sheet_name`, `source_row_number`.
+13. Trả summary created/updated/skipped/errors.
+
+V1B chưa lưu file Excel gốc vào R2. Khi cần audit/replay source file, làm V1C riêng, không trộn vào bugfix import.
+
+Target fields import đang ưu tiên:
+
+Bắt buộc:
+
+```text
+ten_vat_tu
+```
+
+Khuyến nghị:
+
+```text
+stt_goc
+ma_vat_tu
+required_model
+manufacturer
+brand
+origin_country
+unit
+quantity
+yeu_cau_ky_thuat_bo_sung
+don_gia_sau_thue
+thanh_tien_sau_thue
+delivery_time
+origin_full_text
+```
+
+Không auto-link Master Item trong import. Sau import, user link master item thủ công hoặc theo suggestion.
 
 ## 7. D1 schema đề xuất
 
@@ -640,28 +1135,37 @@ updated_at TEXT
 
 ### 7.5. `items` — Master Item
 
+Production V1 dùng `items` làm Master Item. Không tạo bảng `master_items`.
+
 ```sql
 item_id TEXT PRIMARY KEY,
 ma_vat_tu TEXT,
 ten_vat_tu TEXT NOT NULL,
-quy_cach_model TEXT,
-hang_nsx TEXT,
-nhan_hieu TEXT,
-xuat_xu TEXT,
-vat_lieu TEXT,
-category TEXT,
-main_image_id TEXT,
-normalized_search TEXT,
+required_model TEXT,
+manufacturer TEXT,
+brand TEXT,
+origin_country TEXT,
+unit TEXT,
+technical_params TEXT,
 note TEXT,
-created_at TEXT,
-updated_at TEXT
+normalized_search TEXT,
+status TEXT NOT NULL DEFAULT 'active',
+created_by TEXT,
+created_at TEXT NOT NULL,
+updated_at TEXT NOT NULL
 ```
 
-Giai đoạn đầu không bắt buộc mọi RFQ item phải link vào `items`. Có thể link/merge sau.
+Quan hệ với RFQ Item:
+
+```text
+rfq_items.item_id -> items.item_id
+```
+
+Không bắt buộc mọi RFQ Item phải link vào `items`. Có thể link dần trong quá trình vận hành. Không auto-link nguy hiểm.
 
 ### 7.6. `supplier_quotes`
 
-Schema v1 đang dùng trong production:
+Schema production đã mở rộng từ v1 nhập tay sang có source/reference:
 
 ```sql
 quote_id TEXT PRIMARY KEY,
@@ -680,6 +1184,9 @@ lead_time TEXT,
 valid_until TEXT,
 warranty TEXT,
 note TEXT,
+source_channel TEXT,
+source_ref TEXT,
+received_at TEXT,
 status TEXT NOT NULL DEFAULT 'active',
 created_by TEXT,
 created_at TEXT NOT NULL,
@@ -687,7 +1194,7 @@ updated_at TEXT,
 FOREIGN KEY (rfq_item_id) REFERENCES rfq_items(rfq_item_id)
 ```
 
-Index production:
+Index production nên có:
 
 ```sql
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_item
@@ -695,16 +1202,36 @@ CREATE INDEX IF NOT EXISTS idx_supplier_quotes_item
 
 CREATE INDEX IF NOT EXISTS idx_supplier_quotes_status
   ON supplier_quotes(status);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_quotes_source_channel
+  ON supplier_quotes(source_channel);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_quotes_supplier
+  ON supplier_quotes(supplier_id);
+
+CREATE INDEX IF NOT EXISTS idx_supplier_quotes_created
+  ON supplier_quotes(created_at DESC);
 ```
 
-Ghi chú:
+Rule tính giá:
 
-- V1 nhập báo giá thủ công, chưa upload file.
-- `quote_file_id` và `email_ref` chưa có trong production v1.
-- Khi mở upload báo giá/file email ở phase sau, thêm các field này bằng migration mới.
-- Backend tự tính `price_vnd` và `price_vnd_incl_tax`, không tin frontend.
-- `status` chỉ dùng `active` hoặc `archived`.
-- Archive không xóa dữ liệu lịch sử.
+```text
+price_vnd = Math.round(quoted_price * exchange_rate)
+price_vnd_incl_tax = Math.round(price_vnd * (1 + tax_rate / 100))
+```
+
+Backend tự tính `price_vnd` và `price_vnd_incl_tax`, không tin giá đã tính từ frontend.
+
+`status` dùng:
+
+```text
+active
+archived
+```
+
+Archive là soft-hide/soft-archive, không hard delete. Báo giá archived vẫn là lịch sử nghiệp vụ.
+
+Bằng chứng báo giá lưu qua `media_files` + R2, không nhét file vào `supplier_quotes`.
 
 ### 7.7. `pricing_decisions`
 
@@ -777,36 +1304,60 @@ Tên cột cụ thể phải kiểm tra theo migration production thật trướ
 
 ### 7.9. `contracts`
 
+Production V1:
+
 ```sql
 contract_id TEXT PRIMARY KEY,
 rfq_id TEXT,
 contract_no TEXT NOT NULL,
+contract_name TEXT,
 client_id TEXT,
 signed_date TEXT,
+effective_date TEXT,
+expiry_date TEXT,
+currency TEXT DEFAULT 'VND',
 contract_total INTEGER DEFAULT 0,
-contract_file_id TEXT,
-status TEXT DEFAULT 'active',
+status TEXT NOT NULL DEFAULT 'active',
 note TEXT,
-created_at TEXT,
-updated_at TEXT
+created_by TEXT,
+created_at TEXT NOT NULL,
+updated_at TEXT NOT NULL,
+archived_at TEXT
 ```
 
+Contract là header. `contract_total` tính từ active `contract_items`.
+
 ### 7.10. `contract_items`
+
+Production V1:
 
 ```sql
 contract_item_id TEXT PRIMARY KEY,
 contract_id TEXT NOT NULL,
 rfq_item_id TEXT,
 item_id TEXT,
-contract_unit_price INTEGER DEFAULT 0,
+line_no TEXT,
+ma_vat_tu TEXT,
+ten_vat_tu TEXT NOT NULL,
+required_model TEXT,
+manufacturer TEXT,
+brand TEXT,
+origin_country TEXT,
+unit TEXT,
 contract_quantity REAL DEFAULT 0,
+contract_unit_price INTEGER DEFAULT 0,
 contract_line_total INTEGER DEFAULT 0,
-final_spec TEXT,
-final_brand TEXT,
-final_origin TEXT,
+supplier_id TEXT,
+supplier_name TEXT,
+source_quote_id TEXT,
 note TEXT,
-created_at TEXT
+status TEXT NOT NULL DEFAULT 'active',
+created_at TEXT NOT NULL,
+updated_at TEXT NOT NULL,
+archived_at TEXT
 ```
+
+Contract item là snapshot tại thời điểm ký hợp đồng. Không mutate RFQ Item hoặc Supplier Quote khi tạo/sửa Contract Item.
 
 ### 7.11. `media_files`
 
@@ -1022,7 +1573,11 @@ Chỉ làm core purchasing CRM trước.
 
 ## 14. Phase build đề xuất
 
+Các phase ban đầu đã triển khai gần đủ thành sườn production. Từ sau smoke test ngày 2026-06-10, không nên tiếp tục mở module lớn theo phase cũ mà chuyển sang vận hành dữ liệu thật.
+
 ### Phase 1 — Khung app + core RFQ
+
+Đã hoàn thành:
 
 - Login/auth/role.
 - Clients.
@@ -1032,43 +1587,76 @@ Chỉ làm core purchasing CRM trước.
 - Search/pagination.
 - Audit log.
 
-### Phase 2 — Excel import mapping
+### Phase 2 — Import mapping
 
-- Upload Excel vào R2.
+Đã hoàn thành V1A/V1B Core:
+
+- CSV mapping.
+- XLSX mapping browser-side.
 - Preview sheet.
-- Map cột Excel -> cột chuẩn.
-- Import vào RFQ items.
+- Map cột -> cột chuẩn.
+- Template save/reuse theo owner.
+- Import jobs/rows.
 - Lưu raw row JSON.
+- Chưa lưu source Excel vào R2; để V1C nếu cần audit/replay.
 
 ### Phase 3 — Supplier quotes + pricing
 
+Đã hoàn thành:
+
 - Nhập nhiều báo giá cho 1 RFQ item.
-- Upload file báo giá.
-- Chọn base quote.
-- Tính markup 1.4 / 1.55 / 1.6.
-- Lưu pricing version.
+- Source/reference fields.
+- Upload media evidence cho quote.
+- Backend tính giá VND/sau thuế.
+- Pricing Decisions/cân giá.
+- Price History Search/Export.
 
-### Phase 4 — R2 ảnh vật tư
+### Phase 4 — R2 ảnh vật tư/media evidence
 
-- Upload ảnh theo item/RFQ item.
-- Auto resize thumb/medium.
-- Chọn ảnh đại diện.
-- Gallery trong detail.
+Đã có safe upload/media evidence. Nguyên tắc tiếp tục:
 
-### Phase 5 — Technical change log
+- Ảnh/PDF qua R2.
+- D1 chỉ metadata.
+- Không load sẵn media ở list.
+- Chỉ load khi mở detail.
+- Resize/compress ảnh để tránh file 2MB/4MB/8MB không cần thiết.
 
-- Log thay đổi quy cách/model/hãng.
-- Upload file xác nhận.
-- Cập nhật final spec.
+Nếu phát hiện ảnh vẫn quá nặng khi vận hành, sửa targeted phần upload/resize, không đổi kiến trúc.
 
-### Phase 6 — Contract history
+### Phase 5 — Technical clarification
 
-- Tạo contract.
-- Link RFQ item vào contract item.
-- Lưu giá hợp đồng.
-- Search theo mã hợp đồng.
+Đã hoàn thành timeline clarification:
 
----
+- Hỏi hãng.
+- Hãng phản hồi.
+- CĐT phản hồi.
+- Final confirm.
+- Cập nhật snapshot final nếu user chọn.
+
+### Phase 6 — Master Item + Price History + Contract
+
+Đã hoàn thành sườn:
+
+- Master Item Linking V1.
+- Price History Search/Export V1.
+- Contract / Contract Items V1.
+- Dashboard Snapshot/Cache V2.
+
+### Phase vận hành thực tế
+
+Từ đây ưu tiên:
+
+1. Nhập vài RFQ thật.
+2. Import Excel thật từ nhiều CĐT.
+3. Link master item thủ công/suggestion.
+4. Nhập báo giá thật + bằng chứng ảnh/PDF.
+5. Cân giá.
+6. Tạo contract nếu trúng.
+7. Xem dashboard/lịch sử giá.
+8. Ghi lại lỗi thực tế.
+9. Sửa targeted theo root cause.
+
+Không mở module ERP/tồn kho/công nợ/thanh toán/giao hàng trong giai đoạn này.
 
 ## 14A. D1 migration production và deploy
 
@@ -1378,7 +1966,132 @@ Khi tôi yêu cầu sửa app:
 
 ---
 
-## 19. Kết luận
+
+## 19. Trạng thái hoàn thành và nguyên tắc sau sườn
+
+Tính đến smoke test production ngày 2026-06-10, các module sườn chính đã pass:
+
+```text
+RFQ
+RFQ Items
+Technical Clarification
+Supplier Quotes
+Quote Reference
+Media Evidence
+Pricing Decisions
+CSV Import Mapping
+XLSX Import Mapping
+Master Item Linking
+Price History Search/Export
+Contract / Contract Items
+Dashboard Snapshot/Cache V2
+```
+
+Chuỗi nghiệp vụ hoàn chỉnh hiện tại:
+
+```text
+RFQ
+  -> RFQ Items
+  -> Master Item/items
+  -> Supplier Quotes + Evidence
+  -> Pricing Decisions
+  -> Price History
+  -> Contract / Contract Items nếu trúng
+  -> Dashboard summary
+```
+
+Từ giai đoạn này, mọi yêu cầu sửa nên phân loại trước:
+
+### A. Bug vận hành
+
+Ví dụ:
+
+- import Excel sai ngày;
+- mapping thiếu cột;
+- quote tính sai thuế;
+- link master sai;
+- contract total sai;
+- dashboard chưa cập nhật;
+- ảnh quá nặng;
+- action 400/403/500.
+
+Cách làm:
+
+1. Reproduce.
+2. Xem Console.
+3. Xem Network/API payload.
+4. Xem Worker log nếu cần.
+5. Xem D1 nếu nghi schema/data.
+6. Xác định root cause.
+7. Sửa đúng file/function liên quan.
+8. Không refactor rộng.
+
+### B. Cải tiến nhỏ
+
+Ví dụ:
+
+- thêm filter;
+- đổi label;
+- thêm cột vào bảng;
+- chỉnh sort newest-first;
+- thêm badge/count.
+
+Cách làm:
+
+- Targeted edit.
+- Không tạo bảng/action mới nếu API cũ mở rộng được.
+- Giữ UI nghiệp vụ đơn giản.
+
+### C. Module mới
+
+Chỉ làm khi dữ liệu thật chứng minh cần thiết. Trước khi code phải inspect.
+
+Các module không mở vội:
+
+- ERP;
+- tồn kho;
+- công nợ;
+- thanh toán;
+- giao hàng;
+- OCR;
+- AI automapping;
+- workflow duyệt nhiều cấp;
+- email automation.
+
+### D. XLSX Source Archive V1C nếu cần
+
+Chỉ làm nếu thực tế cần lưu file Excel gốc để audit/replay. Khi đó mới thêm:
+
+```text
+import_jobs.source_file_id
+R2 owner_type import_job
+file_kind source_xlsx
+.xlsx magic byte + extension validation
+source_file_id propagation
+```
+
+Không trộn V1C vào bugfix XLSX parser.
+
+### E. Master Item data quality
+
+Lịch sử giá chỉ mạnh khi RFQ Items được link đúng Master Item. Trong vận hành thật cần quy trình:
+
+1. Import RFQ Items.
+2. Mở detail dòng vật tư.
+3. Xem suggestions.
+4. Link vào item có sẵn hoặc tạo item mới.
+5. Không auto-link hàng loạt nếu chưa kiểm tra.
+6. Nếu link sai, unlink và link lại.
+
+Dashboard `master_link_pct` là chỉ số theo dõi chất lượng dữ liệu.
+
+### F. Dashboard cache
+
+Dashboard V2 dùng KV TTL 300 giây. Nếu vừa sửa dữ liệu mà dashboard chưa đổi ngay, đây chưa chắc là bug. Chờ cache hết hạn hoặc sau này thêm invalidate targeted nếu thật cần.
+
+---
+
+## 20. Kết luận
 
 Procurement CRM nên đi từ nhỏ đến chắc:
 
