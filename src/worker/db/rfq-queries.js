@@ -2,15 +2,15 @@ export async function listRfqsSQL(db, { q, status, cursor, limit }) {
   const binds = [];
   const where = [];
   if (q) {
-    where.push('(normalized_search LIKE ? OR ten_goi LIKE ? OR ma_goi_tbmt LIKE ?)');
+    where.push('(r.normalized_search LIKE ? OR r.ten_goi LIKE ? OR r.ma_goi_tbmt LIKE ?)');
     binds.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
   if (status) {
-    where.push('trang_thai_goi = ?');
+    where.push('r.trang_thai_goi = ?');
     binds.push(status);
   }
   if (cursor) {
-    where.push('rfq_id < ?');
+    where.push('r.rfq_id < ?');
     binds.push(cursor);
   }
   const res = await db.prepare(
