@@ -13,7 +13,7 @@
   }
   function render() {
     document.getElementById('supplierRows').innerHTML = (state.rows || []).map(function (r) {
-      return '<tr><td>' + API.esc(r.supplier_id) + '</td><td>' + API.esc(r.supplier_name) + '</td><td>' + API.esc(r.supplier_type) + '</td><td>' + API.esc(r.country) + '</td><td>' + API.esc(r.contact_name) + '<br>' + API.esc(r.phone) + '</td><td>' + API.esc(r.email) + '</td><td><button data-write onclick="SuppliersModule.openEdit(\'' + API.esc(r.supplier_id) + '\')">Sua</button></td></tr>';
+      return '<tr><td>' + API.esc(r.supplier_id) + '</td><td>' + API.esc(r.supplier_name) + '</td><td>' + API.esc(typeLabel(r.supplier_type)) + '</td><td>' + API.esc(r.country) + '</td><td>' + API.esc(r.contact_name) + '<br>' + API.esc(r.phone) + '</td><td>' + API.esc(r.email) + '</td><td><button data-write onclick="SuppliersModule.openEdit(\'' + API.esc(r.supplier_id) + '\')">Sửa</button></td></tr>';
     }).join('');
     document.getElementById('supplierMore').classList.toggle('hidden', !state.hasMore);
     Auth.applyRoleUI();
@@ -21,18 +21,26 @@
   function openCreate() { openForm({}); }
   function openEdit(id) { openForm((state.rows || []).find(function (r) { return r.supplier_id === id; }) || {}); }
   function openForm(r) {
-    Utils.openModal(r.supplier_id ? 'Sua nha cung cap' : 'Them nha cung cap', fields(r), async function (data) {
+    Utils.openModal(r.supplier_id ? 'Sửa nhà cung cấp' : 'Thêm nhà cung cấp', fields(r), async function (data) {
       try {
         if (r.supplier_id) data.supplierId = r.supplier_id;
         await API.call(r.supplier_id ? 'updateSupplier' : 'createSupplier', data);
         Utils.closeModal();
-        API.toast('Da luu nha cung cap', 'success');
+        API.toast('Đã lưu nhà cung cấp', 'success');
         await load(true);
       } catch (err) { API.error(err); }
     });
   }
   function fields(r) {
-    return '<label>Ten nha cung cap<input name="supplierName" required value="' + API.esc(r.supplier_name) + '"></label><label>Loai<select name="supplierType"><option value="unknown">unknown</option><option value="manufacturer">manufacturer</option><option value="distributor">distributor</option><option value="trader">trader</option></select></label><label>Quoc gia<input name="country" value="' + API.esc(r.country) + '"></label><label>Nguoi lien he<input name="contactName" value="' + API.esc(r.contact_name) + '"></label><label>Email<input name="email" value="' + API.esc(r.email) + '"></label><label>Dien thoai<input name="phone" value="' + API.esc(r.phone) + '"></label><label>Zalo<input name="zalo" value="' + API.esc(r.zalo) + '"></label><label>Wechat<input name="wechat" value="' + API.esc(r.wechat) + '"></label><label>Ghi chu<textarea name="note">' + API.esc(r.note) + '</textarea></label>';
+    return '<label>Tên nhà cung cấp<input name="supplierName" required value="' + API.esc(r.supplier_name) + '"></label><label>Loại<select name="supplierType"><option value="unknown">Chưa phân loại</option><option value="manufacturer">Nhà sản xuất</option><option value="distributor">Nhà phân phối</option><option value="trader">Thương mại</option></select></label><label>Quốc gia<input name="country" value="' + API.esc(r.country) + '"></label><label>Người liên hệ<input name="contactName" value="' + API.esc(r.contact_name) + '"></label><label>Email<input name="email" value="' + API.esc(r.email) + '"></label><label>Điện thoại<input name="phone" value="' + API.esc(r.phone) + '"></label><label>Zalo<input name="zalo" value="' + API.esc(r.zalo) + '"></label><label>Wechat<input name="wechat" value="' + API.esc(r.wechat) + '"></label><label>Ghi chú<textarea name="note">' + API.esc(r.note) + '</textarea></label>';
+  }
+  function typeLabel(value) {
+    return {
+      unknown: 'Chưa phân loại',
+      manufacturer: 'Nhà sản xuất',
+      distributor: 'Nhà phân phối',
+      trader: 'Thương mại',
+    }[value] || value || '';
   }
   window.SuppliersModule = { load: load, openCreate: openCreate, openEdit: openEdit };
 })();

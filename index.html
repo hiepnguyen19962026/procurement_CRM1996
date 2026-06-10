@@ -16,9 +16,9 @@
     <form class="login-box" id="loginForm">
       <h1>Procurement CRM</h1>
       <p>RFQ Price History</p>
-      <label>Username<input id="loginUsername" autocomplete="username" required></label>
-      <label>Mat khau<input id="loginPassword" type="password" autocomplete="current-password" required></label>
-      <button class="primary" type="submit">Dang nhap</button>
+      <label>Tài khoản<input id="loginUsername" autocomplete="username" required></label>
+      <label>Mật khẩu<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+      <button class="primary" type="submit">Đăng nhập</button>
     </form>
   </section>
 
@@ -26,77 +26,77 @@
     <aside class="sidebar">
       <div class="brand">Procurement CRM<br><span class="muted">RFQ Price History</span></div>
       <nav class="nav" id="nav">
-        <button data-screen="dashboard" class="active">Dashboard</button>
-        <button data-screen="rfqs">Goi RFQ</button>
-        <button data-screen="items">Dong vat tu</button>
-        <button data-screen="clients">Clients/CDT</button>
-        <button data-screen="suppliers">Nha cung cap</button>
-        <button data-screen="audit" data-role-only="admin,manager">Audit log</button>
-        <button data-screen="accounts" data-role-only="admin">Tai khoan</button>
+        <button data-screen="dashboard" class="active">Tổng quan</button>
+        <button data-screen="rfqs">Gói RFQ</button>
+        <button data-screen="items">Dòng vật tư</button>
+        <button data-screen="clients">Khách hàng / CĐT</button>
+        <button data-screen="suppliers">Nhà cung cấp</button>
+        <button data-screen="audit" data-role-only="admin,manager">Nhật ký</button>
+        <button data-screen="accounts" data-role-only="admin">Tài khoản</button>
       </nav>
     </aside>
     <main class="main">
       <header class="topbar">
-        <strong id="screenTitle">Dashboard</strong>
-        <div><span id="currentUser"></span> <button onclick="Auth.logout()">Dang xuat</button></div>
+        <strong id="screenTitle">Tổng quan</strong>
+        <div class="userbar"><span id="currentUser"></span> <button onclick="Auth.logout()">Đăng xuất</button></div>
       </header>
       <div class="content">
         <section class="screen active" id="screen-dashboard">
-          <h2>Dashboard</h2>
+          <h2>Tổng quan</h2>
           <div class="metrics" id="dashboardStats"></div>
         </section>
 
         <section class="screen" id="screen-rfqs">
-          <h2>Goi RFQ</h2>
+          <h2>Gói RFQ</h2>
           <div class="toolbar">
-            <input id="rfqSearch" placeholder="Tim ma goi, ten goi, CDT">
-            <select id="rfqStatus"><option value="">Tat ca trang thai</option><option value="dang_khao_gia">dang_khao_gia</option><option value="da_bao">da_bao</option><option value="trung">trung</option><option value="khong_trung">khong_trung</option><option value="treo">treo</option></select>
-            <button onclick="RfqsModule.load(true)">Tim</button>
-            <button class="primary" data-write onclick="RfqsModule.openCreate()">Them RFQ</button>
+            <input id="rfqSearch" placeholder="Tìm mã gói, tên gói, CĐT">
+            <select id="rfqStatus"><option value="">Tất cả trạng thái</option><option value="dang_khao_gia">Đang khảo giá</option><option value="da_bao">Đã báo</option><option value="trung">Trúng</option><option value="khong_trung">Không trúng</option><option value="treo">Treo</option></select>
+            <button onclick="RfqsModule.load(true)">Tìm</button>
+            <button class="primary" data-write onclick="RfqsModule.openCreate()">Thêm RFQ</button>
           </div>
-          <div class="table-wrap"><table><thead><tr><th>ID</th><th>Ma goi</th><th>Ten goi</th><th>CDT</th><th>Deadline</th><th>Du toan</th><th>Trang thai</th><th></th></tr></thead><tbody id="rfqRows"></tbody></table></div>
-          <p><button id="rfqMore" class="hidden" onclick="RfqsModule.load(false)">Load more</button></p>
+          <div class="table-wrap"><table><thead><tr><th>ID</th><th>Mã gói</th><th>Tên gói</th><th>CĐT</th><th>Hạn nộp</th><th>Dự toán</th><th>Trạng thái</th><th></th></tr></thead><tbody id="rfqRows"></tbody></table></div>
+          <p><button id="rfqMore" class="hidden" onclick="RfqsModule.load(false)">Tải thêm</button></p>
         </section>
 
         <section class="screen" id="screen-items">
-          <h2>Dong vat tu RFQ</h2>
+          <h2>Dòng vật tư RFQ</h2>
           <div class="toolbar">
-            <input id="itemSearch" placeholder="Tim ma vat tu, ten, model, hang">
+            <input id="itemSearch" placeholder="Tìm mã vật tư, tên, model, hãng">
             <input id="itemRfqId" placeholder="RFQ ID">
-            <select id="itemStatus"><option value="">Tat ca</option><option value="chua_xu_ly">chua_xu_ly</option><option value="dang_hoi_gia">dang_hoi_gia</option><option value="du_gia">du_gia</option><option value="da_final">da_final</option></select>
-            <button onclick="RfqItemsModule.load(true)">Tim</button>
-            <button class="primary" data-write onclick="RfqItemsModule.openCreate()">Them dong</button>
+            <select id="itemStatus"><option value="">Tất cả</option><option value="chua_xu_ly">Chưa xử lý</option><option value="dang_hoi_gia">Đang hỏi giá</option><option value="du_gia">Đủ giá</option><option value="da_final">Đã final</option></select>
+            <button onclick="RfqItemsModule.load(true)">Tìm</button>
+            <button class="primary" data-write onclick="RfqItemsModule.openCreate()">Thêm dòng</button>
           </div>
-          <div class="table-wrap"><table><thead><tr><th>ID</th><th>RFQ</th><th>Ma</th><th>Vat tu / quy cach</th><th>Hang</th><th>SL</th><th>Trang thai</th><th></th></tr></thead><tbody id="itemRows"></tbody></table></div>
-          <p><button id="itemMore" class="hidden" onclick="RfqItemsModule.load(false)">Load more</button></p>
+          <div class="table-wrap"><table><thead><tr><th>ID</th><th>RFQ</th><th>Mã</th><th>Vật tư / quy cách</th><th>Hãng</th><th>SL</th><th>Trạng thái</th><th></th></tr></thead><tbody id="itemRows"></tbody></table></div>
+          <p><button id="itemMore" class="hidden" onclick="RfqItemsModule.load(false)">Tải thêm</button></p>
         </section>
 
         <section class="screen" id="screen-clients">
-          <h2>Clients / CDT</h2>
-          <div class="toolbar"><input id="clientSearch" placeholder="Tim client, nha may, tinh"><button onclick="ClientsModule.load(true)">Tim</button><button class="primary" data-write onclick="ClientsModule.openCreate()">Them client</button></div>
-          <div class="table-wrap"><table><thead><tr><th>ID</th><th>Ten</th><th>Nha may</th><th>Tinh</th><th>Ghi chu</th><th></th></tr></thead><tbody id="clientRows"></tbody></table></div>
-          <p><button id="clientMore" class="hidden" onclick="ClientsModule.load(false)">Load more</button></p>
+          <h2>Khách hàng / CĐT</h2>
+          <div class="toolbar"><input id="clientSearch" placeholder="Tìm khách hàng, nhà máy, tỉnh"><button onclick="ClientsModule.load(true)">Tìm</button><button class="primary" data-write onclick="ClientsModule.openCreate()">Thêm khách hàng</button></div>
+          <div class="table-wrap"><table><thead><tr><th>ID</th><th>Tên</th><th>Nhà máy</th><th>Tỉnh</th><th>Ghi chú</th><th></th></tr></thead><tbody id="clientRows"></tbody></table></div>
+          <p><button id="clientMore" class="hidden" onclick="ClientsModule.load(false)">Tải thêm</button></p>
         </section>
 
         <section class="screen" id="screen-suppliers">
-          <h2>Nha cung cap</h2>
-          <div class="toolbar"><input id="supplierSearch" placeholder="Tim nha cung cap, contact"><button onclick="SuppliersModule.load(true)">Tim</button><button class="primary" data-write onclick="SuppliersModule.openCreate()">Them NCC</button></div>
-          <div class="table-wrap"><table><thead><tr><th>ID</th><th>Ten</th><th>Loai</th><th>Quoc gia</th><th>Contact</th><th>Email</th><th></th></tr></thead><tbody id="supplierRows"></tbody></table></div>
-          <p><button id="supplierMore" class="hidden" onclick="SuppliersModule.load(false)">Load more</button></p>
+          <h2>Nhà cung cấp</h2>
+          <div class="toolbar"><input id="supplierSearch" placeholder="Tìm nhà cung cấp, liên hệ"><button onclick="SuppliersModule.load(true)">Tìm</button><button class="primary" data-write onclick="SuppliersModule.openCreate()">Thêm NCC</button></div>
+          <div class="table-wrap"><table><thead><tr><th>ID</th><th>Tên</th><th>Loại</th><th>Quốc gia</th><th>Liên hệ</th><th>Email</th><th></th></tr></thead><tbody id="supplierRows"></tbody></table></div>
+          <p><button id="supplierMore" class="hidden" onclick="SuppliersModule.load(false)">Tải thêm</button></p>
         </section>
 
         <section class="screen" id="screen-audit">
-          <h2>Audit log</h2>
-          <div class="toolbar"><input id="auditSearch" placeholder="Tim action, actor, message"><button onclick="AuditModule.load(true)">Tim</button></div>
-          <div class="table-wrap"><table><thead><tr><th>Time</th><th>Actor</th><th>Action</th><th>Message</th></tr></thead><tbody id="auditRows"></tbody></table></div>
-          <p><button id="auditMore" class="hidden" onclick="AuditModule.load(false)">Load more</button></p>
+          <h2>Nhật ký</h2>
+          <div class="toolbar"><input id="auditSearch" placeholder="Tìm hành động, người thao tác, nội dung"><button onclick="AuditModule.load(true)">Tìm</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Thời gian</th><th>Người thao tác</th><th>Hành động</th><th>Nội dung</th></tr></thead><tbody id="auditRows"></tbody></table></div>
+          <p><button id="auditMore" class="hidden" onclick="AuditModule.load(false)">Tải thêm</button></p>
         </section>
 
         <section class="screen" id="screen-accounts">
-          <h2>Tai khoan</h2>
-          <div class="toolbar"><button onclick="AccountsModule.load(true)">Reload</button><button class="primary" onclick="AccountsModule.openCreate()">Them tai khoan</button></div>
-          <div class="table-wrap"><table><thead><tr><th>ID</th><th>Username</th><th>Ten</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody id="accountRows"></tbody></table></div>
-          <p><button id="accountMore" class="hidden" onclick="AccountsModule.load(false)">Load more</button></p>
+          <h2>Tài khoản</h2>
+          <div class="toolbar"><button onclick="AccountsModule.load(true)">Tải lại</button><button class="primary" onclick="AccountsModule.openCreate()">Thêm tài khoản</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Mã</th><th>Tài khoản</th><th>Tên hiển thị</th><th>Vai trò</th><th>Trạng thái</th><th></th></tr></thead><tbody id="accountRows"></tbody></table></div>
+          <p><button id="accountMore" class="hidden" onclick="AccountsModule.load(false)">Tải thêm</button></p>
         </section>
       </div>
     </main>
@@ -104,8 +104,8 @@
 
   <div class="modal-backdrop hidden" id="modal">
     <div class="modal">
-      <div class="modal-head"><h3 id="modalTitle"></h3><button type="button" class="icon-btn" id="modalClose">x</button></div>
-      <form id="modalForm"><div class="modal-body" id="modalBody"></div><div class="modal-actions"><button type="button" id="modalCancel">Huy</button><button class="primary" type="submit">Luu</button></div></form>
+      <div class="modal-head"><h3 id="modalTitle"></h3><button type="button" class="icon-btn" id="modalClose">×</button></div>
+      <form id="modalForm"><div class="modal-body" id="modalBody"></div><div class="modal-actions"><button type="button" id="modalCancel">Hủy</button><button class="primary" type="submit">Lưu</button></div></form>
     </div>
   </div>
   <div class="toast" id="toast"></div>

@@ -5,9 +5,9 @@
       var s = data.summary || {};
       document.getElementById('dashboardStats').innerHTML = [
         stat('RFQ', s.rfqs),
-        stat('Dong vat tu', s.items),
-        stat('Nha cung cap', s.suppliers),
-        stat('RFQ dang mo', s.openRfqs),
+        stat('Dòng vật tư', s.items),
+        stat('Nhà cung cấp', s.suppliers),
+        stat('RFQ đang mở', s.openRfqs),
       ].join('');
     } catch (err) { API.error(err); }
   }
