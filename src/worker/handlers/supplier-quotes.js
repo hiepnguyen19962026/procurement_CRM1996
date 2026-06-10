@@ -13,6 +13,7 @@ import { cleanNumber, cleanString } from '../lib/normalize.js';
 import { json, makeId, nowIso, readJson } from '../lib/utils.js';
 
 const VALID_CURRENCY = new Set(['VND', 'USD', 'EUR', 'JPY', 'CNY', 'SGD', 'KRW']);
+const VALID_SOURCE_CHANNEL = new Set(['', 'zalo', 'wechat', 'email', 'phone', 'direct', 'other']);
 
 export async function handleSupplierQuotes(action, request, env, ctx, actor) {
   if (action === 'getSupplierQuotes')    return listQuotes(request, env, actor);
@@ -45,6 +46,10 @@ async function searchQuotes(request, env, actor) {
   if (status && status !== 'active' && status !== 'archived') {
     return json({ ok: false, error: 'status phai la active, archived, hoac de trong' }, 400);
   }
+  const sourceChannel = normalizeSourceChannel(body.sourceChannel ?? body.source_channel);
+  if (sourceChannel === null) {
+    return json({ ok: false, error: 'sourceChannel khong hop le' }, 400);
+  }
 
   const validUntilFrom = cleanString(body.validUntilFrom || '', 20);
   const validUntilTo   = cleanString(body.validUntilTo   || '', 20);
@@ -75,6 +80,7 @@ async function searchQuotes(request, env, actor) {
     supplierName:   cleanString(body.supplierName || '', 180),
     manufacturer:   cleanString(body.manufacturer || '', 180),
     status,
+    sourceChannel,
     priceMin:       priceMinRaw,
     priceMax:       priceMaxRaw,
     validUntilFrom,
@@ -168,6 +174,9 @@ function normalizeQuote(body, base) {
   const priceVnd = Math.round(quotedPrice * exchangeRate);
   const priceVndInclTax = Math.round(priceVnd * (1 + taxRate / 100));
   const supplierId = cleanString(body.supplierId ?? body.supplier_id, 80);
+  const sourceChannel = normalizeSourceChannel(body.sourceChannel ?? body.source_channel);
+  if (sourceChannel === null) throw new Error('sourceChannel khong hop le');
+  const receivedAt = normalizeReceivedAt(body.receivedAt ?? body.received_at);
   return {
     ...base,
     supplier_id: supplierId || null,
@@ -184,5 +193,21 @@ function normalizeQuote(body, base) {
     valid_until: cleanString(body.validUntil ?? body.valid_until, 20),
     warranty: cleanString(body.warranty, 240),
     note: cleanString(body.note, 2000),
+    source_channel: sourceChannel || null,
+    source_ref: cleanString(body.sourceRef ?? body.source_ref, 1000),
+    received_at: receivedAt,
   };
+}
+
+function normalizeSourceChannel(value) {
+  const channel = cleanString(value || '', 20).toLowerCase();
+  return VALID_SOURCE_CHANNEL.has(channel) ? channel : null;
+}
+
+function normalizeReceivedAt(value) {
+  const raw = cleanString(value || '', 40);
+  if (!raw) return '';
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(raw)) return raw;
+  return '';
 }

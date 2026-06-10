@@ -8,10 +8,21 @@ export async function insertMediaFileSQL(db, row) {
 
 export async function listMediaFilesSQL(db, { ownerType, ownerId, limit }) {
   const res = await db.prepare(
-    `SELECT file_id, owner_type, owner_id, file_kind, file_name, mime_type, size_bytes, created_by, created_at
+    `SELECT file_id, owner_type, owner_id, file_kind, file_name, mime_type, size_bytes,
+      width, height, variant, is_primary, created_by, created_at
      FROM media_files
      WHERE owner_type = ? AND owner_id = ?
      ORDER BY created_at DESC, file_id DESC LIMIT ?`
   ).bind(ownerType, ownerId, limit).all();
   return res.results || [];
+}
+
+export async function getMediaFileSQL(db, fileId) {
+  const res = await db.prepare(
+    `SELECT file_id, owner_type, owner_id, file_kind, r2_key, file_name, mime_type, size_bytes,
+      width, height, variant, is_primary, created_by, created_at
+     FROM media_files
+     WHERE file_id = ?`
+  ).bind(fileId).first();
+  return res || null;
 }

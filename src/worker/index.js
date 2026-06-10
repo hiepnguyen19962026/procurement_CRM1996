@@ -20,7 +20,7 @@ const TECHNICAL_CLARIFICATION_ACTIONS = ['getTechnicalClarifications', 'createTe
 const SUPPLIER_QUOTE_ACTIONS = ['getSupplierQuotes', 'searchSupplierQuotes', 'createSupplierQuote', 'updateSupplierQuote', 'archiveSupplierQuote'];
 const PRICING_DECISION_ACTIONS = ['getPricingDecisions', 'createPricingDecision'];
 const AUDIT_ACTIONS = ['getAuditLogs'];
-const MEDIA_ACTIONS = ['getMediaFiles', 'uploadMedia'];
+const MEDIA_ACTIONS = ['getMediaFiles', 'uploadMedia', 'getMediaFileContent'];
 const PUBLIC_ACTIONS = ['authLogin', 'initSetup'];
 
 export default {

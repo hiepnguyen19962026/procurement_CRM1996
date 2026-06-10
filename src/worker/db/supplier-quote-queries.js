@@ -18,12 +18,14 @@ export async function insertSupplierQuoteSQL(db, row) {
     `INSERT INTO supplier_quotes (
       quote_id, rfq_item_id, supplier_id, supplier_name, manufacturer, quote_date,
       quoted_price, currency, exchange_rate, price_vnd, tax_rate, price_vnd_incl_tax,
-      lead_time, valid_until, warranty, note, status, created_by, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      lead_time, valid_until, warranty, note, source_channel, source_ref, received_at,
+      status, created_by, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     row.quote_id, row.rfq_item_id, row.supplier_id, row.supplier_name, row.manufacturer, row.quote_date,
     row.quoted_price, row.currency, row.exchange_rate, row.price_vnd, row.tax_rate, row.price_vnd_incl_tax,
-    row.lead_time, row.valid_until, row.warranty, row.note, row.status, row.created_by, row.created_at, row.updated_at
+    row.lead_time, row.valid_until, row.warranty, row.note, row.source_channel, row.source_ref, row.received_at,
+    row.status, row.created_by, row.created_at, row.updated_at
   ).run();
 }
 
@@ -33,13 +35,13 @@ export async function updateSupplierQuoteSQL(db, row) {
       supplier_id = ?, supplier_name = ?, manufacturer = ?, quote_date = ?,
       quoted_price = ?, currency = ?, exchange_rate = ?, price_vnd = ?, tax_rate = ?,
       price_vnd_incl_tax = ?, lead_time = ?, valid_until = ?, warranty = ?, note = ?,
-      updated_at = ?
+      source_channel = ?, source_ref = ?, received_at = ?, updated_at = ?
      WHERE quote_id = ? AND status = 'active'`
   ).bind(
     row.supplier_id, row.supplier_name, row.manufacturer, row.quote_date,
     row.quoted_price, row.currency, row.exchange_rate, row.price_vnd, row.tax_rate,
     row.price_vnd_incl_tax, row.lead_time, row.valid_until, row.warranty, row.note,
-    row.updated_at, row.quote_id
+    row.source_channel, row.source_ref, row.received_at, row.updated_at, row.quote_id
   ).run();
 }
 
@@ -52,7 +54,7 @@ export async function archiveSupplierQuoteSQL(db, { quoteId, updatedAt }) {
 
 export async function searchSupplierQuotesSQL(db, params) {
   const {
-    q, supplierName, manufacturer, status,
+    q, supplierName, manufacturer, status, sourceChannel,
     priceMin, priceMax, validUntilFrom, validUntilTo,
     rfqId, rfqItemId, cursorCreatedAt, cursorQuoteId, limit,
   } = params;
@@ -63,6 +65,7 @@ export async function searchSupplierQuotesSQL(db, params) {
   if (rfqItemId) { conds.push('sq.rfq_item_id = ?'); binds.push(rfqItemId); }
   if (rfqId)     { conds.push('i.rfq_id = ?');        binds.push(rfqId); }
   if (status)    { conds.push('sq.status = ?');        binds.push(status); }
+  if (sourceChannel) { conds.push('sq.source_channel = ?'); binds.push(sourceChannel); }
   if (supplierName) { conds.push('sq.supplier_name LIKE ?'); binds.push('%' + supplierName + '%'); }
   if (manufacturer) { conds.push('sq.manufacturer LIKE ?');  binds.push('%' + manufacturer + '%'); }
   if (priceMin !== null && priceMin !== undefined) { conds.push('sq.price_vnd_incl_tax >= ?'); binds.push(priceMin); }
@@ -71,8 +74,8 @@ export async function searchSupplierQuotesSQL(db, params) {
   if (validUntilTo)   { conds.push('sq.valid_until <= ?'); binds.push(validUntilTo); }
   if (q) {
     const like = '%' + q + '%';
-    conds.push('(sq.supplier_name LIKE ? OR sq.manufacturer LIKE ? OR i.ten_vat_tu LIKE ? OR i.ma_vat_tu LIKE ? OR i.required_model LIKE ? OR i.quy_cach_model_yeu_cau LIKE ? OR r.ma_goi_tbmt LIKE ? OR r.ten_goi LIKE ?)');
-    binds.push(like, like, like, like, like, like, like, like);
+    conds.push('(sq.supplier_name LIKE ? OR sq.manufacturer LIKE ? OR sq.source_ref LIKE ? OR i.ten_vat_tu LIKE ? OR i.ma_vat_tu LIKE ? OR i.required_model LIKE ? OR i.quy_cach_model_yeu_cau LIKE ? OR r.ma_goi_tbmt LIKE ? OR r.ten_goi LIKE ?)');
+    binds.push(like, like, like, like, like, like, like, like, like);
   }
   if (cursorCreatedAt && cursorQuoteId) {
     conds.push('(sq.created_at < ? OR (sq.created_at = ? AND sq.quote_id < ?))');
@@ -85,7 +88,8 @@ export async function searchSupplierQuotesSQL(db, params) {
       sq.quote_id, sq.rfq_item_id, sq.supplier_id, sq.supplier_name, sq.manufacturer,
       sq.quote_date, sq.quoted_price, sq.currency, sq.exchange_rate, sq.price_vnd,
       sq.tax_rate, sq.price_vnd_incl_tax, sq.lead_time, sq.valid_until, sq.warranty,
-      sq.note, sq.status, sq.created_at, sq.updated_at,
+      sq.note, sq.source_channel, sq.source_ref, sq.received_at,
+      sq.status, sq.created_at, sq.updated_at,
       i.rfq_id, i.ma_vat_tu, i.ten_vat_tu, i.required_model, i.quy_cach_model_yeu_cau,
       COALESCE(i.required_model, i.quy_cach_model_yeu_cau) AS required_model_display,
       r.ma_goi_tbmt, r.ten_goi, r.nha_may_cdt, r.ngay_het_han, r.trang_thai_goi

@@ -15,6 +15,7 @@
   ],
   "rewrites": [
     { "source": "/api/fetch-data", "destination": "/api/fetch-data.js" },
-    { "source": "/api/upload", "destination": "/api/upload.js" }
+    { "source": "/api/upload", "destination": "/api/upload.js" },
+    { "source": "/api/media", "destination": "/api/media.js" }
   ]
 }

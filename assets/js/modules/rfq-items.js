@@ -215,14 +215,23 @@
 
   function itemAttachmentSection(item, files) {
     if (!item.rfq_item_id) return '';
-    var inputId = mediaInputId('rfq_item', item.rfq_item_id);
+    var pdfInputId = mediaInputId('rfq_item', item.rfq_item_id, 'document_pdf');
+    var imageInputId = mediaInputId('rfq_item', item.rfq_item_id, 'item_image');
+    var pdfFiles = filterMedia(files, 'document_pdf');
+    var imageFiles = filterMedia(files, 'item_image');
     return '<section class="modal-section media-section">'
       + '<div class="section-head"><h4>Tài liệu dòng vật tư</h4>'
       + '<div data-write>'
-      + '<input id="' + inputId + '" type="file" accept="application/pdf,.pdf" style="max-width:220px">'
-      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'rfq_item\', \'' + API.esc(item.rfq_item_id) + '\', \'document_pdf\', \'' + inputId + '\', \'' + API.esc(item.rfq_item_id) + '\')">Upload PDF</button>'
+      + '<input id="' + pdfInputId + '" type="file" accept="application/pdf,.pdf" style="max-width:220px">'
+      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'rfq_item\', \'' + API.esc(item.rfq_item_id) + '\', \'document_pdf\', \'' + pdfInputId + '\', \'' + API.esc(item.rfq_item_id) + '\')">Upload PDF</button>'
       + '</div></div>'
-      + mediaList(files)
+      + mediaList(pdfFiles, 'Chưa có file PDF.')
+      + '<div class="section-head media-subhead"><h4>Ảnh vật tư</h4>'
+      + '<div data-write>'
+      + '<input id="' + imageInputId + '" type="file" accept="image/jpeg,image/png,image/webp" style="max-width:220px">'
+      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'rfq_item\', \'' + API.esc(item.rfq_item_id) + '\', \'item_image\', \'' + imageInputId + '\', \'' + API.esc(item.rfq_item_id) + '\')">Upload ảnh</button>'
+      + '</div></div>'
+      + imageGallery(imageFiles)
       + '</section>';
   }
 
@@ -351,7 +360,7 @@
     return '<table class="quotes-mini-table">'
       + '<thead><tr>'
       + '<th>Nhà CC</th><th>Hãng SX</th><th>Giá báo</th><th>T.tệ</th><th>Tỷ giá</th>'
-      + '<th>Thuế</th><th>VND + Thuế</th><th>Giao hàng</th><th>Hiệu lực</th><th>Bảo hành</th><th>File PDF</th><th>Ghi chú</th><th></th>'
+      + '<th>Thuế</th><th>VND + Thuế</th><th>Giao hàng</th><th>Hiệu lực</th><th>Bảo hành</th><th>File / minh chứng</th><th>Ghi chú</th><th></th>'
       + '</tr></thead><tbody>'
       + rows.map(function (r) { return quoteRow(rfqItemId, r, latestDecision, quoteFiles && quoteFiles[r.quote_id] || []); }).join('')
       + '</tbody></table>';
@@ -360,7 +369,7 @@
   function quoteRow(rfqItemId, r, latestDecision, files) {
     var isArchived = r.status === 'archived';
     var isSelectedBase = !isArchived && latestDecision && latestDecision.base_quote_id === r.quote_id;
-    var inputId = mediaInputId('quote', r.quote_id);
+    var inputId = mediaInputId('quote', r.quote_id, 'quote');
     var actions = isArchived
       ? '<span class="badge">Đã lưu trữ</span>'
       : '<button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.openQuoteForm(\''
@@ -391,28 +400,61 @@
   }
 
   function quoteFileCell(rfqItemId, quoteId, inputId, files) {
+    var pdfInputId = inputId + '_pdf';
+    var imageInputId = inputId + '_evidence';
+    var pdfFiles = filterMedia(files, 'quote_pdf');
+    var imageFiles = filterMedia(files, 'quote_evidence_image');
     return '<div class="quote-file-cell">'
-      + mediaList(files)
+      + '<div class="media-label">File PDF</div>'
+      + mediaList(pdfFiles, 'Chưa có file PDF.')
       + '<div data-write style="margin-top:6px">'
-      + '<input id="' + inputId + '" type="file" accept="application/pdf,.pdf" style="max-width:170px">'
-      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'quote\', \'' + API.esc(quoteId) + '\', \'quote_pdf\', \'' + inputId + '\', \'' + API.esc(rfqItemId) + '\')">Upload</button>'
+      + '<input id="' + pdfInputId + '" type="file" accept="application/pdf,.pdf" style="max-width:170px">'
+      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'quote\', \'' + API.esc(quoteId) + '\', \'quote_pdf\', \'' + pdfInputId + '\', \'' + API.esc(rfqItemId) + '\')">Upload</button>'
+      + '</div>'
+      + '<div class="media-label" style="margin-top:8px">Minh chứng báo giá</div>'
+      + imageGallery(imageFiles)
+      + '<div data-write style="margin-top:6px">'
+      + '<input id="' + imageInputId + '" type="file" accept="image/jpeg,image/png,image/webp" style="max-width:170px">'
+      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'quote\', \'' + API.esc(quoteId) + '\', \'quote_evidence_image\', \'' + imageInputId + '\', \'' + API.esc(rfqItemId) + '\')">Upload ảnh</button>'
       + '</div></div>';
   }
 
-  function mediaList(files) {
-    if (!files || !files.length) return '<div class="empty-state small">Chưa có file PDF.</div>';
+  function mediaList(files, emptyText) {
+    if (!files || !files.length) return '<div class="empty-state small">' + API.esc(emptyText || 'Chưa có file.') + '</div>';
     return '<ul class="media-list" style="margin:0;padding-left:18px;font-size:12px">'
       + files.map(function (f) {
-        return '<li><strong>' + API.esc(f.file_name || f.file_id) + '</strong>'
+        return '<li><a href="' + API.esc(API.mediaUrl(f.file_id)) + '" target="_blank" rel="noopener"><strong>' + API.esc(f.file_name || f.file_id) + '</strong></a>'
           + ' <span class="muted">(' + API.esc(formatSize(f.size_bytes)) + ', ' + API.esc(formatDate(f.created_at)) + ')</span></li>';
       }).join('')
       + '</ul>';
   }
 
+  function imageGallery(files) {
+    if (!files || !files.length) return '<div class="empty-state small">Chưa có ảnh.</div>';
+    return '<div class="media-gallery">'
+      + files.map(function (f) {
+        var src = API.mediaUrl(f.file_id);
+        return '<button type="button" class="media-thumb" onclick="RfqItemsModule.openMediaPreview(\'' + API.esc(f.file_id) + '\')" title="' + API.esc(f.file_name || f.file_id) + '">'
+          + '<img src="' + API.esc(src) + '" alt="' + API.esc(f.file_name || 'Ảnh upload') + '" loading="lazy">'
+          + '<span>' + API.esc(f.file_name || f.file_id) + '</span>'
+          + '</button>';
+      }).join('')
+      + '</div>';
+  }
+
+  function filterMedia(files, fileKind) {
+    return (files || []).filter(function (f) { return f.file_kind === fileKind; });
+  }
+
   async function uploadMediaFile(ownerType, ownerId, fileKind, inputId, rfqItemId) {
     var input = document.getElementById(inputId);
     var file = input && input.files && input.files[0];
+    var isImage = fileKind === 'item_image' || fileKind === 'quote_evidence_image';
     if (!file) {
+      if (isImage) {
+        API.toast('Chọn ảnh trước khi upload', 'warn');
+        return;
+      }
       API.toast('Chọn file PDF trước khi upload', 'warn');
       return;
     }
@@ -423,6 +465,11 @@
     form.append('file', file);
     try {
       await API.upload(form);
+      if (isImage) {
+        API.toast('Đã upload ảnh', 'success');
+        await openEdit(rfqItemId);
+        return;
+      }
       API.toast('Đã upload file PDF', 'success');
       await openEdit(rfqItemId);
     } catch (err) {
@@ -430,8 +477,12 @@
     }
   }
 
-  function mediaInputId(ownerType, ownerId) {
-    return 'media_' + ownerType + '_' + String(ownerId || '').replace(/[^A-Za-z0-9_-]/g, '_');
+  function openMediaPreview(fileId) {
+    window.open(API.mediaUrl(fileId), '_blank', 'noopener');
+  }
+
+  function mediaInputId(ownerType, ownerId, fileKind) {
+    return 'media_' + ownerType + '_' + String(ownerId || '').replace(/[^A-Za-z0-9_-]/g, '_') + '_' + String(fileKind || '').replace(/[^A-Za-z0-9_-]/g, '_');
   }
 
   function formatSize(value) {
@@ -978,6 +1029,7 @@
     archiveQuote: archiveQuote,
     openPricingForm: openPricingForm,
     uploadMediaFile: uploadMediaFile,
+    openMediaPreview: openMediaPreview,
     downloadTemplate: downloadTemplate,
     exportCsv: exportCsv,
     importCsv: importCsv,
