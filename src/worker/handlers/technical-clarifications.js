@@ -78,8 +78,8 @@ async function saveClarification(request, env, ctx, actor, isUpdate) {
       sequence_no: isUpdate ? oldRow.sequence_no : await nextClarificationSequenceSQL(env.DB, rfqItemId),
       created_by: isUpdate ? oldRow.created_by : actor.id,
       created_at: isUpdate ? oldRow.created_at : now,
-      updated_at: isUpdate ? now : '',
-      deleted_at: '',
+      updated_at: isUpdate ? now : null,
+      deleted_at: null,
     });
   } catch (err) {
     return json({ ok: false, error: err.message || 'Du lieu trao doi ky thuat khong hop le' }, 400);
