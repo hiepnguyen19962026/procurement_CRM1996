@@ -10,7 +10,9 @@
   function openModal(title, bodyHtml, onSubmit) {
     var modal = document.getElementById('modal');
     document.getElementById('modalTitle').textContent = title;
-    document.getElementById('modalBody').innerHTML = bodyHtml;
+    var _mb = document.getElementById('modalBody');
+    _mb.className = 'modal-body form-grid-12';
+    _mb.innerHTML = bodyHtml;
     modal.classList.remove('hidden');
     modal._onSubmit = onSubmit;
     var submitBtn = document.getElementById('modalSubmit');

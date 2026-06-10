@@ -145,17 +145,21 @@
         }).join('')
       + '</select>';
 
-    var profileHtml = '<label class="field-md">Tên CĐT / khách hàng<input name="clientName" required value="' + API.esc(r.client_name || '') + '"></label>'
-      + '<label class="field-md">Tên pháp nhân<input name="legalName" value="' + API.esc(r.legal_name || '') + '"></label>'
-      + '<label class="field-sm">MST (Mã số thuế)<input name="taxCode" value="' + API.esc(r.tax_code || '') + '"></label>'
-      + '<label class="field-sm">Loại hình' + typeSel + '</label>'
-      + '<label class="field-sm">Nhà máy<input name="plantName" value="' + API.esc(r.plant_name || '') + '"></label>'
-      + '<label class="field-sm">Tỉnh / thành<input name="province" value="' + API.esc(r.province || '') + '"></label>'
-      + '<label class="field-lg">Địa chỉ<input name="address" value="' + API.esc(r.address || '') + '"></label>'
-      + '<label class="field-sm">Email<input name="email" type="email" value="' + API.esc(r.email || '') + '"></label>'
-      + '<label class="field-sm">SĐT<input name="phone" value="' + API.esc(r.phone || '') + '"></label>'
-      + '<label class="field-sm">Website<input name="website" value="' + API.esc(r.website || '') + '"></label>'
-      + '<label class="field-full">Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>';
+    // Row 1: tên CĐT(4) + tên pháp nhân(4) + MST(2) + loại hình(2) = 12
+    // Row 2: nhà máy(3) + tỉnh(1) + địa chỉ(6) = 10 → email/phone wrap
+    // Row 3: email(3) + SĐT(2) + website(3) = 8
+    // Row 4: ghi chú(12)
+    var profileHtml = '<label class="span-4">Tên CĐT / khách hàng<input name="clientName" required value="' + API.esc(r.client_name || '') + '"></label>'
+      + '<label class="span-4">Tên pháp nhân<input name="legalName" value="' + API.esc(r.legal_name || '') + '"></label>'
+      + '<label class="span-2">MST (Mã số thuế)<input name="taxCode" value="' + API.esc(r.tax_code || '') + '"></label>'
+      + '<label class="span-2">Loại hình' + typeSel + '</label>'
+      + '<label class="span-3">Nhà máy<input name="plantName" value="' + API.esc(r.plant_name || '') + '"></label>'
+      + '<label class="span-1">Tỉnh<input name="province" value="' + API.esc(r.province || '') + '"></label>'
+      + '<label class="span-6">Địa chỉ<input name="address" value="' + API.esc(r.address || '') + '"></label>'
+      + '<label class="span-3">Email<input name="email" type="email" value="' + API.esc(r.email || '') + '"></label>'
+      + '<label class="span-2">SĐT<input name="phone" value="' + API.esc(r.phone || '') + '"></label>'
+      + '<label class="span-3">Website<input name="website" value="' + API.esc(r.website || '') + '"></label>'
+      + '<label class="span-12 compact-ta">Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>';
 
     if (!cid) return profileHtml;
 

@@ -221,14 +221,17 @@
       + '<small id="rfq-cac-helper" style="color:var(--text-muted);display:block;margin-top:2px">' + initHelper + '</small>'
       + '</div>';
 
-    var base = '<label class="field-lg">Tên gói *<input name="tenGoi" required value="' + API.esc(r.ten_goi || '') + '"></label>'
-      + '<label class="field-sm">Mã gói / TBMT<input name="maGoiTbmt" value="' + API.esc(r.ma_goi_tbmt || '') + '"></label>'
-      + '<label class="field-md">CĐT / pháp nhân phát thầu' + clientAc + '</label>'
-      + '<label class="field-sm">Ngày nhận / đăng tải<input name="ngayNhanHoacDangTai" type="date" value="' + API.esc(r.ngay_nhan_hoac_dang_tai || '') + '"></label>'
-      + '<label class="field-sm">Ngày hết hạn<input name="ngayHetHan" type="date" value="' + API.esc(r.ngay_het_han || '') + '"></label>'
-      + '<label class="field-sm">Dự toán (VNĐ)<input name="duToan" inputmode="numeric" value="' + API.esc(r.du_toan || '') + '"></label>'
-      + '<label class="field-sm">Trạng thái' + statSel + '</label>'
-      + '<label class="field-full">Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>';
+    // Row 1: tên gói(5) + mã gói(3) + CĐT(4) = 12
+    // Row 2: ngày nhận(2) + ngày hết hạn(2) + dự toán(3) + trạng thái(2) = 9
+    // Row 3: ghi chú(12)
+    var base = '<label class="span-5">Tên gói *<input name="tenGoi" required value="' + API.esc(r.ten_goi || '') + '"></label>'
+      + '<label class="span-3">Mã gói / TBMT<input name="maGoiTbmt" value="' + API.esc(r.ma_goi_tbmt || '') + '"></label>'
+      + '<label class="span-4">CĐT / pháp nhân phát thầu' + clientAc + '</label>'
+      + '<label class="span-2">Ngày nhận / đăng tải<input name="ngayNhanHoacDangTai" type="date" value="' + API.esc(r.ngay_nhan_hoac_dang_tai || '') + '"></label>'
+      + '<label class="span-2">Ngày hết hạn<input name="ngayHetHan" type="date" value="' + API.esc(r.ngay_het_han || '') + '"></label>'
+      + '<label class="span-3">Dự toán (VNĐ)<input name="duToan" inputmode="numeric" value="' + API.esc(r.du_toan || '') + '"></label>'
+      + '<label class="span-2">Trạng thái' + statSel + '</label>'
+      + '<label class="span-12 compact-ta">Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>';
 
     if (r.rfq_id) base += rfqContactsSection(r.rfq_id, rfqContacts, clientContacts, r.client_id || '');
     return base;

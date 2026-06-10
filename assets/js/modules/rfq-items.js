@@ -244,34 +244,43 @@
 
   function fields(r, clarifications, quotes, pricingDecisions) {
     var status = r.trang_thai_dong || 'chua_xu_ly';
+    var techStatus = r.clarification_status || r.trang_thai_ky_thuat || '';
     var latestDecision = (pricingDecisions || [])[0] || null;
     return ''
-      + '<label class="field-sm field-readonly">RFQ ID<input name="rfqId" value="' + API.esc(r.rfq_id || '') + '" readonly tabindex="-1"></label>'
-      + input('sttGoc', 'STT', r.stt_goc, '', 'field-xs')
-      + input('maMuaSam', 'Mã mua sắm', r.ma_mua_sam, '', 'field-sm')
-      + input('maVatTu', 'Mã vật tư', r.ma_vat_tu, '', 'field-sm')
-      + textarea('tenVatTu', 'Tên vật tư / Danh mục hàng hóa', r.ten_vat_tu, 'required', 'field-lg')
-      + textarea('requiredModel', 'Ký mã hiệu / Model', val(r, 'required_model', 'quy_cach_model_yeu_cau'), '', 'field-md')
-      + input('brand', 'Nhãn hiệu', val(r, 'brand', 'nhan_hieu'), '', 'field-sm')
-      + input('manufactureYear', 'Năm sản xuất', val(r, 'manufacture_year', 'nam_san_xuat'), '', 'field-xs')
-      + input('originCountry', 'Xuất xứ', val(r, 'origin_country', 'xuat_xu'), '', 'field-sm')
-      + input('manufacturer', 'Hãng sản xuất', val(r, 'manufacturer', 'hang_goc_nsx_goc'), '', 'field-sm')
-      + textarea('technicalParams', 'Quy cách / thông số kỹ thuật', val(r, 'technical_params', 'thong_so_ky_thuat'), '', 'field-full')
-      + input('vatLieu', 'Vật liệu', r.vat_lieu, '', 'field-sm')
-      + input('phuTungChuyenDung', 'Phụ tùng chuyên dụng', r.phu_tung_chuyen_dung, '', 'field-sm')
-      + textarea('yeuCauKyThuatBoSung', 'Yêu cầu kỹ thuật bổ sung', r.yeu_cau_ky_thuat_bo_sung, '', 'field-full')
-      + input('unit', 'Đơn vị tính', val(r, 'unit', 'don_vi'), '', 'field-xs')
-      + input('quantity', 'Khối lượng', val(r, 'quantity', 'so_luong'), 'inputmode="decimal"', 'field-xs')
-      + input('thueSuat', 'Thuế suất', r.thue_suat, 'inputmode="decimal"', 'field-xs')
-      + input('donGiaSauThue', 'Đơn giá', r.don_gia_sau_thue || r.don_gia_truoc_thue, 'inputmode="numeric"', 'field-sm')
-      + input('thanhTienSauThue', 'Thành tiền', r.thanh_tien_sau_thue, 'inputmode="numeric"', 'field-sm')
-      + input('deliveryTime', 'Thời gian giao hàng', r.delivery_time, '', 'field-sm')
-      + textarea('note', 'Ghi chú', r.note, '', 'field-full')
-      + '<label class="field-sm field-readonly">Trạng thái gói <small style="font-weight:400;color:var(--text-muted)">(kế thừa từ RFQ)</small>'
+      // Row 1: identifiers (2+1+2+3) + quantities (1+1+1+1) = 12
+      + '<label class="span-2 readonly-field">RFQ ID<input name="rfqId" value="' + API.esc(r.rfq_id || '') + '" readonly tabindex="-1"></label>'
+      + input('sttGoc', 'STT', r.stt_goc, '', 'span-1')
+      + input('maMuaSam', 'Mã mua sắm', r.ma_mua_sam, '', 'span-2')
+      + input('maVatTu', 'Mã vật tư', r.ma_vat_tu, '', 'span-3')
+      + input('unit', 'ĐVT', val(r, 'unit', 'don_vi'), '', 'span-1')
+      + input('quantity', 'Khối lượng', val(r, 'quantity', 'so_luong'), 'inputmode="decimal"', 'span-1')
+      + input('thueSuat', 'Thuế suất', r.thue_suat, 'inputmode="decimal"', 'span-1')
+      + input('manufactureYear', 'Năm SX', val(r, 'manufacture_year', 'nam_san_xuat'), '', 'span-1')
+      // Row 2: description (5+4+3) = 12
+      + textarea('tenVatTu', 'Tên vật tư / Danh mục hàng hóa', r.ten_vat_tu, 'required', 'span-5 compact-ta')
+      + textarea('requiredModel', 'Ký mã hiệu / Model', val(r, 'required_model', 'quy_cach_model_yeu_cau'), '', 'span-4 compact-ta')
+      + input('brand', 'Nhãn hiệu', val(r, 'brand', 'nhan_hieu'), '', 'span-3')
+      // Row 3: origin / material (3+2+3+2+2) = 12
+      + input('manufacturer', 'Hãng sản xuất', val(r, 'manufacturer', 'hang_goc_nsx_goc'), '', 'span-3')
+      + input('originCountry', 'Xuất xứ', val(r, 'origin_country', 'xuat_xu'), '', 'span-2')
+      + input('vatLieu', 'Vật liệu', r.vat_lieu, '', 'span-3')
+      + input('phuTungChuyenDung', 'Phụ tùng chuyên dụng', r.phu_tung_chuyen_dung, '', 'span-2')
+      + input('deliveryTime', 'Thời gian giao hàng', r.delivery_time, '', 'span-2')
+      // Row 4: pricing + status (3+3+3+3) = 12
+      + input('donGiaSauThue', 'Đơn giá', r.don_gia_sau_thue || r.don_gia_truoc_thue, 'inputmode="numeric"', 'span-3')
+      + input('thanhTienSauThue', 'Thành tiền', r.thanh_tien_sau_thue, 'inputmode="numeric"', 'span-3')
+      + '<label class="span-3 readonly-field">Trạng thái gói <small style="font-weight:400;color:var(--text-muted)">(RFQ)</small>'
       + '<input value="' + API.esc(statusLabel(status)) + '" readonly tabindex="-1">'
       + '<input type="hidden" name="trangThaiDong" value="' + API.esc(status) + '">'
       + '</label>'
-      + textarea('originFullText', 'Cột tổng hợp gốc để đối chiếu/export', r.origin_full_text, '', 'field-full')
+      + '<label class="span-3 readonly-field">Xác nhận kỹ thuật'
+      + '<input value="' + API.esc(technicalStatusLabel(techStatus)) + '" readonly tabindex="-1">'
+      + '</label>'
+      // Full-width specification fields
+      + textarea('technicalParams', 'Quy cách / thông số kỹ thuật', val(r, 'technical_params', 'thong_so_ky_thuat'), '', 'span-12 compact-ta')
+      + textarea('yeuCauKyThuatBoSung', 'Yêu cầu kỹ thuật bổ sung', r.yeu_cau_ky_thuat_bo_sung, '', 'span-12 compact-ta')
+      + textarea('note', 'Ghi chú', r.note, '', 'span-12 compact-ta')
+      + textarea('originFullText', 'Cột tổng hợp gốc để đối chiếu/export', r.origin_full_text, '', 'span-12 compact-ta')
       + masterItemSection(r, state.currentMaster || {})
       + itemAttachmentSection(r, (state.currentMedia && state.currentMedia.itemFiles) || [])
       + technicalSection(r, clarifications)
@@ -417,20 +426,25 @@
   }
 
   function timelineItem(rfqItemId, r) {
-    var modelChange = r.old_model || r.proposed_model
-      ? '<div class="muted">' + API.esc(r.old_model || '-') + ' -> ' + API.esc(r.proposed_model || '-') + '</div>'
+    var modelChange = (r.old_model || r.proposed_model)
+      ? '<div style="font-size:12px;color:var(--text-muted);margin-top:2px">' + API.esc(r.old_model || '—') + ' → ' + API.esc(r.proposed_model || '—') + '</div>'
       : '';
-    var attachment = r.attachment_file_id
-      ? '<span>' + API.esc(r.attachment_file_name || r.attachment_file_id) + '</span>'
+    var propSpec = (r.proposed_manufacturer || r.proposed_origin)
+      ? '<div style="font-size:12px;color:var(--text-muted)">' + API.esc([r.proposed_manufacturer, r.proposed_origin].filter(Boolean).join(' · ')) + '</div>'
       : '';
-    return '<article class="timeline-item">'
-      + '<div class="timeline-top"><strong>' + API.esc(r.title) + '</strong><span>' + API.esc(formatDate(r.created_at)) + '</span></div>'
-      + '<div><span class="badge">' + API.esc(typeLabel(r.clarification_type)) + '</span> <span class="badge">' + API.esc(technicalStatusLabel(r.status_after)) + '</span></div>'
-      + (r.content ? '<p>' + API.esc(r.content) + '</p>' : '')
-      + modelChange
-      + (r.proposed_manufacturer || r.proposed_origin ? '<div class="muted">' + API.esc([r.proposed_manufacturer, r.proposed_origin].filter(Boolean).join(' - ')) + '</div>' : '')
-      + (attachment ? '<div>' + attachment + '</div>' : '')
-      + '<button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.openClarificationForm(\'' + API.esc(rfqItemId) + '\', \'' + API.esc(r.clarification_id) + '\')">Sửa</button>'
+    return '<article class="timeline-item" style="display:grid;grid-template-columns:140px 1fr auto;gap:8px;align-items:start;padding:8px 10px;margin-bottom:6px">'
+      + '<div style="display:flex;flex-direction:column;gap:3px">'
+      + '<span class="badge" style="font-size:11px;white-space:nowrap">' + API.esc(typeLabel(r.clarification_type)) + '</span>'
+      + '<span class="badge" style="font-size:11px;white-space:nowrap">' + API.esc(technicalStatusLabel(r.status_after)) + '</span>'
+      + '<span style="font-size:11px;color:var(--text-muted);margin-top:2px">' + API.esc(formatDate(r.created_at)) + '</span>'
+      + '</div>'
+      + '<div style="min-width:0">'
+      + '<strong style="font-size:13px">' + API.esc(r.title) + '</strong>'
+      + (r.content ? '<div style="font-size:12px;margin-top:3px;white-space:pre-wrap">' + API.esc(r.content) + '</div>' : '')
+      + modelChange + propSpec
+      + (r.attachment_file_id ? '<div style="font-size:12px;color:var(--text-muted);margin-top:2px">📎 ' + API.esc(r.attachment_file_name || r.attachment_file_id) + '</div>' : '')
+      + '</div>'
+      + '<div><button type="button" data-role-only="admin,manager" style="font-size:12px;min-height:28px;padding:3px 8px" onclick="RfqItemsModule.openClarificationForm(\'' + API.esc(rfqItemId) + '\', \'' + API.esc(r.clarification_id) + '\')">Sửa</button></div>'
       + '</article>';
   }
 
@@ -438,7 +452,8 @@
     var type = r.clarification_type || 'ask_supplier';
     var status = r.status_after || 'waiting_supplier';
     return ''
-      + '<label class="field-sm">Loại trao đổi<select name="clarificationType">'
+      // Row 1: type(2) + status(3) + title(7) = 12
+      + '<label class="span-2">Loại trao đổi<select name="clarificationType">'
       + option('ask_supplier', 'Hỏi hãng', type)
       + option('supplier_reply', 'Hãng phản hồi', type)
       + option('ask_client', 'Hỏi CĐT', type)
@@ -446,21 +461,22 @@
       + option('replacement_proposal', 'Đề xuất thay thế', type)
       + option('final_confirm', 'Final confirm', type)
       + '</select></label>'
-      + '<label class="field-sm">Trạng thái sau trao đổi<select name="statusAfter">'
+      + '<label class="span-3">Trạng thái sau trao đổi<select name="statusAfter">'
       + option('waiting_supplier', 'Đang hỏi hãng', status)
       + option('waiting_client', 'Đang hỏi CĐT', status)
       + option('need_more_info', 'Cần bổ sung', status)
       + option('final_confirmed', 'Đã xác nhận', status)
       + option('rejected', 'Bị từ chối', status)
       + '</select></label>'
-      + input('title', 'Tiêu đề', r.title, 'required', 'field-lg')
-      + textarea('content', 'Nội dung', r.content, '', 'field-full')
-      + input('oldModel', 'Model cũ', r.old_model || val(item, 'required_model', 'quy_cach_model_yeu_cau'), '', 'field-sm')
-      + input('proposedModel', 'Model đề xuất / final', r.proposed_model || item.quy_cach_final, '', 'field-sm')
-      + input('proposedManufacturer', 'Hãng SX đề xuất / final', r.proposed_manufacturer || item.hang_final, '', 'field-sm')
-      + input('proposedOrigin', 'Xuất xứ đề xuất / final', r.proposed_origin || item.xuat_xu_final, '', 'field-sm')
-      + input('attachmentFileId', 'File đính kèm (file_id)', r.attachment_file_id, '', 'field-sm')
-      + textarea('rawNote', 'Ghi chú gốc', r.raw_note, '', 'field-full')
+      + input('title', 'Tiêu đề', r.title, 'required', 'span-7')
+      + textarea('content', 'Nội dung', r.content, '', 'span-12 compact-ta')
+      // Row: model/spec fields (3+3+3+3) = 12
+      + input('oldModel', 'Model cũ', r.old_model || val(item, 'required_model', 'quy_cach_model_yeu_cau'), '', 'span-3')
+      + input('proposedModel', 'Model đề xuất / final', r.proposed_model || item.quy_cach_final, '', 'span-3')
+      + input('proposedManufacturer', 'Hãng SX đề xuất', r.proposed_manufacturer || item.hang_final, '', 'span-3')
+      + input('proposedOrigin', 'Xuất xứ đề xuất', r.proposed_origin || item.xuat_xu_final, '', 'span-3')
+      + input('attachmentFileId', 'File đính kèm (file_id)', r.attachment_file_id, '', 'span-4')
+      + textarea('rawNote', 'Ghi chú gốc', r.raw_note, '', 'span-12 compact-ta')
       + '<label class="check"><input type="checkbox" name="updateFinal"> Cập nhật quy cách final cho vật tư này</label>';
   }
 
@@ -718,13 +734,15 @@
   function quoteFields(r) {
     var currency = r.currency || 'VND';
     var sourceChannel = r.source_channel || '';
+    var vndDisplay = r.price_vnd_incl_tax ? API.money(r.price_vnd_incl_tax) : '';
     return ''
+      // Row 1: source ref (2+3+7) = 12
       + quoteReferenceFields(r, sourceChannel)
-      + input('supplierName', 'Tên nhà cung cấp', r.supplier_name || '', 'placeholder="VD: SKF Vietnam"', 'field-md')
-      + input('manufacturer', 'Hãng sản xuất', r.manufacturer || '', 'placeholder="VD: SKF"', 'field-sm')
-      + input('quoteDate', 'Ngày báo giá', r.quote_date || '', 'type="date"', 'field-sm')
-      + input('quotedPrice', 'Giá báo (theo tiền tệ)', r.quoted_price || '', 'inputmode="decimal" placeholder="0"', 'field-sm')
-      + '<label class="field-xs">Tiền tệ<select name="currency">'
+      // Row 2: supplier (4+3) + date(2) + currency(1) = 10 → pricing continues
+      + input('supplierName', 'Tên nhà cung cấp', r.supplier_name || '', 'placeholder="VD: SKF Vietnam"', 'span-4')
+      + input('manufacturer', 'Hãng sản xuất', r.manufacturer || '', 'placeholder="VD: SKF"', 'span-3')
+      + input('quoteDate', 'Ngày báo giá', r.quote_date || '', 'type="date"', 'span-2')
+      + '<label class="span-1">Tiền tệ<select name="currency">'
       + option('VND', 'VND', currency)
       + option('USD', 'USD', currency)
       + option('EUR', 'EUR', currency)
@@ -733,17 +751,21 @@
       + option('SGD', 'SGD', currency)
       + option('KRW', 'KRW', currency)
       + '</select></label>'
-      + input('exchangeRate', 'Tỷ giá (1 ngoại tệ = ? VND)', r.exchange_rate || 1, 'inputmode="decimal" placeholder="1"', 'field-sm')
-      + input('taxRate', 'Thuế suất (%)', r.tax_rate || 0, 'inputmode="decimal" placeholder="0"', 'field-xs')
-      + input('leadTime', 'Thời gian giao hàng', r.lead_time || '', 'placeholder="VD: 4-6 tuần"', 'field-sm')
-      + input('validUntil', 'Hiệu lực đến', r.valid_until || '', 'type="date"', 'field-sm')
-      + input('warranty', 'Bảo hành', r.warranty || '', 'placeholder="VD: 12 tháng"', 'field-sm')
-      + textarea('note', 'Ghi chú', r.note || '', '', 'field-full');
+      // Row 3: pricing (3+2+1+3) + delivery/validity (2+2+2) = 15, wraps naturally
+      + input('quotedPrice', 'Giá báo', r.quoted_price || '', 'inputmode="decimal" placeholder="0"', 'span-3')
+      + input('exchangeRate', 'Tỷ giá (1 NTệ=?VND)', r.exchange_rate || 1, 'inputmode="decimal" placeholder="1"', 'span-2')
+      + input('taxRate', 'Thuế (%)', r.tax_rate || 0, 'inputmode="decimal" placeholder="0"', 'span-1')
+      + '<label class="span-3 readonly-field">VND + Thuế<input value="' + API.esc(vndDisplay) + '" readonly tabindex="-1"></label>'
+      + input('leadTime', 'Thời gian giao hàng', r.lead_time || '', 'placeholder="VD: 4-6 tuần"', 'span-2')
+      + input('validUntil', 'Hiệu lực đến', r.valid_until || '', 'type="date"', 'span-2')
+      + input('warranty', 'Bảo hành', r.warranty || '', 'placeholder="VD: 12 tháng"', 'span-2')
+      + textarea('note', 'Ghi chú', r.note || '', '', 'span-12 compact-ta');
   }
 
   function quoteReferenceFields(r, sourceChannel) {
     return ''
-      + '<label class="field-sm">Nguồn báo giá<select name="sourceChannel">'
+      // Row: nguồn(2) + thời điểm(3) + ghi chú nguồn(7) = 12
+      + '<label class="span-2">Nguồn báo giá<select name="sourceChannel">'
       + sourceOption('', '-', sourceChannel)
       + sourceOption('zalo', 'Zalo', sourceChannel)
       + sourceOption('wechat', 'WeChat', sourceChannel)
@@ -752,8 +774,8 @@
       + sourceOption('direct', 'Direct', sourceChannel)
       + sourceOption('other', 'Other', sourceChannel)
       + '</select></label>'
-      + input('receivedAt', 'Thời điểm nhận báo giá', r.received_at || '', 'type="datetime-local"', 'field-sm')
-      + textarea('sourceRef', 'Ghi chú nguồn / tham chiếu', r.source_ref || '', '', 'field-full');
+      + input('receivedAt', 'Thời điểm nhận', r.received_at || '', 'placeholder="YYYY-MM-DD HH:mm"', 'span-3')
+      + textarea('sourceRef', 'Ghi chú nguồn / tham chiếu', r.source_ref || '', '', 'span-7 compact-ta');
   }
 
   function sourceOption(value, label, current) {
@@ -928,11 +950,11 @@
   function pricingFormHtml(baseQuoteId, activeQuotes, supplierName, basePriceVndInclTax) {
     var baseSection = baseQuoteId
       ? '<input type="hidden" name="baseQuoteId" value="' + API.esc(baseQuoteId) + '">'
-        + '<div style="background:var(--primary-bg);border:1px solid var(--primary-border);border-radius:9px;padding:10px 13px;margin-bottom:10px;font-size:13px;grid-column:1/-1">'
+        + '<div class="span-12" style="background:var(--primary-bg);border:1px solid var(--primary-border);border-radius:9px;padding:10px 13px;margin-bottom:6px;font-size:13px">'
         + '<strong>Báo giá gốc:</strong> ' + API.esc(supplierName || baseQuoteId)
         + (basePriceVndInclTax ? ' — ' + API.money(basePriceVndInclTax) + ' VND' : '')
         + '</div>'
-      : '<label style="grid-column:1/-1">Chọn báo giá gốc'
+      : '<label class="span-12">Chọn báo giá gốc'
         + '<select name="baseQuoteId" required>'
         + '<option value="">-- Chọn báo giá --</option>'
         + (activeQuotes || []).map(function (q) {
@@ -946,14 +968,14 @@
     var markupOptions = [1.0, 1.1, 1.15, 1.2, 1.25, 1.3, 1.35, 1.4, 1.45, 1.5, 1.6, 1.7, 1.8, 1.9, 2.0];
 
     return baseSection
-      + '<label>Hệ số markup<select name="markupRate">'
+      + '<label class="span-4">Hệ số markup<select name="markupRate">'
       + markupOptions.map(function (v) {
           return '<option value="' + v + '"' + (v === 1.4 ? ' selected' : '') + '>'
-            + 'x' + v + ' (' + Math.round((v - 1) * 100) + '% biên độ)'
+            + 'x' + v + ' (' + Math.round((v - 1) * 100) + '%)'
             + '</option>';
         }).join('')
       + '</select></label>'
-      + '<label>Lý do chọn báo giá<select name="selectionReason">'
+      + '<label class="span-4">Lý do chọn báo giá<select name="selectionReason">'
       + option('', '-- Chọn lý do --', '')
       + option('lowest_price',    'Giá thấp nhất', '')
       + option('better_lead_time','Giao hàng nhanh hơn', '')
@@ -963,13 +985,13 @@
       + option('available_stock', 'Có hàng sẵn', '')
       + option('other',           'Lý do khác', '')
       + '</select></label>'
-      + '<label>Mức độ rủi ro<select name="riskLevel">'
+      + '<label class="span-4">Mức độ rủi ro<select name="riskLevel">'
       + option('low',    'Thấp', 'low')
       + option('medium', 'Trung bình', '')
       + option('high',   'Cao', '')
       + '</select></label>'
-      + '<label>Ghi chú rủi ro<textarea name="riskNote" placeholder="Mô tả rủi ro nếu có"></textarea></label>'
-      + '<label>Ghi chú cân giá (bắt buộc nếu chọn "Lý do khác")<textarea name="pricingNote" placeholder="Ghi chú bổ sung hoặc lý do cụ thể"></textarea></label>';
+      + '<label class="span-12 compact-ta">Ghi chú rủi ro<textarea name="riskNote" placeholder="Mô tả rủi ro nếu có"></textarea></label>'
+      + '<label class="span-12 compact-ta">Ghi chú cân giá<textarea name="pricingNote" placeholder="Ghi chú bổ sung hoặc lý do cụ thể"></textarea></label>';
   }
 
   // --- Price History ---
@@ -1155,12 +1177,9 @@
     var item = (state.rows || []).find(function (r) { return r.rfq_item_id === rfqItemId; }) || { rfq_item_id: rfqItemId };
     var currency = 'VND';
     var html = ''
-      + input('contractNo', 'Số hợp đồng', '', 'required placeholder="VD: HD-2026-001"')
-      + input('contractName', 'Tên hợp đồng', '', 'placeholder="VD: Hợp đồng cung cấp vòng bi"')
-      + input('signedDate', 'Ngày ký', '', 'type="date"')
-      + input('effectiveDate', 'Ngày có hiệu lực', '', 'type="date"')
-      + input('expiryDate', 'Ngày hết hạn', '', 'type="date"')
-      + '<label>Ti&#7873;n t&#7879;<select name="currency">'
+      + input('contractNo', 'Số hợp đồng', '', 'required placeholder="VD: HD-2026-001"', 'span-4')
+      + input('contractName', 'Tên hợp đồng', '', 'placeholder="VD: Hợp đồng cung cấp vòng bi"', 'span-5')
+      + '<label class="span-3">Tiền tệ<select name="currency">'
       + option('VND', 'VND', currency)
       + option('USD', 'USD', currency)
       + option('EUR', 'EUR', currency)
@@ -1169,13 +1188,16 @@
       + option('SGD', 'SGD', currency)
       + option('KRW', 'KRW', currency)
       + '</select></label>'
-      + '<div style="background:var(--primary-bg);border:1px solid var(--primary-border);border-radius:9px;padding:10px 13px;margin-bottom:10px;font-size:13px">'
-      + '<strong>D&#242;ng v&#7853;t t&#432;:</strong> ' + API.esc(item.ten_vat_tu || rfqItemId)
+      + input('signedDate', 'Ngày ký', '', 'type="date"', 'span-3')
+      + input('effectiveDate', 'Ngày có hiệu lực', '', 'type="date"', 'span-3')
+      + input('expiryDate', 'Ngày hết hạn', '', 'type="date"', 'span-3')
+      + '<div class="span-3" style="background:var(--primary-bg);border:1px solid var(--primary-border);border-radius:9px;padding:8px 12px;font-size:13px">'
+      + '<strong>Dòng vật tư:</strong> ' + API.esc(item.ten_vat_tu || rfqItemId)
       + (item.ma_vat_tu ? ' <span class="badge">' + API.esc(item.ma_vat_tu) + '</span>' : '')
       + '</div>'
-      + input('contractQuantity', 'Số lượng HĐ', val(item, 'quantity', 'so_luong') || '', 'inputmode="decimal" placeholder="0"')
-      + input('contractUnitPrice', 'Đơn giá HĐ (VND)', '', 'inputmode="numeric" placeholder="0"')
-      + textarea('note', 'Ghi chú', '');
+      + input('contractQuantity', 'Số lượng HĐ', val(item, 'quantity', 'so_luong') || '', 'inputmode="decimal" placeholder="0"', 'span-3')
+      + input('contractUnitPrice', 'Đơn giá HĐ (VND)', '', 'inputmode="numeric" placeholder="0"', 'span-3')
+      + textarea('note', 'Ghi chú', '', '', 'span-12 compact-ta');
     Utils.openModal('Tạo hợp đồng từ dòng vật tư', html, async function (form) {
       try {
         form.rfqItemId = rfqItemId;

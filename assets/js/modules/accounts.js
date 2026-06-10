@@ -60,16 +60,18 @@
   function fields(r) {
     var role = r.role || 'viewer';
     var status = r.status || 'active';
-    return '<label class="field-sm">Tài khoản<input name="username" ' + (r.user_id ? 'disabled' : 'required') + ' value="' + API.esc(r.username) + '"></label>'
-      + '<label class="field-sm">Tên hiển thị<input name="displayName" required value="' + API.esc(r.display_name) + '"></label>'
-      + '<label class="field-sm">Mật khẩu mới<input name="password" type="password" ' + (r.user_id ? '' : 'required') + '></label>'
-      + '<label class="field-sm">Vai trò<select name="role">'
+    // Row 1: username(4) + displayName(4) + password(4) = 12
+    // Row 2: vai trò(3) + trạng thái(3) = 6
+    return '<label class="span-4">Tài khoản<input name="username" ' + (r.user_id ? 'disabled' : 'required') + ' value="' + API.esc(r.username) + '"></label>'
+      + '<label class="span-4">Tên hiển thị<input name="displayName" required value="' + API.esc(r.display_name) + '"></label>'
+      + '<label class="span-4">Mật khẩu mới<input name="password" type="password" ' + (r.user_id ? '' : 'required') + '></label>'
+      + '<label class="span-3">Vai trò<select name="role">'
       + '<option value="viewer"' + (role === 'viewer' ? ' selected' : '') + '>Viewer</option>'
       + '<option value="purchasing"' + (role === 'purchasing' ? ' selected' : '') + '>Purchasing</option>'
       + '<option value="manager"' + (role === 'manager' ? ' selected' : '') + '>Manager</option>'
       + '<option value="admin"' + (role === 'admin' ? ' selected' : '') + '>Admin</option>'
       + '</select></label>'
-      + '<label class="field-sm">Trạng thái<select name="status">'
+      + '<label class="span-3">Trạng thái<select name="status">'
       + '<option value="active"' + (status === 'active' ? ' selected' : '') + '>Hoạt động</option>'
       + '<option value="inactive"' + (status === 'inactive' ? ' selected' : '') + '>Không hoạt động</option>'
       + '<option value="frozen"' + (status === 'frozen' ? ' selected' : '') + '>Tạm khóa</option>'
