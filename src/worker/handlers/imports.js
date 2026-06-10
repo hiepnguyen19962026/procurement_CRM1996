@@ -106,6 +106,7 @@ async function commitRows(request, env, ctx, actor) {
 
   const rows = Array.isArray(body.rows) ? body.rows.slice(0, 500) : [];
   if (!rows.length) return json({ ok: false, error: 'Khong co dong import' }, 400);
+  const sourceSheetName = cleanString(body.sourceSheetName || body.source_sheet_name, 80) || 'csv';
 
   const now = nowIso();
   const jobId = makeId('IMPJOB');
@@ -141,6 +142,7 @@ async function commitRows(request, env, ctx, actor) {
           oldRow,
           rawRow,
           sourceRowNumber,
+          sourceSheetName,
           now,
         });
         if (oldRow) {
@@ -184,7 +186,7 @@ async function commitRows(request, env, ctx, actor) {
     owner_key: cleanString(body.ownerKey || body.owner_key, 120),
     rfq_id: rfqId,
     source_file_name: cleanString(body.sourceFileName || body.source_file_name, 180),
-    source_sheet_name: 'csv',
+    source_sheet_name: sourceSheetName,
     status: summary.errors ? 'completed_with_errors' : 'completed',
     total_rows: rows.length,
     created_count: summary.created,
@@ -276,13 +278,13 @@ async function resolveExistingItem(db, rfqId, mapped) {
   });
 }
 
-async function buildImportItemRow(db, { rfqId, mapped, oldRow, rawRow, sourceRowNumber, now }) {
+async function buildImportItemRow(db, { rfqId, mapped, oldRow, rawRow, sourceRowNumber, sourceSheetName, now }) {
   const row = oldRow ? { ...oldRow } : emptyItemRow();
   row.rfq_item_id = oldRow ? oldRow.rfq_item_id : await nextEntityId(db, 'rfq_items', 'rfq_item_id', 'RFQI');
   row.rfq_id = rfqId;
   row.created_at = oldRow?.created_at || now;
   row.updated_at = now;
-  row.source_sheet_name = 'csv';
+  row.source_sheet_name = sourceSheetName || 'csv';
   row.source_row_number = sourceRowNumber;
   row.raw_row_json = JSON.stringify(rawRow);
 

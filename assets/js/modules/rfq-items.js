@@ -1164,7 +1164,7 @@
   };
 
   var csvState = { headers: null, rows: null };
-  var importMapState = { headers: null, rows: null, fileName: '', templates: [] };
+  var importMapState = { headers: null, rows: null, fileName: '', sheetName: 'csv', workbook: null, templates: [] };
 
   var IMPORT_TARGET_FIELDS = [
     ['', '- Không import -'],
@@ -1314,7 +1314,7 @@
   }
 
   function openImportMapping() {
-    importMapState = { headers: null, rows: null, fileName: '', templates: [] };
+    importMapState = { headers: null, rows: null, fileName: '', sheetName: 'csv', workbook: null, templates: [] };
     var rfqId = (document.getElementById('itemRfqId').value || '').trim();
     var html = ''
       + '<div class="modal-section" style="border-top:0;margin-top:0;padding-top:0">'
@@ -1324,15 +1324,15 @@
       + '<label>Template<select id="importTemplateSelect" onchange="RfqItemsModule.applyImportTemplate()"><option value="">Chưa chọn template</option></select></label>'
       + '<label>Tên template<input id="importTemplateName" placeholder="VD: Owner A - danh sách vật tư"></label>'
       + '</div>'
-      + '<label>CSV file<input type="file" id="importMapCsvFile" accept=".csv,text/csv" onchange="RfqItemsModule._onImportMapFileChange(this)"></label>'
+      + '<label>CSV / XLSX file<input type="file" id="importMapCsvFile" accept=".csv,.xlsx" onchange="RfqItemsModule._onImportMapFileChange(this)"></label>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px">'
       + '<button type="button" onclick="RfqItemsModule.loadImportTemplates()">Load template</button>'
       + '<button type="button" onclick="RfqItemsModule.saveImportTemplate()">Lưu template</button>'
       + '<button type="button" class="primary" onclick="RfqItemsModule.commitImportMapping()">Validate / Commit</button>'
       + '</div>'
-      + '<div id="importMapArea" style="color:var(--text-muted);font-size:13px">Chọn CSV để xem preview và map cột.</div>'
+      + '<div id="importMapArea" style="color:var(--text-muted);font-size:13px">Chọn file CSV hoặc XLSX để xem preview và map cột.</div>'
       + '</div>';
-    Utils.openModal('Import CSV nâng cao', html, async function () {
+    Utils.openModal('Import CSV/XLSX nâng cao', html, async function () {
       await commitImportMapping();
     });
   }
@@ -1340,22 +1340,111 @@
   function _onImportMapFileChange(input) {
     var area = document.getElementById('importMapArea');
     if (!input || !input.files || !input.files[0]) return;
-    importMapState.fileName = input.files[0].name || '';
+    var file = input.files[0];
+    var name = file.name || '';
+    var ext = name.split('.').pop().toLowerCase();
+    if (ext === 'xls' || ext === 'xlsm' || ext === 'ods') {
+      area.textContent = 'Định dạng .' + ext + ' không được hỗ trợ. Vui lòng dùng .csv hoặc .xlsx.';
+      input.value = '';
+      return;
+    }
+    importMapState.fileName = name;
+    importMapState.workbook = null;
     area.textContent = 'Đang đọc file...';
+    if (ext === 'xlsx') {
+      parseXlsxFile(file, area);
+    } else {
+      var reader = new FileReader();
+      reader.onload = function (e) {
+        try {
+          var all = parseCsv(e.target.result);
+          if (!all.length) { area.textContent = 'File trống.'; return; }
+          importMapState.headers = all[0];
+          importMapState.rows = all.slice(1).filter(function (r) { return r.some(function (c) { return c !== ''; }); });
+          importMapState.sheetName = 'csv';
+          renderImportMapping();
+        } catch (err) {
+          area.textContent = 'Lỗi đọc file: ' + (err.message || String(err));
+        }
+      };
+      reader.onerror = function () { area.textContent = 'Không đọc được file.'; };
+      reader.readAsText(file, 'UTF-8');
+    }
+  }
+
+  function parseXlsxFile(file, area) {
+    if (typeof XLSX === 'undefined') {
+      area.textContent = 'Thư viện XLSX chưa tải. Vui lòng tải lại trang và thử lại.';
+      return;
+    }
     var reader = new FileReader();
     reader.onload = function (e) {
       try {
-        var all = parseCsv(e.target.result);
-        if (!all.length) { area.textContent = 'File trống.'; return; }
-        importMapState.headers = all[0];
-        importMapState.rows = all.slice(1).filter(function (r) { return r.some(function (c) { return c !== ''; }); });
-        renderImportMapping();
+        var wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array', cellDates: true });
+        if (!wb.SheetNames || !wb.SheetNames.length) {
+          area.textContent = 'File không có sheet nào.';
+          return;
+        }
+        importMapState.workbook = wb;
+        loadXlsxSheet(wb, wb.SheetNames[0]);
       } catch (err) {
-        area.textContent = 'Lỗi đọc file: ' + (err.message || String(err));
+        area.textContent = 'Lỗi đọc XLSX: ' + (err.message || String(err));
       }
     };
     reader.onerror = function () { area.textContent = 'Không đọc được file.'; };
-    reader.readAsText(input.files[0], 'UTF-8');
+    reader.readAsArrayBuffer(file);
+  }
+
+  function loadXlsxSheet(wb, sheetName) {
+    var sheet = wb.Sheets[sheetName];
+    if (!sheet) return;
+    var result = xlsxSheetToArrays(sheet);
+    importMapState.headers = result.headers;
+    importMapState.rows = result.rows;
+    importMapState.sheetName = sheetName;
+    renderImportMapping();
+  }
+
+  function xlsxSheetToArrays(sheet) {
+    var ref = sheet['!ref'];
+    if (!ref) return { headers: [], rows: [] };
+    var range = XLSX.utils.decode_range(ref);
+    var headers = [];
+    var rows = [];
+    var c, r;
+    for (c = range.s.c; c <= range.e.c; c++) {
+      var hCell = sheet[XLSX.utils.encode_cell({ r: range.s.r, c: c })];
+      headers.push(hCell ? String(hCell.v !== undefined ? hCell.v : '') : '');
+    }
+    for (r = range.s.r + 1; r <= range.e.r; r++) {
+      var row = [];
+      var hasValue = false;
+      for (c = range.s.c; c <= range.e.c; c++) {
+        var dCell = sheet[XLSX.utils.encode_cell({ r: r, c: c })];
+        var val = dCell ? fmtXlsxCell(dCell.v) : '';
+        row.push(val);
+        if (val !== '') hasValue = true;
+      }
+      if (hasValue) rows.push(row);
+    }
+    return { headers: headers, rows: rows };
+  }
+
+  function fmtXlsxCell(v) {
+    if (v === null || v === undefined) return '';
+    if (v instanceof Date) {
+      var y = v.getFullYear();
+      var mo = v.getMonth() + 1;
+      var d = v.getDate();
+      return y + '-' + (mo < 10 ? '0' : '') + mo + '-' + (d < 10 ? '0' : '') + d;
+    }
+    return String(v);
+  }
+
+  function _onImportMapSheetChange(sel) {
+    var wb = importMapState.workbook;
+    if (!wb || !sel || !sel.value) return;
+    loadXlsxSheet(wb, sel.value);
   }
 
   function renderImportMapping() {
@@ -1375,8 +1464,19 @@
         return '<td>' + API.esc(r[i] || '') + '</td>';
       }).join('') + '</tr>';
     }).join('');
-    area.innerHTML = ''
-      + '<p style="margin:0 0 8px;color:var(--text-muted)">File: <strong>' + API.esc(importMapState.fileName || '-') + '</strong> - '
+    var sheetSelectorHtml = '';
+    if (importMapState.workbook && importMapState.workbook.SheetNames.length > 1) {
+      var sheetOptions = importMapState.workbook.SheetNames.map(function (s) {
+        return '<option value="' + API.esc(s) + '"' + (s === importMapState.sheetName ? ' selected' : '') + '>' + API.esc(s) + '</option>';
+      }).join('');
+      sheetSelectorHtml = '<div style="margin-bottom:10px">'
+        + '<label style="font-size:13px;font-weight:600">Sheet: <select id="importMapSheetSelect" onchange="RfqItemsModule._onImportMapSheetChange(this)" style="margin-left:4px;font-size:13px">'
+        + sheetOptions + '</select></label></div>';
+    }
+    var sheetLabel = importMapState.sheetName && importMapState.sheetName !== 'csv'
+      ? ' · Sheet: <strong>' + API.esc(importMapState.sheetName) + '</strong>' : '';
+    area.innerHTML = sheetSelectorHtml
+      + '<p style="margin:0 0 8px;color:var(--text-muted)">File: <strong>' + API.esc(importMapState.fileName || '-') + '</strong>' + sheetLabel + ' — '
       + rows.length + ' dòng dữ liệu. Preview ' + previewRows.length + ' dòng đầu.</p>'
       + '<div style="overflow:auto;max-height:230px;margin-bottom:12px"><table class="quotes-mini-table"><thead><tr><th>Source Header</th><th>Target Field</th><th>Mẫu dữ liệu</th></tr></thead><tbody>'
       + mappingRows + '</tbody></table></div>'
@@ -1499,27 +1599,57 @@
     var ownerKey = (document.getElementById('importOwnerKey') || {}).value || '';
     var templateId = (document.getElementById('importTemplateSelect') || {}).value || '';
     if (!rfqId) { API.toast('Thiếu RFQ ID', 'warn'); return; }
-    if (!importMapState.rows || !importMapState.rows.length) { API.toast('Chưa chọn CSV', 'warn'); return; }
+    if (!importMapState.rows || !importMapState.rows.length) { API.toast('Chưa chọn file', 'warn'); return; }
     var mapping = currentImportMapping();
-    if (Object.keys(mapping).indexOf('ten_vat_tu') < 0 && Object.values(mapping).indexOf('ten_vat_tu') < 0) {
+    if (Object.values(mapping).indexOf('ten_vat_tu') < 0) {
       API.toast('Cần map cột Tên vật tư', 'warn');
       return;
     }
     if (area) area.insertAdjacentHTML('afterbegin', '<p style="color:var(--text-muted)">Đang commit import...</p>');
     try {
-      var data = await API.call('commitImportRows', {
-        rfqId: rfqId,
-        ownerKey: ownerKey,
-        templateId: templateId,
-        sourceFileName: importMapState.fileName,
-        rows: mappedRowsForCommit(mapping),
-      });
+      var data = await commitInChunks(rfqId, ownerKey, templateId, importMapState.fileName, importMapState.sheetName || 'csv', mappedRowsForCommit(mapping));
       renderImportResult(data.summary || {});
       await load(true);
       if (typeof RfqsModule !== 'undefined') await RfqsModule.load(true);
     } catch (err) {
       API.error(err);
     }
+  }
+
+  async function commitInChunks(rfqId, ownerKey, templateId, sourceFileName, sourceSheetName, allRows) {
+    var CHUNK_SIZE = 500;
+    var totalCreated = 0, totalUpdated = 0, totalSkipped = 0, totalErrors = 0;
+    var allRowErrors = [];
+    var lastJobId = '';
+    for (var i = 0; i < allRows.length; i += CHUNK_SIZE) {
+      var chunk = allRows.slice(i, i + CHUNK_SIZE);
+      var data = await API.call('commitImportRows', {
+        rfqId: rfqId,
+        ownerKey: ownerKey,
+        templateId: templateId,
+        sourceFileName: sourceFileName,
+        sourceSheetName: sourceSheetName,
+        rows: chunk,
+      });
+      var s = data.summary || {};
+      totalCreated += Number(s.created || 0);
+      totalUpdated += Number(s.updated || 0);
+      totalSkipped += Number(s.skipped || 0);
+      totalErrors += Number(s.errors || 0);
+      if (s.jobId) lastJobId = s.jobId;
+      if (s.rowErrors && s.rowErrors.length) allRowErrors = allRowErrors.concat(s.rowErrors);
+    }
+    return {
+      summary: {
+        jobId: lastJobId,
+        totalRows: allRows.length,
+        created: totalCreated,
+        updated: totalUpdated,
+        skipped: totalSkipped,
+        errors: totalErrors,
+        rowErrors: allRowErrors,
+      },
+    };
   }
 
   function renderImportResult(summary) {
@@ -1665,6 +1795,7 @@
     openImportMapping: openImportMapping,
     _onCsvFileChange: _onCsvFileChange,
     _onImportMapFileChange: _onImportMapFileChange,
+    _onImportMapSheetChange: _onImportMapSheetChange,
     loadImportTemplates: loadImportTemplates,
     applyImportTemplate: applyImportTemplate,
     saveImportTemplate: saveImportTemplate,
