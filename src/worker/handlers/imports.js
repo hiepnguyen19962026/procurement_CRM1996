@@ -7,6 +7,7 @@ import {
   insertImportTemplateSQL,
   listImportJobRowsSQL,
   listImportTemplatesSQL,
+  listRfqItemsByRfqIdSQL,
   updateImportTemplateSQL,
 } from '../db/import-queries.js';
 import { getRfqSQL } from '../db/rfq-queries.js';
@@ -64,9 +65,62 @@ const TEXT_FIELDS = [
   'origin_full_text',
 ];
 
+// --- Import identity key & content-change helpers ---
+
+function normKey(s) {
+  return String(s == null ? '' : s).replace(/　/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+}
+function normKeyNum(v) {
+  const n = parseFloat(String(v == null ? '' : v).replace(/[,\s]/g, ''));
+  return isNaN(n) ? '0' : String(n);
+}
+// Composite key: rfq_id + stt + maMuaSam + maVatTu + tenVatTu + requiredModel + qty
+// Null-byte separator avoids collisions with values containing "||"
+function buildImportKey(rfqId, sttGoc, maMuaSam, maVatTu, tenVatTu, requiredModel, quantity) {
+  return [String(rfqId || ''), normKey(sttGoc), normKey(maMuaSam), normKey(maVatTu), normKey(tenVatTu), normKey(requiredModel), normKeyNum(quantity)].join('\x00');
+}
+
+const COMPARE_FIELDS = [
+  'ma_mua_sam', 'ma_vat_tu', 'ten_vat_tu', 'required_model', 'quantity', 'unit',
+  'manufacturer', 'brand', 'origin_country', 'manufacture_year', 'technical_params',
+  'vat_lieu', 'phu_tung_chuyen_dung', 'yeu_cau_ky_thuat_bo_sung',
+  'thue_suat', 'don_gia_truoc_thue', 'thanh_tien_sau_thue', 'gia_hop_dong',
+  'delivery_time', 'note',
+];
+
+function hasContentChanged(existingRow, mapped) {
+  for (const field of COMPARE_FIELDS) {
+    const oldVal = existingRow[field] == null ? '' : String(existingRow[field]);
+    const newVal = mapped[field] == null ? '' : String(mapped[field]);
+    if (newVal !== '' && oldVal !== newVal) return true;
+  }
+  return false;
+}
+
+function getChangedFields(existingRow, mapped) {
+  const out = [];
+  for (const field of COMPARE_FIELDS) {
+    const oldVal = existingRow[field] == null ? '' : String(existingRow[field]);
+    const newVal = mapped[field] == null ? '' : String(mapped[field]);
+    if (newVal !== '' && oldVal !== newVal) out.push(field);
+  }
+  return out;
+}
+
+function buildExistingKeyMap(rfqId, items) {
+  const map = new Map();
+  for (const item of items) {
+    const stt = item.stt_goc || String(item.source_row_number || '0');
+    const key = buildImportKey(rfqId, stt, item.ma_mua_sam, item.ma_vat_tu, item.ten_vat_tu, item.required_model, item.quantity);
+    if (!map.has(key)) map.set(key, item);
+  }
+  return map;
+}
+
 export async function handleImports(action, request, env, ctx, actor) {
   if (action === 'getImportTemplates') return getTemplates(request, env, actor);
   if (action === 'saveImportTemplate') return saveTemplate(request, env, actor);
+  if (action === 'previewImportRows') return previewRows(request, env, actor);
   if (action === 'commitImportRows') return commitRows(request, env, ctx, actor);
   if (action === 'getImportJob') return getJob(request, env, actor);
   if (action === 'getImportJobRows') return getJobRows(request, env, actor);
@@ -121,19 +175,26 @@ async function commitRows(request, env, ctx, actor) {
 
   const rows = Array.isArray(body.rows) ? body.rows.slice(0, 500) : [];
   if (!rows.length) return json({ ok: false, error: 'Khong co dong import' }, 400);
-  const sourceSheetName = cleanString(body.sourceSheetName || body.source_sheet_name, 80) || 'csv';
 
+  // importMode: 'update_changed' (default) | 'skip_all_existing' | 'force_insert'
+  const importMode = ['update_changed', 'skip_all_existing', 'force_insert'].includes(body.importMode)
+    ? body.importMode : 'update_changed';
+
+  const sourceSheetName = cleanString(body.sourceSheetName || body.source_sheet_name, 80) || 'csv';
   const now = nowIso();
   const jobId = makeId('IMPJOB');
-  const summary = {
-    jobId,
-    totalRows: rows.length,
-    created: 0,
-    updated: 0,
-    skipped: 0,
-    errors: 0,
-    rowErrors: [],
-  };
+  const summary = { jobId, totalRows: rows.length, created: 0, updated: 0, skipped: 0, errors: 0, rowErrors: [] };
+
+  // Preload all existing items for composite key lookup (skip for force_insert)
+  const existingByKey = new Map();
+  if (importMode !== 'force_insert') {
+    const existing = await listRfqItemsByRfqIdSQL(env.DB, rfqId);
+    for (const item of existing) {
+      const stt = item.stt_goc || String(item.source_row_number || '0');
+      const key = buildImportKey(rfqId, stt, item.ma_mua_sam, item.ma_vat_tu, item.ten_vat_tu, item.required_model, item.quantity);
+      if (!existingByKey.has(key)) existingByKey.set(key, item);
+    }
+  }
 
   for (let i = 0; i < rows.length; i++) {
     const sourceRow = rows[i] || {};
@@ -150,26 +211,39 @@ async function commitRows(request, env, ctx, actor) {
         errorMessage = 'Thieu ten_vat_tu';
         summary.errors++;
       } else {
-        const oldRow = await resolveExistingItem(env.DB, rfqId, mapped);
-        const itemRow = await buildImportItemRow(env.DB, {
-          rfqId,
-          mapped,
-          oldRow,
-          rawRow,
-          sourceRowNumber,
-          sourceSheetName,
-          now,
-        });
-        if (oldRow) {
+        // Explicit rfq_item_id always resolves directly (round-trip update)
+        let oldRow = null;
+        const explicitId = cleanString(mapped.rfq_item_id, 80);
+        if (explicitId) {
+          oldRow = await getRfqItemSQL(env.DB, explicitId);
+          if (!oldRow) throw new Error(`Khong tim thay rfq_item_id ${explicitId}`);
+          if (oldRow.rfq_id !== rfqId) throw new Error(`rfq_item_id ${explicitId} khong thuoc RFQ dang import`);
+        } else if (importMode !== 'force_insert') {
+          const stt = cleanString(mapped.stt_goc, 40) || String(sourceRowNumber - 1);
+          const key = buildImportKey(rfqId, stt, mapped.ma_mua_sam, mapped.ma_vat_tu, mapped.ten_vat_tu, mapped.required_model, mapped.quantity);
+          oldRow = existingByKey.get(key) ?? null;
+        }
+
+        if (oldRow && importMode === 'skip_all_existing') {
+          status = 'skipped';
+          rfqItemId = oldRow.rfq_item_id;
+        } else if (oldRow && importMode === 'update_changed' && !hasContentChanged(oldRow, mapped)) {
+          // Exact duplicate — skip silently
+          status = 'skipped';
+          rfqItemId = oldRow.rfq_item_id;
+        } else if (oldRow) {
+          const itemRow = await buildImportItemRow(env.DB, { rfqId, mapped, oldRow, rawRow, sourceRowNumber, sourceSheetName, now });
           await updateRfqItemSQL(env.DB, itemRow);
           status = 'updated';
           summary.updated++;
+          rfqItemId = itemRow.rfq_item_id;
         } else {
+          const itemRow = await buildImportItemRow(env.DB, { rfqId, mapped, oldRow: null, rawRow, sourceRowNumber, sourceSheetName, now });
           await insertRfqItemSQL(env.DB, itemRow);
           status = 'created';
           summary.created++;
+          rfqItemId = itemRow.rfq_item_id;
         }
-        rfqItemId = itemRow.rfq_item_id;
       }
     } catch (err) {
       status = 'error';
@@ -177,9 +251,7 @@ async function commitRows(request, env, ctx, actor) {
       summary.errors++;
     }
 
-    if (status === 'error') {
-      summary.rowErrors.push({ sourceRowNumber, error: errorMessage });
-    }
+    if (status === 'error') summary.rowErrors.push({ sourceRowNumber, error: errorMessage });
 
     await insertImportJobRowSQL(env.DB, {
       job_row_id: makeId('IMPROW'),
@@ -214,14 +286,59 @@ async function commitRows(request, env, ctx, actor) {
   });
 
   ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
-  ctx.waitUntil(writeActionLog(env, {
-    action: 'commitImportRows',
-    entityType: 'import_job',
-    entityId: jobId,
-    newJson: summary,
-    actor,
-  }));
+  ctx.waitUntil(writeActionLog(env, { action: 'commitImportRows', entityType: 'import_job', entityId: jobId, newJson: summary, actor }));
   return json({ ok: true, summary });
+}
+
+async function previewRows(request, env, actor) {
+  const denied = requireRole(actor, WRITE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const rfqId = cleanString(body.rfqId || body.rfq_id, 80);
+  const rfq = rfqId ? await getRfqSQL(env.DB, rfqId) : null;
+  if (!rfq) return json({ ok: false, error: 'RFQ khong ton tai' }, 400);
+
+  const rows = Array.isArray(body.rows) ? body.rows.slice(0, 500) : [];
+
+  // Load all existing items for this RFQ in one query
+  const existing = await listRfqItemsByRfqIdSQL(env.DB, rfqId);
+  const existingByKey = buildExistingKeyMap(rfqId, existing);
+
+  const previewItems = [];
+  const summary = { total: rows.length, new: 0, exact_duplicate: 0, changed_same_key: 0, weak_key: 0 };
+
+  for (let i = 0; i < rows.length; i++) {
+    const sr = rows[i] || {};
+    const srcRow = positiveInt(sr.sourceRowNumber ?? sr.source_row_number) || i + 2;
+    const mapped = sanitizeMapped(sr.mapped || {});
+    const stt = cleanString(mapped.stt_goc, 40) || String(srcRow - 1);
+    const isWeak = !stt && !mapped.ma_vat_tu && !mapped.ten_vat_tu;
+
+    if (isWeak) {
+      summary.weak_key++;
+      previewItems.push({ sourceRowNumber: srcRow, status: 'weak_key' });
+      continue;
+    }
+
+    const key = buildImportKey(rfqId, stt, mapped.ma_mua_sam, mapped.ma_vat_tu, mapped.ten_vat_tu, mapped.required_model, mapped.quantity);
+    const existingItem = existingByKey.get(key) ?? null;
+
+    if (!existingItem) {
+      summary.new++;
+      previewItems.push({ sourceRowNumber: srcRow, status: 'new', stt, ten_vat_tu: mapped.ten_vat_tu || '', ma_vat_tu: mapped.ma_vat_tu || '' });
+    } else {
+      const changedFields = getChangedFields(existingItem, mapped);
+      if (!changedFields.length) {
+        summary.exact_duplicate++;
+        previewItems.push({ sourceRowNumber: srcRow, status: 'exact_duplicate', stt, ten_vat_tu: mapped.ten_vat_tu || '', ma_vat_tu: mapped.ma_vat_tu || '', existingId: existingItem.rfq_item_id });
+      } else {
+        summary.changed_same_key++;
+        previewItems.push({ sourceRowNumber: srcRow, status: 'changed_same_key', stt, ten_vat_tu: mapped.ten_vat_tu || '', ma_vat_tu: mapped.ma_vat_tu || '', existingId: existingItem.rfq_item_id, changedFields });
+      }
+    }
+  }
+
+  return json({ ok: true, summary, rows: previewItems });
 }
 
 async function getJob(request, env, actor) {

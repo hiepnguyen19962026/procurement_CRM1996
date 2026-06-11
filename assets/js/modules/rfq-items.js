@@ -2134,18 +2134,150 @@
       API.toast('Cần map cột Tên vật tư', 'warn');
       return;
     }
-    if (area) area.insertAdjacentHTML('afterbegin', '<p style="color:var(--text-muted)">Đang commit import...</p>');
+    var allRows = mappedRowsForCommit(mapping);
+    if (area) area.insertAdjacentHTML('afterbegin', '<p style="color:var(--text-muted)">Đang kiểm tra dữ liệu...</p>');
     try {
-      var data = await commitInChunks(rfqId, ownerKey, templateId, importMapState.fileName, importMapState.sheetName || 'csv', mappedRowsForCommit(mapping));
-      renderImportResult(data.summary || {});
-      await load(true);
-      if (typeof RfqsModule !== 'undefined') await RfqsModule.load(true);
+      var preview = await previewAllRows(rfqId, allRows);
+      renderImportPreview(area, rfqId, ownerKey, templateId, allRows, preview);
     } catch (err) {
       API.error(err);
     }
   }
 
-  async function commitInChunks(rfqId, ownerKey, templateId, sourceFileName, sourceSheetName, allRows) {
+  async function previewAllRows(rfqId, allRows) {
+    var CHUNK_SIZE = 500;
+    var totalSummary = { total: 0, new: 0, exact_duplicate: 0, changed_same_key: 0, weak_key: 0 };
+    var allPreviewRows = [];
+    for (var i = 0; i < allRows.length; i += CHUNK_SIZE) {
+      var chunk = allRows.slice(i, i + CHUNK_SIZE);
+      var data = await API.call('previewImportRows', { rfqId: rfqId, rows: chunk });
+      var s = data.summary || {};
+      totalSummary.total += Number(s.total || 0);
+      totalSummary.new += Number(s.new || 0);
+      totalSummary.exact_duplicate += Number(s.exact_duplicate || 0);
+      totalSummary.changed_same_key += Number(s.changed_same_key || 0);
+      totalSummary.weak_key += Number(s.weak_key || 0);
+      if (Array.isArray(data.rows)) allPreviewRows = allPreviewRows.concat(data.rows);
+    }
+    return { summary: totalSummary, rows: allPreviewRows };
+  }
+
+  function renderImportPreview(area, rfqId, ownerKey, templateId, allRows, preview) {
+    if (!area) return;
+    // Store pending state for _doCommitImport
+    importMapState._pendingRfqId = rfqId;
+    importMapState._pendingOwnerKey = ownerKey;
+    importMapState._pendingTemplateId = templateId;
+    importMapState._pendingAllRows = allRows;
+
+    var s = preview.summary || {};
+    var allDupe = s.total > 0 && s.exact_duplicate === s.total;
+    var warnHtml = allDupe
+      ? '<p style="color:var(--orange);font-weight:600;margin:4px 0">⚠ File này có vẻ đã import rồi — toàn bộ ' + s.total + ' dòng đều trùng khớp chính xác.</p>'
+      : '';
+
+    var badgeStyle = 'display:inline-block;padding:1px 7px;border-radius:10px;font-size:12px;margin:0 2px;';
+    var summaryHtml = '<div style="margin-bottom:8px">'
+      + '<span style="' + badgeStyle + 'background:var(--green);color:#fff">' + (s.new || 0) + ' mới</span>'
+      + '<span style="' + badgeStyle + 'background:var(--blue,#3b82f6);color:#fff">' + (s.changed_same_key || 0) + ' thay đổi</span>'
+      + '<span style="' + badgeStyle + 'background:var(--text-muted);color:#fff">' + (s.exact_duplicate || 0) + ' trùng y chang</span>'
+      + (s.weak_key ? '<span style="' + badgeStyle + 'background:var(--orange);color:#fff">' + s.weak_key + ' thiếu key</span>' : '')
+      + '</div>';
+
+    var modeHtml = '<fieldset style="border:1px solid var(--border-mid);border-radius:6px;padding:8px 12px;margin-bottom:10px">'
+      + '<legend style="font-size:12px;padding:0 4px">Chọn cách xử lý dòng đã tồn tại</legend>'
+      + '<label style="display:block;margin:3px 0"><input type="radio" name="importMode" value="update_changed" checked> Cập nhật dòng có thay đổi, bỏ qua dòng y chang <em>(mặc định)</em></label>'
+      + '<label style="display:block;margin:3px 0"><input type="radio" name="importMode" value="skip_all_existing"> Bỏ qua toàn bộ dòng đã có, chỉ thêm mới</label>'
+      + '<label style="display:block;margin:3px 0"><input type="radio" name="importMode" value="force_insert"> Luôn thêm mới (không hợp nhất — có thể tạo bản ghi trùng)</label>'
+      + '</fieldset>';
+
+    // Row-level detail (max 50 rows shown)
+    var rowsHtml = '';
+    var previewRows = preview.rows || [];
+    if (previewRows.length) {
+      var statusLabel = { new: 'Mới', exact_duplicate: 'Trùng y chang', changed_same_key: 'Có thay đổi', weak_key: 'Thiếu key' };
+      var statusColor = { new: 'var(--green)', exact_duplicate: 'var(--text-muted)', changed_same_key: 'var(--blue,#3b82f6)', weak_key: 'var(--orange)' };
+      rowsHtml = '<details style="margin-bottom:10px"><summary style="cursor:pointer;font-size:13px">Chi tiết từng dòng (' + previewRows.length + ')</summary>'
+        + '<div style="max-height:240px;overflow-y:auto;margin-top:6px">'
+        + '<table style="width:100%;font-size:12px;border-collapse:collapse">'
+        + '<thead><tr><th style="text-align:left;padding:2px 4px">Dòng</th><th style="text-align:left;padding:2px 4px">STT</th><th style="text-align:left;padding:2px 4px">Mã vật tư</th><th style="text-align:left;padding:2px 4px">Tên vật tư</th><th style="padding:2px 4px">Trạng thái</th></tr></thead>'
+        + '<tbody>'
+        + previewRows.slice(0, 200).map(function (r) {
+            var col = statusColor[r.status] || 'inherit';
+            var lbl = statusLabel[r.status] || r.status;
+            var changed = r.changedFields && r.changedFields.length ? ' <small style="color:var(--text-muted)">(' + r.changedFields.join(', ') + ')</small>' : '';
+            return '<tr>'
+              + '<td style="padding:2px 4px">' + API.esc(r.sourceRowNumber) + '</td>'
+              + '<td style="padding:2px 4px">' + API.esc(r.stt || '') + '</td>'
+              + '<td style="padding:2px 4px">' + API.esc(r.ma_vat_tu || '') + '</td>'
+              + '<td style="padding:2px 4px">' + API.esc(r.ten_vat_tu || '') + '</td>'
+              + '<td style="padding:2px 4px;color:' + col + ';white-space:nowrap">' + API.esc(lbl) + changed + '</td>'
+              + '</tr>';
+          }).join('')
+        + '</tbody></table></div></details>';
+    }
+
+    var btnHtml = '<div style="display:flex;gap:8px;margin-top:4px">'
+      + '<button type="button" class="primary" onclick="RfqItemsModule._doCommitImport()">Xác nhận import</button>'
+      + '<button type="button" onclick="RfqItemsModule._cancelImport()">Huỷ</button>'
+      + '</div>';
+
+    // Replace first child (the "Đang kiểm tra..." message) and prepend preview
+    var existing = area.firstElementChild;
+    if (existing && existing.tagName === 'P' && existing.textContent.indexOf('Đang kiểm tra') >= 0) existing.remove();
+
+    var wrapper = document.createElement('div');
+    wrapper.id = 'importPreviewPanel';
+    wrapper.style.cssText = 'border:1px solid var(--border-mid);border-radius:8px;padding:12px;margin-bottom:12px;background:var(--bg-card,var(--bg))';
+    wrapper.innerHTML = '<p style="margin:0 0 6px;font-weight:600">Xem trước import — ' + API.esc(importMapState.fileName || '') + '</p>'
+      + warnHtml + summaryHtml + modeHtml + rowsHtml + btnHtml;
+    area.insertBefore(wrapper, area.firstChild);
+  }
+
+  async function _doCommitImport() {
+    var btn = document.querySelector('#importPreviewPanel button.primary');
+    if (btn) btn.disabled = true;
+    var rfqId = importMapState._pendingRfqId;
+    var ownerKey = importMapState._pendingOwnerKey;
+    var templateId = importMapState._pendingTemplateId;
+    var allRows = importMapState._pendingAllRows;
+    if (!rfqId || !allRows || !allRows.length) { API.toast('Không có dữ liệu pending', 'warn'); if (btn) btn.disabled = false; return; }
+
+    var modeEl = document.querySelector('#importPreviewPanel input[name="importMode"]:checked');
+    var importMode = modeEl ? modeEl.value : 'update_changed';
+
+    if (importMode === 'force_insert') {
+      var ok = await Utils.confirmDanger('Tạo thêm bản ghi mới cho tất cả ' + allRows.length + ' dòng (kể cả dòng trùng)?\nThao tác này có thể tạo bản ghi trùng lặp.');
+      if (!ok) { if (btn) btn.disabled = false; return; }
+    }
+
+    var area = document.getElementById('importMapArea');
+    if (area) area.insertAdjacentHTML('afterbegin', '<p style="color:var(--text-muted)">Đang commit import...</p>');
+    try {
+      var data = await commitInChunks(rfqId, ownerKey, templateId, importMapState.fileName, importMapState.sheetName || 'csv', allRows, importMode);
+      var panel = document.getElementById('importPreviewPanel');
+      if (panel) panel.remove();
+      renderImportResult(data.summary || {});
+      await load(true);
+      if (typeof RfqsModule !== 'undefined') await RfqsModule.load(true);
+    } catch (err) {
+      API.error(err);
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  function _cancelImport() {
+    var panel = document.getElementById('importPreviewPanel');
+    if (panel) panel.remove();
+    // Clear the "Đang kiểm tra..." message if still present
+    var area = document.getElementById('importMapArea');
+    if (area) {
+      var p = area.firstElementChild;
+      if (p && p.tagName === 'P' && p.textContent.indexOf('Đang kiểm tra') >= 0) p.remove();
+    }
+  }
+
+  async function commitInChunks(rfqId, ownerKey, templateId, sourceFileName, sourceSheetName, allRows, importMode) {
     var CHUNK_SIZE = 500;
     var totalCreated = 0, totalUpdated = 0, totalSkipped = 0, totalErrors = 0;
     var allRowErrors = [];
@@ -2158,6 +2290,7 @@
         templateId: templateId,
         sourceFileName: sourceFileName,
         sourceSheetName: sourceSheetName,
+        importMode: importMode || 'update_changed',
         rows: chunk,
       });
       var s = data.summary || {};
@@ -2353,6 +2486,8 @@
     applyImportTemplate: applyImportTemplate,
     saveImportTemplate: saveImportTemplate,
     commitImportMapping: commitImportMapping,
+    _doCommitImport: _doCommitImport,
+    _cancelImport: _cancelImport,
     loadPriceHistory: loadPriceHistory,
     exportPriceHistory: exportPriceHistory,
     loadContractItems: loadContractItems,

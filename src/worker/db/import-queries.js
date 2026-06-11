@@ -115,3 +115,17 @@ export async function findDuplicateRfqItemSQL(db, { rfqId, maVatTu, sttGoc }) {
   }
   return null;
 }
+
+export async function listRfqItemsByRfqIdSQL(db, rfqId) {
+  const res = await db.prepare(
+    `SELECT rfq_item_id, rfq_id, stt_goc, source_row_number,
+       ma_mua_sam, ma_vat_tu, ten_vat_tu, required_model, quantity, unit,
+       manufacturer, brand, origin_country, manufacture_year, technical_params,
+       vat_lieu, phu_tung_chuyen_dung, yeu_cau_ky_thuat_bo_sung,
+       thue_suat, don_gia_truoc_thue, thanh_tien_sau_thue, gia_hop_dong, delivery_time, note
+     FROM rfq_items
+     WHERE rfq_id = ? AND trang_thai_dong != 'archived'
+     ORDER BY COALESCE(source_row_number, 0) ASC, rfq_item_id ASC`
+  ).bind(rfqId).all();
+  return res.results || [];
+}
