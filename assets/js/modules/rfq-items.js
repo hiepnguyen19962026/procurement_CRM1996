@@ -3,6 +3,7 @@
   var sort = { by: '', dir: 'desc' };
   var _setupDone = false;
   var clarificationDataCache = {};
+  var _lightboxEl = null;
   var _pendingRfqFilter = '';
 
   function setupOnce() {
@@ -122,7 +123,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="27" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="28" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -143,8 +144,9 @@
       var nameCell = canWrite
         ? '<td><span class="link-edit" onclick="RfqItemsModule.openEdit(\'' + API.esc(r.rfq_item_id) + '\')">'
           + '<strong>' + API.esc(r.ten_vat_tu) + '</strong></span>'
-          + '<div class="muted">' + API.esc(val(r, 'technical_params', 'thong_so_ky_thuat')) + '</div></td>'
-        : '<td>' + nameInner + '</td>';
+          + '<div class="muted">' + API.esc(val(r, 'technical_params', 'thong_so_ky_thuat')) + '</div>'
+          + mediaBadges(r) + '</td>'
+        : '<td>' + nameInner + mediaBadges(r) + '</td>';
       return '<tr>'
         + '<td style="padding:0 4px;text-align:center;width:28px"><input type="checkbox" class="item-check" value="' + API.esc(r.rfq_item_id) + '" onchange="RfqItemsModule.onCheckChange()"></td>'
         + renderCell(r.ten_goi || r.ma_goi_tbmt || '', true)
@@ -169,6 +171,7 @@
         + renderCell(API.money(r.gia_hop_dong), true)
         + renderCell(r.delivery_time, true)
         + renderCell(r.note, true)
+        + quotesSummaryCell(r)
         + '<td>' + technicalSummary(r) + '</td>'
         + '<td><span class="badge">' + API.esc(statusLabel(r.trang_thai_dong)) + '</span></td>'
         + '<td class="muted-cell" style="text-align:center">' + revisionBadge(r) + '</td>'
@@ -205,6 +208,33 @@
     } else {
       el.textContent = 'Tổng: ' + formatted + ' dòng vật tư';
     }
+  }
+
+  function quotesSummaryCell(r) {
+    var count = Number(r.quote_count || 0);
+    var escId = API.esc(r.rfq_item_id);
+    if (!count) {
+      return '<td style="text-align:center"><button type="button" class="btn-link-sm" data-write'
+        + ' onclick="RfqItemsModule.openQuoteForm(\'' + escId + '\')"'
+        + ' title="Thêm báo giá cho dòng này">Báo giá</button></td>';
+    }
+    var priceHtml = r.min_price_vnd_incl_tax
+      ? '<div style="font-size:11px;color:var(--text-muted)">' + API.money(r.min_price_vnd_incl_tax) + '</div>'
+      : '';
+    return '<td style="text-align:center">'
+      + '<span class="badge badge-clickable" onclick="RfqItemsModule.openEdit(\'' + escId + '\')" title="Xem danh sách báo giá">'
+      + count + ' báo giá</span>'
+      + priceHtml + '</td>';
+  }
+
+  function mediaBadges(r) {
+    var imgs = Number(r.image_count || 0);
+    var docs = Number(r.file_count || 0);
+    if (!imgs && !docs) return '';
+    var parts = [];
+    if (imgs) parts.push('📷 ' + imgs);
+    if (docs) parts.push('📎 ' + docs);
+    return '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' + parts.join('  ') + '</div>';
   }
 
   function technicalSummary(r) {
@@ -692,19 +722,23 @@
     var imageInputId = mediaInputId('rfq_item', item.rfq_item_id, 'item_image');
     var pdfFiles = filterMedia(files, 'document_pdf');
     var imageFiles = filterMedia(files, 'item_image');
+    var escId = API.esc(item.rfq_item_id);
     return '<section class="modal-section media-section">'
-      + '<div class="section-head"><h4>Tài liệu dòng vật tư</h4>'
-      + '<div data-write>'
-      + '<input id="' + pdfInputId + '" type="file" accept="application/pdf,.pdf" style="max-width:220px">'
-      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'rfq_item\', \'' + API.esc(item.rfq_item_id) + '\', \'document_pdf\', \'' + pdfInputId + '\', \'' + API.esc(item.rfq_item_id) + '\')">Upload PDF</button>'
-      + '</div></div>'
+      + '<div class="section-head"><h4>Tài liệu dòng vật tư</h4></div>'
+      + '<div class="media-subhead"><strong style="font-size:13px">Tài liệu PDF</strong></div>'
       + mediaList(pdfFiles, 'Chưa có file PDF.')
-      + '<div class="section-head media-subhead"><h4>Ảnh vật tư</h4>'
-      + '<div data-write>'
-      + '<input id="' + imageInputId + '" type="file" accept="image/jpeg,image/png,image/webp" style="max-width:220px">'
-      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'rfq_item\', \'' + API.esc(item.rfq_item_id) + '\', \'item_image\', \'' + imageInputId + '\', \'' + API.esc(item.rfq_item_id) + '\')">Upload ảnh</button>'
-      + '</div></div>'
+      + '<div data-write class="upload-row">'
+      + '<label>Upload tài liệu PDF</label>'
+      + '<input id="' + pdfInputId + '" type="file" accept="application/pdf,.pdf">'
+      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'rfq_item\', \'' + escId + '\', \'document_pdf\', \'' + pdfInputId + '\', \'' + escId + '\')">Upload PDF</button>'
+      + '</div>'
+      + '<div class="media-subhead" style="margin-top:16px"><strong style="font-size:13px">Ảnh vật tư</strong></div>'
       + imageGallery(imageFiles)
+      + '<div data-write class="upload-row">'
+      + '<label>Upload ảnh vật tư</label>'
+      + '<input id="' + imageInputId + '" type="file" accept="image/jpeg,image/png,image/webp">'
+      + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'rfq_item\', \'' + escId + '\', \'item_image\', \'' + imageInputId + '\', \'' + escId + '\')">Upload ảnh</button>'
+      + '</div>'
       + '</section>';
   }
 
@@ -1098,7 +1132,26 @@
   }
 
   function openMediaPreview(fileId) {
-    window.open(API.mediaUrl(fileId), '_blank', 'noopener');
+    var src = API.mediaUrl(fileId);
+    if (!_lightboxEl) {
+      _lightboxEl = document.createElement('div');
+      _lightboxEl.className = 'media-lightbox';
+      _lightboxEl.innerHTML =
+        '<div class="media-lightbox-inner" onclick="event.stopPropagation()">'
+        + '<img class="media-lightbox-img" src="" alt="">'
+        + '<a class="media-lightbox-link" href="" target="_blank" rel="noopener">&#8599; M&#7903; tab m&#7899;i</a>'
+        + '</div>';
+      _lightboxEl.addEventListener('click', function () { closeLightbox(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
+      document.body.appendChild(_lightboxEl);
+    }
+    _lightboxEl.querySelector('.media-lightbox-img').src = src;
+    _lightboxEl.querySelector('.media-lightbox-link').href = src;
+    _lightboxEl.classList.add('active');
+  }
+
+  function closeLightbox() {
+    if (_lightboxEl) _lightboxEl.classList.remove('active');
   }
 
   function mediaInputId(ownerType, ownerId, fileKind) {

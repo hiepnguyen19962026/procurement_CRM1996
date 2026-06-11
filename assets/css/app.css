@@ -129,6 +129,15 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .media-thumb { width: 100%; min-height: 0; padding: 0; display: grid; gap: 4px; border: 1px solid var(--border); border-radius: 8px; background: #fff; box-shadow: none; overflow: hidden; text-align: left; }
 .media-thumb img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; display: block; background: #f3f4f6; }
 .media-thumb span { display: block; padding: 0 6px 6px; color: var(--text-muted); font-size: 11px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.upload-row { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; padding: 8px 10px; background: var(--bg); border: 1px dashed var(--border-mid); border-radius: 6px; }
+.upload-row label { margin: 0; font-weight: normal; font-size: 12px; color: var(--text-muted); }
+/* lightbox overlay for image zoom */
+.media-lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.86); z-index: 200; place-items: center; padding: 16px; cursor: zoom-out; }
+.media-lightbox.active { display: grid; }
+.media-lightbox-inner { display: flex; flex-direction: column; align-items: center; gap: 10px; cursor: default; max-width: 96vw; }
+.media-lightbox-img { max-width: 96vw; max-height: 88vh; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,.5); display: block; }
+.media-lightbox-link { color: #fff; font-size: 13px; text-decoration: underline; opacity: .8; }
+.media-lightbox-link:hover { opacity: 1; }
 .timeline-item { border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 10px; background: #fff; }
 .timeline-item p { margin: 8px 0; white-space: pre-wrap; }
 .timeline-top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
@@ -146,6 +155,8 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 /* dashboard mini-table scroll wrapper — always horizontally scrollable */
 .dashboard-table-wrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* quotes/history table scroll inside modal — needs overflow-x: clip on .modal-body to work */
+.quotes-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
 /* coverage 2-stat grid — overridable by media query */
 .coverage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
 .empty-state { min-height: 150px; display: grid; place-items: center; color: var(--text-muted); border: 1px dashed var(--border-mid); border-radius: 10px; background: #fcfcfd; font-size: 13px; text-align: center; padding: 18px; }
@@ -157,7 +168,7 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .modal-head, .modal-actions { display: flex; justify-content: space-between; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .modal-head { background: #fffaf5; }
 .modal-actions { border-top: 1px solid var(--border); border-bottom: 0; justify-content: flex-end; gap: 8px; background: #fafafa; }
-.modal-body { padding: 10px 16px 14px; flex: 0 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0 8px; align-content: start; }
+.modal-body { padding: 10px 16px 14px; flex: 0 1 auto; min-height: 0; overflow-y: auto; overflow-x: clip; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 0 8px; align-content: start; }
 .modal-body label { margin-bottom: 6px; font-size: 13px; }
 /* fallback for labels without explicit span class */
 .modal-body label:not([class]) { grid-column: span 3; }

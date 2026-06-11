@@ -57,7 +57,7 @@ export async function listClientsSQL(db, { q, cursor, sortBy, sortDir, limit }) 
          SUM(CASE WHEN trang_thai_goi = 'treo'          THEN 1 ELSE 0 END) AS rfq_treo,
          SUM(CASE WHEN trang_thai_goi = 'tham_khao'     THEN 1 ELSE 0 END) AS rfq_tham_khao
        FROM rfqs
-       WHERE deleted_at IS NULL AND client_id IS NOT NULL AND client_id != ''
+       WHERE trang_thai_goi != 'archived' AND client_id IS NOT NULL AND client_id != ''
        GROUP BY client_id
      ) rs ON rs.client_id = c.client_id
      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
