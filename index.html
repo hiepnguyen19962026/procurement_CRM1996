@@ -179,16 +179,17 @@
   <script src="/assets/js/modules/rfqs.js"></script>
   <script src="/assets/js/vendor/xlsx.min.js"></script>
   <script src="/assets/js/modules/rfq-items.js"></script>
+  <script src="/assets/js/modules/ocr.js"></script>
   <script src="/assets/js/modules/supplier-quotes.js"></script>
   <script src="/assets/js/modules/audit.js"></script>
   <script src="/assets/js/modules/accounts.js"></script>
   <script>
     var SCREEN_ACTIONS = {
       dashboard: '<button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button><button onclick="DashboardModule.openNsxStats()">Thống kê NSX</button>',
-      rfqs:      '<button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button>',
-      items:     '<button onclick="RfqItemsModule.downloadTemplate()">Tải template CSV</button><button onclick="RfqItemsModule.exportCsv()">Xuất CSV</button><button data-write onclick="RfqItemsModule.importCsv()">Upload CSV</button><button data-write onclick="RfqItemsModule.openImportMapping()">Import CSV nâng cao</button><button class="primary" data-write onclick="RfqItemsModule.openCreate()">+ Thêm dòng</button>',
+      rfqs:      '<button data-write onclick="OcrModule.openRfqOcr()">OCR từ thư viện</button><button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button>',
+      items:     '<button onclick="RfqItemsModule.downloadTemplate()">Tải template CSV</button><button onclick="RfqItemsModule.exportCsv()">Xuất CSV</button><button data-write onclick="RfqItemsModule.importCsv()">Upload CSV</button><button data-write onclick="RfqItemsModule.openImportMapping()">Import CSV nâng cao</button><button data-write onclick="OcrModule.openItemOcr()">OCR từ thư viện</button><button class="primary" data-write onclick="RfqItemsModule.openCreate()">+ Thêm dòng</button>',
       clients:   '<button onclick="ClientsModule.downloadClientTemplate()">Tải template CSV</button><button data-write onclick="ClientsModule.importClientsCsv()">Import CSV/XLSX</button><button onclick="ClientsModule.exportClientsCsv()">Xuất CSV</button><button class="primary" data-write onclick="ClientsModule.openCreate()">+ Thêm khách hàng</button>',
-      suppliers: '<button class="primary" data-write onclick="SuppliersModule.openCreate()">+ Thêm NCC</button>',
+      suppliers: '<button data-write onclick="OcrModule.openSupplierOcr()">OCR danh thiếp</button><button class="primary" data-write onclick="SuppliersModule.openCreate()">+ Thêm NCC</button>',
       quotes:    '',
       audit:     '',
       accounts:  '<button onclick="AccountsModule.load(true)">Tải lại</button><button class="primary" onclick="AccountsModule.openCreate()">+ Thêm tài khoản</button>',

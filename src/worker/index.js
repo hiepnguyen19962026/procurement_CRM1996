@@ -18,6 +18,7 @@ import { handleTechnicalClarifications } from './handlers/technical-clarificatio
 import { handlePriceHistory } from './handlers/price-history.js';
 import { handleContracts } from './handlers/contracts.js';
 import { handleDashboard } from './handlers/dashboard.js';
+import { handleOcr } from './handlers/ocr.js';
 import { actorFromRequest, validateActorSession, validateSecret } from './lib/auth.js';
 import { json, readJson } from './lib/utils.js';
 
@@ -41,6 +42,7 @@ const ITEM_ACTIONS = ['searchMasterItems', 'getMasterItemDetail', 'suggestMaster
 const PRICE_HISTORY_ACTIONS = ['searchPriceHistory', 'getPriceHistorySummary', 'exportPriceHistoryCsv'];
 const CONTRACT_ACTIONS = ['getContracts', 'getContractDetail', 'getContractItemsForRfqItem', 'createContract', 'updateContract', 'archiveContract', 'addContractItem', 'updateContractItem', 'archiveContractItem', 'createContractFromRfqItem'];
 const DASHBOARD_V2_ACTIONS = ['getDashboardV2'];
+const OCR_ACTIONS = ['ocrImage'];
 const PUBLIC_ACTIONS = ['authLogin', 'initSetup'];
 
 export default {
@@ -80,6 +82,7 @@ export default {
     else if (PRICE_HISTORY_ACTIONS.includes(action)) res = await handlePriceHistory(action, request, env, ctx, actor);
     else if (CONTRACT_ACTIONS.includes(action)) res = await handleContracts(action, request, env, ctx, actor);
     else if (DASHBOARD_V2_ACTIONS.includes(action)) res = await handleDashboard(action, request, env, ctx, actor);
+    else if (OCR_ACTIONS.includes(action)) res = await handleOcr(action, request, env, ctx, actor);
     else res = json({ ok: false, error: 'Unknown action' }, 400);
     return cors(res);
   },

@@ -267,11 +267,39 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
   /* topbar and main content */
   .topbar { padding: 6px 12px; }
   .topbar-right { gap: 8px; }
-  .main { overflow-x: hidden; max-width: 100vw; }
-  .content { padding: 16px 12px; overflow-x: hidden; }
-  /* dashboard: use minmax(0,1fr) so panels can't inflate past viewport */
+  /* body backstop: prevent page-level horizontal scroll on browsers that don't
+     support overflow:clip (old iOS 15). Must stay as body-level guard. */
+  body { overflow-x: hidden; }
+  /* clip (not hidden) — clips overflow visually but does NOT create a scroll
+     container, so touch-swipe events reach child .table-wrap on iOS Safari.
+     overflow:hidden creates a scroll container that intercepts touch events
+     before they reach the inner scrollable table wrapper. */
+  .main { overflow-x: clip; max-width: 100vw; }
+  .content { padding: 16px 12px; overflow-x: clip; }
+  /* dashboard: zero min-width on all grid children so panels stay in track */
   .dashboard-grid { grid-template-columns: minmax(0, 1fr); }
-  .dashboard-grid .panel { min-width: 0; max-width: 100%; }
+  .dashboard-grid,
+  .dashboard-grid > *,
+  .dashboard-grid .panel,
+  .dashboard-table-wrap,
+  .dashboard-grid .table-wrap { min-width: 0; max-width: 100%; }
+  /* reliable local horizontal scroll — overflow-y:hidden prevents a vertical
+     scroll container competing for the same touch gesture;
+     overscroll-behavior-inline:contain stops scroll chaining to parent */
+  .dashboard-table-wrap,
+  .dashboard-grid .table-wrap {
+    display: block; width: 100%;
+    overflow-x: auto; overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-inline: contain;
+  }
+  /* width:max-content removes the "width:100% of what?" ambiguity in table
+     layout — some browsers compute 100% of scrollable width (= min-width,
+     no overflow, no scroll). max-content uses intrinsic size unambiguously. */
+  .dashboard-table-wrap table,
+  .dashboard-grid .table-wrap table { width: max-content; min-width: 780px; }
+  /* text wrap for non-table dashboard content */
+  .dashboard-grid p, .dashboard-grid .empty-state { max-width: 100%; overflow-wrap: anywhere; }
   /* coverage 2-stat side-by-side → single column on mobile */
   .coverage-grid { grid-template-columns: 1fr; }
   .page-actions { justify-content: flex-start; }
