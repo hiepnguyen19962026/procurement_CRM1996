@@ -1,8 +1,8 @@
 (function () {
   function formToObject(form) {
     var data = {};
-    Array.prototype.forEach.call(new FormData(form).entries(), function (pair) {
-      data[pair[0]] = pair[1];
+    new FormData(form).forEach(function (value, key) {
+      data[key] = value;
     });
     return data;
   }
