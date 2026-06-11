@@ -398,6 +398,64 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 .task-fc { display: flex; align-items: center; gap: 6px; }
 .task-fc select { min-width: 110px; }
 
+/* desktop table fixed layout + column widths */
+#screen-tasks .task-table-wrap table { table-layout: fixed; width: 100%; min-width: 600px; }
+#screen-tasks .task-table-wrap th:nth-child(1) { width: 44%; }
+#screen-tasks .task-table-wrap th:nth-child(2) { width: 10%; }
+#screen-tasks .task-table-wrap th:nth-child(3) { width: 8%; }
+#screen-tasks .task-table-wrap th:nth-child(4) { width: 9%; }
+#screen-tasks .task-table-wrap th:nth-child(5) { width: 8%; }
+#screen-tasks .task-table-wrap th:nth-child(6) { width: 10%; }
+#screen-tasks .task-table-wrap th:nth-child(7) { width: 7%; }
+#screen-tasks .task-table-wrap th:nth-child(8) { width: 4%; }
+
+/* task table cell helpers */
+.task-preview {
+  font-size: 11px;
+  color: var(--text-muted);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 3px;
+  line-height: 1.45;
+}
+.task-col-co { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-tbl-sel {
+  font-size: 11px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  border: 1px solid #d1d5db;
+  cursor: pointer;
+  max-width: 130px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* company suggestion dropdown */
+.task-co-wrap { position: relative; }
+.task-co-drop {
+  position: absolute;
+  top: calc(100% + 2px);
+  left: 0;
+  right: 0;
+  z-index: 120;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-md);
+  max-height: 220px;
+  overflow-y: auto;
+}
+.task-co-item {
+  padding: 8px 12px;
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border);
+}
+.task-co-item:last-child { border-bottom: none; }
+.task-co-item:hover { background: var(--primary-bg); color: var(--primary-dk); }
+
 /* desktop table visible, mobile cards hidden */
 .task-table-wrap { display: block; }
 .task-card-list  { display: none; }
@@ -491,10 +549,10 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
   .task-table-wrap { display: none !important; }
   .task-card-list  { display: block; }
 
-  /* summary: 4 compact chips in a 2×2 grid, max ~100px total */
+  /* summary: 2×2 compact grid */
   .task-summary {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
     gap: 5px;
     overflow-x: visible;
   }
@@ -503,6 +561,7 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
   .task-stat-chip .tsc-lbl { font-size: 10px; margin-top: 2px; }
 
   /* toolbar: search full width, controls on next row */
+  .task-card-list { overflow-x: hidden; }
   .task-toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
   .task-toolbar > #taskSearch { flex: none; width: 100%; min-width: 0; }
   .task-fc { width: 100%; }

@@ -3,6 +3,7 @@
   var sort = { by: '', dir: 'desc' };
   var _setupDone = false;
   var _suggestTimer = null;
+  var _companySuggestCache = [];
 
   // ─── lookup tables ────────────────────────────────────────────────────────
 
@@ -146,42 +147,40 @@
     // ── desktop table ──────────────────────────────────────────────────────
     document.getElementById('taskRows').innerHTML = rows.map(function (r) {
       var statusSel = canWrite
-        ? '<select style="font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid #d1d5db;cursor:pointer;'
-          + (STATUS_STYLE[r.status] || '') + '"'
+        ? '<select class="task-tbl-sel" style="' + (STATUS_STYLE[r.status] || '') + '"'
           + ' onchange="TasksModule.quickStatus(\'' + esc(r.task_id) + '\',this.value,this)">'
           + STATUS_LIST.map(function (s) { return '<option value="' + s[0] + '"' + (r.status === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('')
           + '</select>'
         : '<span class="badge" style="' + (STATUS_STYLE[r.status]||'') + '">' + esc(statusLabel(r.status)) + '</span>';
 
       var priSel = canWrite
-        ? '<select style="font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid #d1d5db;cursor:pointer;'
-          + (PRIORITY_STYLE[r.priority] || '') + '"'
+        ? '<select class="task-tbl-sel" style="' + (PRIORITY_STYLE[r.priority] || '') + '"'
           + ' onchange="TasksModule.quickPriority(\'' + esc(r.task_id) + '\',this.value,this)">'
           + PRIORITY_LIST.map(function (p) { return '<option value="' + p[0] + '"' + (r.priority === p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join('')
           + '</select>'
         : '<span class="badge" style="' + (PRIORITY_STYLE[r.priority]||'') + '">' + esc(priorityLabel(r.priority)) + '</span>';
 
       var prog = Number(r.progress_percent || 0);
-      var preview = (r.latest_note || r.description || '').replace(/\n/g, ' ').slice(0, 80);
+      var preview = (r.latest_note || r.description || '').replace(/\n/g, ' ').slice(0, 200);
 
       return '<tr>'
-        + '<td style="min-width:180px;max-width:300px">'
+        + '<td>'
           + '<div><span class="link-edit" onclick="TasksModule.openEdit(\'' + esc(r.task_id) + '\')" style="font-weight:600">' + esc(r.title) + '</span></div>'
-          + (preview ? '<div style="font-size:11px;color:var(--text-muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:280px;margin-top:2px">' + esc(preview) + '</div>' : '')
+          + (preview ? '<div class="task-preview">' + esc(preview) + '</div>' : '')
           + '</td>'
-        + '<td style="max-width:160px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + esc(r.company_name || '') + '</td>'
+        + '<td class="task-col-co">' + esc(r.company_name || '') + '</td>'
         + '<td>' + priSel + '</td>'
         + '<td>' + statusSel + '</td>'
         + '<td>'
           + '<div style="font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:3px">' + prog + '%</div>'
-          + '<div style="height:4px;background:#e5e7eb;border-radius:2px;min-width:56px"><div style="height:4px;background:#1d4ed8;border-radius:2px;width:' + prog + '%"></div></div>'
+          + '<div style="height:4px;background:#e5e7eb;border-radius:2px"><div style="height:4px;background:#1d4ed8;border-radius:2px;width:' + prog + '%"></div></div>'
           + '</td>'
-        + '<td>'
+        + '<td style="font-size:12px">'
           + (r.deadline_date ? remainCell(r.deadline_date) : '<span style="color:var(--text-faint)">—</span>')
-          + (r.next_followup_date ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">↻ ' + esc(r.next_followup_date) + '</div>' : '')
+          + (r.next_followup_date ? '<div style="color:var(--text-muted);margin-top:2px">↻ ' + esc(r.next_followup_date) + '</div>' : '')
           + '</td>'
-        + '<td style="font-size:11px;color:var(--text-muted);white-space:nowrap">' + esc(formatDate(r.last_activity_at || r.updated_at)) + '</td>'
-        + '<td style="white-space:nowrap">'
+        + '<td style="font-size:11px;color:var(--text-muted)">' + esc(formatDate(r.last_activity_at || r.updated_at)) + '</td>'
+        + '<td style="white-space:nowrap;text-align:right">'
           + (canWrite ? '<button type="button" class="btn-link" onclick="TasksModule.openEdit(\'' + esc(r.task_id) + '\')" style="font-size:12px;padding:2px 6px;margin-right:2px">Sửa</button>' : '')
           + (canDelete ? '<button type="button" class="btn-x-archive" title="Xóa" onclick="TasksModule.deleteTask(\'' + esc(r.task_id) + '\')">✕</button>' : '')
           + '</td>'
@@ -241,7 +240,7 @@
       var row = (state.rows || []).find(function (r) { return r.task_id === taskId; });
       if (row) {
         row.status = status;
-        if (selectEl) selectEl.style.cssText = 'font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid #d1d5db;cursor:pointer;' + (STATUS_STYLE[status] || '');
+        if (selectEl) selectEl.style.cssText = STATUS_STYLE[status] || '';
       }
       renderSummaryRefresh();
     } catch (err) { API.error(err); }
@@ -253,7 +252,7 @@
       var row = (state.rows || []).find(function (r) { return r.task_id === taskId; });
       if (row) {
         row.priority = priority;
-        if (selectEl) selectEl.style.cssText = 'font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid #d1d5db;cursor:pointer;' + (PRIORITY_STYLE[priority] || '');
+        if (selectEl) selectEl.style.cssText = PRIORITY_STYLE[priority] || '';
       }
     } catch (err) { API.error(err); }
   }
@@ -279,29 +278,71 @@
     } catch (err) { API.error(err); }
   }
 
-  // ─── company autocomplete ─────────────────────────────────────────────────
+  // ─── company suggestion dropdown ─────────────────────────────────────────
 
-  function bindCompanyAutocomplete(input) {
-    if (!input) return;
-    input.addEventListener('input', function () {
-      clearTimeout(_suggestTimer);
-      var val = (input.value || '').trim();
-      if (!val || val.length < 1) { clearDatalist(); return; }
-      _suggestTimer = setTimeout(function () {
-        API.get('suggestTaskCompanies', { q: val }).then(function (data) {
-          var list = document.getElementById('taskCompanySuggest');
-          if (!list) return;
-          list.innerHTML = (data.suggestions || []).map(function (s) {
-            return '<option value="' + API.esc(s) + '">';
-          }).join('');
-        }).catch(function () {});
-      }, 300);
-    });
+  function loadCompanySuggestionsInit() {
+    API.get('suggestTaskCompanies', { q: '', limit: 20 }).then(function (data) {
+      _companySuggestCache = data.suggestions || [];
+    }).catch(function () {});
   }
 
-  function clearDatalist() {
-    var list = document.getElementById('taskCompanySuggest');
-    if (list) list.innerHTML = '';
+  function bindCompanyDropdown(input) {
+    if (!input) return;
+    var drop = document.getElementById('taskCoDropdown');
+    if (!drop) return;
+
+    function filterLocal(val) {
+      if (!val) return _companySuggestCache.slice(0, 10);
+      var lv = val.toLowerCase();
+      return _companySuggestCache.filter(function (s) {
+        return s.toLowerCase().indexOf(lv) === 0;
+      }).slice(0, 10);
+    }
+
+    function showItems(items) {
+      if (!items || items.length === 0) { drop.classList.add('hidden'); return; }
+      drop.innerHTML = items.map(function (s) {
+        return '<div class="task-co-item" data-val="' + API.esc(s) + '">' + API.esc(s) + '</div>';
+      }).join('');
+      drop.classList.remove('hidden');
+      drop.querySelectorAll('.task-co-item').forEach(function (el) {
+        el.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        el.addEventListener('click', function () {
+          input.value = el.getAttribute('data-val');
+          drop.classList.add('hidden');
+        });
+      });
+    }
+
+    function fetchAndShow(val) {
+      clearTimeout(_suggestTimer);
+      _suggestTimer = setTimeout(function () {
+        API.get('suggestTaskCompanies', { q: val, limit: 10 }).then(function (data) {
+          var items = data.suggestions || [];
+          items.forEach(function (s) {
+            if (_companySuggestCache.indexOf(s) < 0) _companySuggestCache.push(s);
+          });
+          showItems(items);
+        }).catch(function () {});
+      }, 200);
+    }
+
+    input.addEventListener('focus', function () {
+      var val = input.value.trim();
+      var local = filterLocal(val);
+      if (local.length > 0) { showItems(local); } else { fetchAndShow(val); }
+    });
+
+    input.addEventListener('input', function () {
+      clearTimeout(_suggestTimer);
+      var val = input.value.trim();
+      var local = filterLocal(val);
+      if (local.length > 0) { showItems(local); } else { fetchAndShow(val); }
+    });
+
+    input.addEventListener('blur', function () {
+      setTimeout(function () { drop.classList.add('hidden'); }, 150);
+    });
   }
 
   // ─── modal create/edit ────────────────────────────────────────────────────
@@ -333,17 +374,14 @@
         }).join('')
       + '</select>';
 
-    // Row 1: company(3) + task_type(2) + title(5) + priority(2) = 12
-    // Row 2: start_date(3) + deadline(3) + followup(3) + progress(3) = 12
-    // Row 3: description full-width, large textarea
-    // Row 4: latest_note full-width, medium textarea
-    // Footer row: status select on left, separated by border-top
-    var html = '<datalist id="taskCompanySuggest"></datalist>'
-
+    var html = ''
       // ── Row 1 ──────────────────────────────────────────────────────────────
       + '<label class="span-3">Công ty'
-        + '<input name="companyName" list="taskCompanySuggest" autocomplete="off"'
-        + ' value="' + API.esc(row.company_name || '') + '" placeholder="Nhập hoặc chọn công ty...">'
+        + '<div class="task-co-wrap">'
+          + '<input name="companyName" autocomplete="off"'
+            + ' value="' + API.esc(row.company_name || '') + '" placeholder="Nhập hoặc chọn công ty...">'
+          + '<div id="taskCoDropdown" class="task-co-drop hidden"></div>'
+        + '</div>'
         + '</label>'
       + '<label class="span-2">Loại task'
         + '<input name="taskType" value="' + API.esc(row.task_type || '') + '" placeholder="Báo giá, Kỹ thuật...">'
@@ -398,8 +436,9 @@
       } catch (err) { API.error(err); }
     });
 
+    loadCompanySuggestionsInit();
     setTimeout(function () {
-      bindCompanyAutocomplete(document.querySelector('#modalBody input[name="companyName"]'));
+      bindCompanyDropdown(document.querySelector('#modalBody input[name="companyName"]'));
     }, 0);
     Auth.applyRoleUI();
   }

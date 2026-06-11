@@ -179,8 +179,8 @@ async function suggestCompanies(request, env, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
   const p = await readJson(request);
-  const q = normalizeText(p.q);
-  if (!q) return json({ ok: true, suggestions: [] });
-  const suggestions = await suggestTaskCompaniesSQL(env.DB, q, 10);
+  const q = normalizeText(p.q || '');
+  const limit = q ? 10 : Math.min(Number(p.limit) || 20, 20);
+  const suggestions = await suggestTaskCompaniesSQL(env.DB, q, limit);
   return json({ ok: true, suggestions });
 }
