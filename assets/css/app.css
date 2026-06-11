@@ -147,7 +147,7 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .empty-state { min-height: 150px; display: grid; place-items: center; color: var(--text-muted); border: 1px dashed var(--border-mid); border-radius: 10px; background: #fcfcfd; font-size: 13px; text-align: center; padding: 18px; }
 
 .modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.48); display: grid; place-items: center; padding: 18px; z-index: 20; }
-.modal { width: min(90vw, 1600px); max-height: 92vh; background: white; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-md); display: flex; flex-direction: column; overflow: hidden; }
+.modal { width: min(90vw, 1600px); max-height: 90vh; background: white; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-md); display: flex; flex-direction: column; overflow: hidden; }
 /* form must be a flex column to let modal-body scroll and modal-actions stick to bottom */
 #modalForm { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; overflow: hidden; }
 .modal-head, .modal-actions { display: flex; justify-content: space-between; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
@@ -237,6 +237,13 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 /* clickable identifier cells in tables */
 span.link-edit { cursor: pointer; }
 span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
+
+/* ── desktop modal: expand to fill available height so datepicker is never clipped ── */
+@media (min-width: 900px) {
+  .modal      { min-height: 560px; }
+  #modalForm  { flex: 1 1 auto; }
+  .modal-body { flex: 1 1 auto; }
+}
 
 @media (max-width: 1100px) {
   .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
