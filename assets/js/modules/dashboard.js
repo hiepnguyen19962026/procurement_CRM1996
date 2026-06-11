@@ -71,58 +71,38 @@
   // ── KPI cards ─────────────────────────────────────────────────────────────
 
   function renderStats(d) {
-    var rfq = d.rfq            || {};
+    var rfq  = d.rfq            || {};
     var clar = d.clarifications || {};
     var cs   = clar.by_status   || {};
 
-    // Card A: Đang khảo giá
     var dkqTotal = rfq.dkq_total   || 0;
     var dkqDue3  = rfq.dkq_due3    || 0;
     var dkqOver  = rfq.dkq_overdue || 0;
-    var cardABadges = '';
-    if (dkqOver > 0) cardABadges += ' <span class="badge" style="background:var(--red);color:#fff">' + dkqOver + ' quá hạn</span>';
-    if (dkqDue3 > 0) cardABadges += ' <span class="badge" style="background:#d97706;color:#fff">' + dkqDue3 + ' ≤3 ngày</span>';
+    var colorA   = dkqOver > 0 ? 'red' : dkqDue3 > 0 ? 'orange' : 'blue';
 
-    // Card B: Đã trúng
     var trungCount = rfq.trung_count      || 0;
     var trungValue = rfq.trung_value      || 0;
     var trungItems = rfq.trung_item_count || 0;
 
-    // Card C: Tham khảo
     var tkCount = rfq.tham_khao_count || 0;
-    var tkValue = rfq.tham_khao_value || 0;
 
-    // Card D: Clarification cần xử lý
     var clarTotal = (cs.waiting_supplier || 0) + (cs.waiting_client || 0)
                   + (cs.need_more_info   || 0) + (cs.processing     || 0);
-    var clarBadges = '';
-    if (cs.waiting_supplier) clarBadges += ' <span class="badge">Chờ NCC: ' + cs.waiting_supplier + '</span>';
-    if (cs.waiting_client)   clarBadges += ' <span class="badge">Chờ CĐT: ' + cs.waiting_client   + '</span>';
-    if (cs.need_more_info)   clarBadges += ' <span class="badge">Cần bổ sung: ' + cs.need_more_info + '</span>';
-    if (cs.processing)       clarBadges += ' <span class="badge">Đang xử lý: ' + cs.processing     + '</span>';
+    var clarParts = [];
+    if (cs.waiting_supplier) clarParts.push('Chờ NCC: ' + cs.waiting_supplier);
+    if (cs.need_more_info)   clarParts.push('Cần bổ sung: ' + cs.need_more_info);
+    if (cs.waiting_client)   clarParts.push('Chờ CĐT: ' + cs.waiting_client);
+    if (cs.processing)       clarParts.push('Đang xử lý: ' + cs.processing);
 
     document.getElementById('dashboardStats').innerHTML = [
-      kpiCard('Đang khảo giá', dkqTotal,
-        cardABadges ? '<br>' + cardABadges : '',
-        rfq.total + ' gói tổng cộng',
-        dkqOver > 0 ? 'red' : dkqDue3 > 0 ? 'orange' : 'blue'),
-
-      kpiCard('Đã trúng', trungCount,
-        '<br><small>' + fmtMoney(trungValue) + ' VND dự toán · ' + trungItems + ' dòng VT</small>',
-        'Giá trị dựa trên du_toan', 'green'),
-
-      kpiCard('Tham khảo', tkCount,
-        tkValue > 0 ? '<br><small>' + fmtMoney(tkValue) + ' VND ước tính</small>' : '',
-        'RFQ dạng tham khảo', ''),
-
-      kpiCard('Clarification cần xử lý', clarTotal,
-        clarBadges ? '<br>' + clarBadges : '',
-        'Đang chờ phản hồi',
-        clarTotal > 0 ? 'orange' : ''),
+      kpiCard('Đang khảo giá',          dkqTotal + ' gói', rfq.total + ' gói tổng cộng', null, colorA),
+      kpiCard('Đã trúng',               trungCount + ' gói', fmtMoney(trungValue) + ' VND', trungItems + ' mục VT', 'green'),
+      kpiCard('Tham khảo',              tkCount, null, null, ''),
+      kpiCard('Clarification cần xử lý', clarTotal, clarParts.length ? clarParts.join(' · ') : null, null, clarTotal > 0 ? 'orange' : ''),
     ].join('');
   }
 
-  function kpiCard(label, value, extraHtml, subText, colorHint) {
+  function kpiCard(label, mainText, sub1, sub2, colorHint) {
     var borderColor = {
       red:    'var(--red)',
       orange: '#d97706',
@@ -130,12 +110,11 @@
       blue:   'var(--blue)',
     }[colorHint] || 'var(--border)';
     return '<div class="metric" style="border-left:3px solid ' + borderColor + '">'
-      + '<div>'
       + '<span>' + API.esc(label) + '</span>'
-      + '<strong style="font-size:28px">' + value + '</strong>'
-      + (extraHtml || '')
-      + '<small>' + API.esc(subText || '') + '</small>'
-      + '</div></div>';
+      + '<strong>' + API.esc(String(mainText)) + '</strong>'
+      + (sub1 != null ? '<small>' + API.esc(String(sub1)) + '</small>' : '')
+      + (sub2 != null ? '<small>' + API.esc(String(sub2)) + '</small>' : '')
+      + '</div>';
   }
 
   // ── Panels ────────────────────────────────────────────────────────────────
@@ -146,10 +125,7 @@
       + panelFollowup(d.tasks || {})
       + panelDeadlines(d.rfq || {})
       + panelWonRfqs(d.rfq || {})
-      + panelClarifications(d.clarifications || {})
-      + panelContracts(d.contracts || {}, d.rfq || {});
-    // Removed: panelTopSuppliers, panelCoverage, panelImports, panelMasterItems
-    // Code kept below but not rendered — use for reference or future toggle
+      + panelClarifications(d.clarifications || {});
   }
 
   // ── "Việc cần làm" – top 20 active tasks ─────────────────────────────────
@@ -187,29 +163,48 @@
     );
   }
 
-  // ── "Follow-up hôm nay & quá hạn" ────────────────────────────────────────
+  // ── "Follow-up" – grouped: Quá hạn / Hôm nay / Ngày mai ─────────────────
 
   function panelFollowup(tasks) {
-    var rows = tasks.followup || [];
-    var today = todayVN();
-    return panel('Follow-up hôm nay & quá hạn',
-      rows.length
-        ? miniTable(
-            ['Công ty', 'Nội dung', 'Follow-up', 'Người phụ trách'],
-            rows.map(function (r) {
-              var fu = r.next_followup_date || '';
-              var fuHtml = fu < today
-                ? '<span class="badge" style="background:var(--red);color:#fff">QH: ' + API.esc(fu) + '</span>'
-                : '<span class="badge" style="background:#d97706;color:#fff">' + API.esc(fu) + '</span>';
-              return '<tr style="cursor:pointer" onclick="DashboardModule._navToTask(\'' + API.esc(r.task_id) + '\')">'
-                + '<td>' + API.esc(r.company_name || '—') + '</td>'
-                + '<td>' + API.esc(r.title || '') + (r.latest_note ? '<br><small style="color:var(--text-muted)">' + API.esc(r.latest_note) + '</small>' : '') + '</td>'
-                + '<td style="white-space:nowrap">' + fuHtml + '</td>'
-                + '<td style="color:var(--text-muted)">' + API.esc(r.created_by || '—') + '</td>'
-                + '</tr>';
-            }).join('')
-          )
-        : empty('Không có follow-up quá hạn hoặc hôm nay.')
+    var rows     = tasks.followup || [];
+    var today    = todayVN();
+    var tomorrow = vnDateAdd(1);
+
+    var overdue   = rows.filter(function (r) { return (r.next_followup_date || '') < today; });
+    var todayRows = rows.filter(function (r) { return r.next_followup_date === today; });
+    var tmrRows   = rows.filter(function (r) { return r.next_followup_date === tomorrow; });
+
+    var headers = ['Task', 'Công ty', 'Follow-up', 'Ưu tiên', 'Trạng thái'];
+
+    function fuRows(list) {
+      return list.map(function (r) {
+        return '<tr style="cursor:pointer" onclick="DashboardModule._navToTask(\'' + API.esc(r.task_id) + '\')">'
+          + '<td>' + API.esc(r.title || '') + (r.latest_note ? '<br><small style="color:var(--text-muted)">' + API.esc(r.latest_note) + '</small>' : '') + '</td>'
+          + '<td>' + API.esc(r.company_name || '—') + '</td>'
+          + '<td style="white-space:nowrap">' + API.esc(r.next_followup_date || '') + '</td>'
+          + '<td>' + priorityBadge(r.priority) + '</td>'
+          + '<td>' + taskStatusBadge(r.status) + '</td>'
+          + '</tr>';
+      }).join('');
+    }
+
+    function fuSection(title, list, color) {
+      return '<div style="margin-bottom:14px">'
+        + '<p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:' + color + ';margin:0 0 4px">'
+        + API.esc(title) + (list.length ? ' (' + list.length + ')' : '') + '</p>'
+        + (list.length
+            ? miniTable(headers, fuRows(list))
+            : '<div style="color:var(--text-faint);font-size:12px;padding:4px 0">Không có.</div>')
+        + '</div>';
+    }
+
+    var hasAny = overdue.length || todayRows.length || tmrRows.length;
+    return panel('Follow-up',
+      hasAny
+        ? fuSection('Quá hạn', overdue,   'var(--red)')
+          + fuSection('Hôm nay', todayRows, '#d97706')
+          + fuSection('Ngày mai', tmrRows,  'var(--blue)')
+        : empty('Không có follow-up quá hạn, hôm nay, hoặc ngày mai.')
     );
   }
 
@@ -247,7 +242,7 @@
                 + '</tr>';
             }).join('')
           )
-        : empty('Không có RFQ đang khảo giá nào có deadline.')
+        : empty('Không có RFQ đang khảo giá nào hết hạn trong 3 ngày tới.')
     );
   }
 
@@ -258,7 +253,7 @@
     return panel('RFQ vừa trúng',
       rows.length
         ? miniTable(
-            ['Mã gói', 'Tên gói', 'Giá trị (dự toán)', 'Số dòng VT', 'Cập nhật'],
+            ['Mã gói', 'Tên gói', 'Giá trị dự toán', 'Số dòng VT', 'Cập nhật', 'Hợp đồng'],
             rows.map(function (r) {
               var upd = (r.updated_at || '').slice(0, 10);
               return '<tr style="cursor:pointer" onclick="DashboardModule._navToRfq(\'' + API.esc(r.rfq_id) + '\')">'
@@ -267,6 +262,7 @@
                 + '<td class="num">' + (r.du_toan ? fmtMoney(r.du_toan) : '<span style="color:var(--text-faint)">—</span>') + '</td>'
                 + '<td class="num">' + (r.item_count || 0) + '</td>'
                 + '<td style="color:var(--text-muted);white-space:nowrap">' + API.esc(upd) + '</td>'
+                + '<td style="color:var(--text-faint)">—</td>'
                 + '</tr>';
             }).join('')
           )

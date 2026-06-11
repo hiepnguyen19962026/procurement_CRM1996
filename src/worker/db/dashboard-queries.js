@@ -169,25 +169,26 @@ export async function getDashboardV2SQL(db) {
       " AND status_after IN ('waiting_supplier','waiting_client','need_more_info','processing')"
     ).first(),
 
-    // ── NEW: deadline warning list – dang_khao_gia only, sorted by deadline ASC (32) ──
+    // ── NEW: deadline warning list – dang_khao_gia only, overdue or ≤3 days (32) ──
     db.prepare(
       'SELECT r.rfq_id, r.ma_goi_tbmt, r.ten_goi, r.ngay_het_han, r.nha_may_cdt,' +
       " COALESCE(c.client_name, r.nha_may_cdt, '') AS cdt_label" +
       ' FROM rfqs r LEFT JOIN clients c ON c.client_id = r.client_id' +
       " WHERE r.trang_thai_goi = 'dang_khao_gia'" +
       " AND r.ngay_het_han IS NOT NULL AND r.ngay_het_han != ''" +
+      ' AND r.ngay_het_han <= ?' +
       ' ORDER BY r.ngay_het_han ASC LIMIT 20'
-    ).all(),
+    ).bind(d3).all(),
 
     // ── NEW: won RFQ list with item count, sorted by updated_at DESC (33) ─────
     db.prepare(
       'SELECT r.rfq_id, r.ma_goi_tbmt, r.ten_goi, r.du_toan, r.updated_at,' +
       ' (SELECT COUNT(*) FROM rfq_items i WHERE i.rfq_id = r.rfq_id) AS item_count' +
       " FROM rfqs r WHERE r.trang_thai_goi = 'trung'" +
-      ' ORDER BY r.updated_at DESC, r.rfq_id DESC LIMIT 10'
+      ' ORDER BY r.updated_at DESC, r.rfq_id DESC LIMIT 15'
     ).all(),
 
-    // ── NEW: latest 30 clarifications with rfq_item + rfq names (34) ──────────
+    // ── NEW: latest 30 clarifications with rfq_item + rfq names, exclude SMOKE (34) ──
     db.prepare(
       'SELECT tc.clarification_id, tc.rfq_item_id, tc.clarification_type, tc.status_after,' +
       ' tc.title, tc.proposed_model, tc.proposed_manufacturer, tc.proposed_origin, tc.created_at,' +
@@ -196,6 +197,8 @@ export async function getDashboardV2SQL(db) {
       ' JOIN rfq_items i ON i.rfq_item_id = tc.rfq_item_id' +
       ' JOIN rfqs r ON r.rfq_id = i.rfq_id' +
       ' WHERE tc.deleted_at IS NULL' +
+      " AND UPPER(r.rfq_id) NOT LIKE '%SMOKE%'" +
+      " AND UPPER(COALESCE(r.ten_goi,'')) NOT LIKE '%SMOKE%'" +
       ' ORDER BY tc.created_at DESC LIMIT 30'
     ).all(),
 
