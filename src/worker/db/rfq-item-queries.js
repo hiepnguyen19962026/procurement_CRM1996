@@ -5,15 +5,33 @@ function parseCursor(cursor) {
 }
 
 const ITEM_SORT = {
-  stt:            { col: 'i.stt_goc',          rowKey: 'stt_goc',          type: 'text' },
-  ma_mua_sam:     { col: 'i.ma_mua_sam',        rowKey: 'ma_mua_sam',       type: 'text' },
-  ma_vat_tu:      { col: 'i.ma_vat_tu',         rowKey: 'ma_vat_tu',        type: 'text' },
-  ten_vat_tu:     { col: 'i.ten_vat_tu',        rowKey: 'ten_vat_tu',       type: 'text' },
-  required_model: { col: 'i.required_model',    rowKey: 'required_model',   type: 'text' },
-  brand:          { col: 'i.brand',             rowKey: 'brand',            type: 'text' },
-  manufacturer:   { col: 'i.manufacturer',      rowKey: 'manufacturer',     type: 'text' },
-  origin_country: { col: 'i.origin_country',    rowKey: 'origin_country',   type: 'text' },
-  trang_thai:     { col: 'i.trang_thai_dong',   rowKey: 'trang_thai_dong',  type: 'text' },
+  stt:                      { col: 'i.stt_goc',                    rowKey: 'stt_goc',                    type: 'text' },
+  ten_goi:                  { col: 'r.ten_goi',                    rowKey: 'ten_goi',                    type: 'text' },
+  ma_mua_sam:               { col: 'i.ma_mua_sam',                 rowKey: 'ma_mua_sam',                 type: 'text' },
+  ma_vat_tu:                { col: 'i.ma_vat_tu',                  rowKey: 'ma_vat_tu',                  type: 'text' },
+  ten_vat_tu:               { col: 'i.ten_vat_tu',                 rowKey: 'ten_vat_tu',                 type: 'text' },
+  required_model:           { col: 'i.required_model',             rowKey: 'required_model',             type: 'text' },
+  brand:                    { col: 'i.brand',                      rowKey: 'brand',                      type: 'text' },
+  manufacture_year:         { col: 'i.manufacture_year',           rowKey: 'manufacture_year',           type: 'text' },
+  origin_country:           { col: 'i.origin_country',             rowKey: 'origin_country',             type: 'text' },
+  manufacturer:             { col: 'i.manufacturer',               rowKey: 'manufacturer',               type: 'text' },
+  technical_params:         { col: 'i.technical_params',           rowKey: 'technical_params',           type: 'text' },
+  vat_lieu:                 { col: 'i.vat_lieu',                   rowKey: 'vat_lieu',                   type: 'text' },
+  phu_tung_chuyen_dung:     { col: 'i.phu_tung_chuyen_dung',       rowKey: 'phu_tung_chuyen_dung',       type: 'text' },
+  yeu_cau_ky_thuat_bo_sung: { col: 'i.yeu_cau_ky_thuat_bo_sung',  rowKey: 'yeu_cau_ky_thuat_bo_sung',   type: 'text' },
+  unit:                     { col: 'i.unit',                       rowKey: 'unit',                       type: 'text' },
+  quantity:                 { col: 'i.quantity',                   rowKey: 'quantity',                   type: 'num'  },
+  thue_suat:                { col: 'i.thue_suat',                  rowKey: 'thue_suat',                  type: 'num'  },
+  don_gia_sau_thue:         { col: 'i.don_gia_sau_thue',           rowKey: 'don_gia_sau_thue',           type: 'num'  },
+  thanh_tien_sau_thue:      { col: 'i.thanh_tien_sau_thue',        rowKey: 'thanh_tien_sau_thue',        type: 'num'  },
+  gia_hop_dong:             { col: 'i.gia_hop_dong',               rowKey: 'gia_hop_dong',               type: 'num'  },
+  delivery_time:            { col: 'i.delivery_time',              rowKey: 'delivery_time',              type: 'text' },
+  note:                     { col: 'i.note',                       rowKey: 'note',                       type: 'text' },
+  quy_cach_final:           { col: 'i.quy_cach_final',             rowKey: 'quy_cach_final',             type: 'text' },
+  hang_final:               { col: 'i.hang_final',                 rowKey: 'hang_final',                 type: 'text' },
+  xuat_xu_final:            { col: 'i.xuat_xu_final',              rowKey: 'xuat_xu_final',              type: 'text' },
+  ghi_chu_final:            { col: 'i.ghi_chu_final',              rowKey: 'ghi_chu_final',              type: 'text' },
+  trang_thai:               { col: 'i.trang_thai_dong',            rowKey: 'trang_thai_dong',            type: 'text' },
 };
 
 export async function listRfqItemsSQL(db, { q, rfqId, status, techFilter, cursor, sortBy, sortDir, limit }) {
@@ -24,8 +42,8 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, techFilter, cursor
   const binds = [];
   const where = [];
   if (q) {
-    where.push('(i.normalized_search LIKE ? OR i.ten_vat_tu LIKE ? OR i.ma_vat_tu LIKE ? OR i.ma_mua_sam LIKE ?)');
-    binds.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
+    where.push('(i.normalized_search LIKE ? OR EXISTS (SELECT 1 FROM rfqs r2 WHERE r2.rfq_id = i.rfq_id AND (r2.ten_goi LIKE ? OR r2.ma_goi_tbmt LIKE ?)))');
+    binds.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
   if (rfqId) { where.push('i.rfq_id = ?'); binds.push(rfqId); }
   if (status) {
@@ -163,4 +181,48 @@ export async function updateRfqItemSQL(db, row) {
     row.item_id, row.normalized_search, row.raw_row_json, row.source_file_id, row.source_sheet_name, row.source_row_number, row.updated_at,
     row.rfq_item_id
   ).run();
+}
+
+export async function exportRfqItemsSQL(db, { q, rfqId, status, techFilter, sortBy, sortDir }) {
+  const sort = ITEM_SORT[sortBy] || null;
+  const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
+
+  const binds = [];
+  const where = [];
+  if (q) {
+    where.push('(i.normalized_search LIKE ? OR EXISTS (SELECT 1 FROM rfqs r2 WHERE r2.rfq_id = i.rfq_id AND (r2.ten_goi LIKE ? OR r2.ma_goi_tbmt LIKE ?)))');
+    binds.push(`%${q}%`, `%${q}%`, `%${q}%`);
+  }
+  if (rfqId) { where.push('i.rfq_id = ?'); binds.push(rfqId); }
+  if (status) {
+    where.push('i.trang_thai_dong = ?'); binds.push(status);
+  } else {
+    where.push("i.trang_thai_dong != 'archived'");
+  }
+  if (techFilter === 'has_clarification') {
+    where.push('EXISTS (SELECT 1 FROM technical_clarifications tc WHERE tc.rfq_item_id = i.rfq_item_id AND tc.deleted_at IS NULL)');
+  } else if (techFilter === 'no_clarification') {
+    where.push('NOT EXISTS (SELECT 1 FROM technical_clarifications tc WHERE tc.rfq_item_id = i.rfq_item_id AND tc.deleted_at IS NULL)');
+  } else if (techFilter === 'khong_can') {
+    where.push("i.trang_thai_ky_thuat = 'khong_can_xac_nhan'");
+  } else if (techFilter === 'dang_hoi') {
+    where.push("i.trang_thai_ky_thuat IN ('dang_hoi','can_bo_sung','processing','waiting_supplier','waiting_client','need_more_info')");
+  } else if (techFilter === 'da_xac_nhan') {
+    where.push("i.trang_thai_ky_thuat IN ('da_xac_nhan','final_confirmed')");
+  } else if (techFilter === 'bi_tu_choi') {
+    where.push("i.trang_thai_ky_thuat IN ('bi_tu_choi','rejected','thay_the')");
+  }
+
+  const orderBy = sort
+    ? `${sort.col} ${dir}, i.rfq_item_id ${dir}`
+    : `COALESCE(i.source_row_number, 0) ASC, i.rfq_item_id ASC`;
+
+  const res = await db.prepare(
+    `SELECT i.*, r.ten_goi, r.ma_goi_tbmt
+     FROM rfq_items i LEFT JOIN rfqs r ON r.rfq_id = i.rfq_id
+     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+     ORDER BY ${orderBy} LIMIT 5000`
+  ).bind(...binds).all();
+
+  return res.results || [];
 }

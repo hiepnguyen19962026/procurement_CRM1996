@@ -106,9 +106,21 @@
     return r[canonical] ?? (legacy ? r[legacy] : '') ?? '';
   }
 
+  function hlEsc(text, q) {
+    var safe = API.esc(String(text === null || text === undefined ? '' : text));
+    if (!q) return safe;
+    try {
+      var pattern = API.esc(q).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return safe.replace(new RegExp('(' + pattern + ')', 'gi'), '<mark>$1</mark>');
+    } catch (e) {
+      return safe;
+    }
+  }
+
   function renderCell(value, muted) {
     var text = value === undefined || value === null || value === '' ? '-' : value;
-    return '<td' + (muted && text === '-' ? ' class="muted-cell"' : '') + '>' + API.esc(text) + '</td>';
+    if (text === '-') return '<td' + (muted ? ' class="muted-cell"' : '') + '>-</td>';
+    return '<td>' + hlEsc(String(text), state.q) + '</td>';
   }
 
   function render() {
@@ -140,12 +152,12 @@
     }
     var canWrite = Utils.roleCanWrite();
     document.getElementById('itemRows').innerHTML = rows.map(function (r) {
-      var nameInner = '<strong>' + API.esc(r.ten_vat_tu) + '</strong>'
-        + '<div class="muted">' + API.esc(val(r, 'technical_params', 'thong_so_ky_thuat')) + '</div>';
+      var nameInner = '<strong>' + hlEsc(r.ten_vat_tu, state.q) + '</strong>'
+        + '<div class="muted">' + hlEsc(val(r, 'technical_params', 'thong_so_ky_thuat'), state.q) + '</div>';
       var nameCell = canWrite
         ? '<td><span class="link-edit" onclick="RfqItemsModule.openEdit(\'' + API.esc(r.rfq_item_id) + '\')">'
-          + '<strong>' + API.esc(r.ten_vat_tu) + '</strong></span>'
-          + '<div class="muted">' + API.esc(val(r, 'technical_params', 'thong_so_ky_thuat')) + '</div>'
+          + '<strong>' + hlEsc(r.ten_vat_tu, state.q) + '</strong></span>'
+          + '<div class="muted">' + hlEsc(val(r, 'technical_params', 'thong_so_ky_thuat'), state.q) + '</div>'
           + mediaBadges(r) + '</td>'
         : '<td>' + nameInner + mediaBadges(r) + '</td>';
       return '<tr>'
@@ -1914,31 +1926,23 @@
 
   async function exportCsv() {
     var rfqId = (document.getElementById('itemRfqId').value || '').trim();
-    if (!rfqId) { API.toast('Lọc theo RFQ trước khi xuất CSV', 'warn'); return; }
+    var statusEl = document.getElementById('itemStatus');
+    var techEl = document.getElementById('itemTechFilter');
+    var params = {
+      rfqId: rfqId,
+      q: state.q || '',
+      status: statusEl ? statusEl.value : '',
+      techFilter: techEl ? techEl.value : '',
+      sortBy: sort.by || '',
+      sortDir: sort.dir || '',
+    };
     try {
-      var allRows = [], cursor = '', page = 0, maxPages = 20;
-      while (page < maxPages) {
-        var data = await API.get('getRfqItems', { rfqId: rfqId, cursor: cursor, limit: 50 });
-        allRows = allRows.concat(data.rows || []);
-        if (!data.hasMore) break;
-        cursor = data.nextCursor || '';
-        page++;
-      }
-      if (!allRows.length) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
-      var csv = '﻿'
-        + EXPORT_HEADERS.map(csvQuote).join(',') + '\r\n'
-        + allRows.map(function (r) { return rowToExportValues(r).map(csvQuote).join(','); }).join('\r\n')
-        + '\r\n';
-      var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      var url = URL.createObjectURL(blob);
-      var a = document.createElement('a');
-      a.href = url;
-      a.download = 'rfq-items-' + rfqId + '.csv';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      setTimeout(function () { URL.revokeObjectURL(url); }, 10000);
-      API.toast('Đã xuất ' + allRows.length + ' dòng', 'success');
+      var data = await API.call('exportRfqItemsCsv', params);
+      if (!data.ok) { API.error(data.error || 'Không thể xuất CSV'); return; }
+      if (!data.row_count) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
+      if (data.capped) API.toast('⚠ Kết quả bị giới hạn tối đa 5.000 dòng', 'warn');
+      downloadCsvBlob(data.csv, data.filename);
+      API.toast('Đã xuất ' + data.row_count + ' dòng', 'success');
     } catch (err) {
       API.error(err);
     }

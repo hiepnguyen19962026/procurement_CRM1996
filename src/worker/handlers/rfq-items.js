@@ -1,4 +1,4 @@
-import { archiveRfqItemSQL, getRfqItemSQL, insertRfqItemSQL, listRfqItemsSQL, updateRfqItemSQL } from '../db/rfq-item-queries.js';
+import { archiveRfqItemSQL, exportRfqItemsSQL, getRfqItemSQL, insertRfqItemSQL, listRfqItemsSQL, updateRfqItemSQL } from '../db/rfq-item-queries.js';
 import { getRfqSQL } from '../db/rfq-queries.js';
 import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { invalidateKv } from '../lib/cache.js';
@@ -14,6 +14,7 @@ export async function handleRfqItems(action, request, env, ctx, actor) {
   if (action === 'hardDeleteRfqItems') return hardDelete(request, env, ctx, actor);
   if (action === 'hardDeleteAllRfqItems') return hardDeleteAll(request, env, ctx, actor);
   if (action === 'logRfqItemImportSummary') return logImportSummary(request, env, ctx, actor);
+  if (action === 'exportRfqItemsCsv') return exportItems(request, env, actor);
   return json({ ok: false, error: 'Unknown RFQ item action' }, 400);
 }
 
@@ -190,6 +191,8 @@ function normalizeItemRow(body, base) {
     row.ma_mua_sam, row.ma_vat_tu, row.ten_vat_tu, row.required_model,
     row.brand, row.manufacturer, row.origin_country, row.manufacture_year,
     row.technical_params, row.vat_lieu, row.yeu_cau_ky_thuat_bo_sung,
+    row.hang_bao_gia_nsx_bao_gia, row.note,
+    row.quy_cach_final, row.hang_final, row.xuat_xu_final, row.ghi_chu_final,
   ]);
   return row;
 }
@@ -214,6 +217,77 @@ async function hardDelete(request, env, ctx, actor) {
   ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
   ctx.waitUntil(writeActionLog(env, { action: 'hardDeleteRfqItems', entityType: 'rfq_item', entityId: ids.join(','), actor }));
   return json({ ok: true, deleted: ids.length });
+}
+
+const EXPORT_MAX_ROWS = 5000;
+
+const EXPORT_COL_HEADERS = [
+  'STT', 'Mã mua sắm', 'Mã vật tư',
+  'Tên vật tư / Danh mục hàng hóa', 'Ký mã hiệu / Model', 'Nhãn hiệu',
+  'Năm sản xuất', 'Xuất xứ', 'Hãng sản xuất', 'Quy cách / thông số kỹ thuật',
+  'Vật liệu', 'Phụ tùng chuyên dụng', 'Yêu cầu kỹ thuật bổ sung',
+  'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền', 'Giá hợp đồng',
+  'Thời gian giao hàng', 'Ghi chú', 'rfqItemId (Không sửa)',
+];
+
+function rowToExportCsv(r) {
+  return [
+    r.stt_goc, r.ma_mua_sam, r.ma_vat_tu,
+    r.ten_vat_tu,
+    r.required_model || r.quy_cach_model_yeu_cau || '',
+    r.brand || r.nhan_hieu || '',
+    r.manufacture_year || r.nam_san_xuat || '',
+    r.origin_country || r.xuat_xu || '',
+    r.manufacturer || r.hang_goc_nsx_goc || '',
+    r.technical_params || r.thong_so_ky_thuat || '',
+    r.vat_lieu || '', r.phu_tung_chuyen_dung || '', r.yeu_cau_ky_thuat_bo_sung || '',
+    r.unit || r.don_vi || '',
+    r.quantity ?? r.so_luong ?? '',
+    r.thue_suat ?? '',
+    r.don_gia_truoc_thue || r.don_gia_sau_thue || '',
+    r.thanh_tien_sau_thue || '',
+    r.gia_hop_dong || '',
+    r.delivery_time || '', r.note || '',
+    r.rfq_item_id,
+  ];
+}
+
+function csvQ(value) {
+  const s = String(value == null ? '' : value);
+  if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
+  return s;
+}
+
+function buildExportCsv(rows) {
+  const lines = [EXPORT_COL_HEADERS.map(csvQ).join(',')];
+  for (const r of rows) lines.push(rowToExportCsv(r).map(csvQ).join(','));
+  return '﻿' + lines.join('\r\n') + '\r\n'; // UTF-8 BOM
+}
+
+async function exportItems(request, env, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const p = await readJson(request);
+  const VALID_TECH_FILTERS = new Set(['has_clarification','no_clarification','khong_can','dang_hoi','da_xac_nhan','bi_tu_choi']);
+  const rows = await exportRfqItemsSQL(env.DB, {
+    q: normalizeText(p.q),
+    rfqId: p.rfqId || p.rfq_id || '',
+    status: p.status || '',
+    techFilter: VALID_TECH_FILTERS.has(p.techFilter) ? p.techFilter : '',
+    sortBy: p.sortBy || '',
+    sortDir: p.sortDir || '',
+  });
+  const rfqId = cleanString(p.rfqId || p.rfq_id || 'all', 80);
+  const today = nowIso().slice(0, 10);
+  return json({
+    ok: true,
+    filename: `rfq-items-${rfqId}-${today}.csv`,
+    csv: buildExportCsv(rows),
+    row_count: rows.length,
+    capped: rows.length >= EXPORT_MAX_ROWS,
+  });
 }
 
 async function hardDeleteAll(request, env, ctx, actor) {
