@@ -46,6 +46,9 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, techFilter, cursor
   } else if (techFilter === 'bi_tu_choi') {
     where.push("i.trang_thai_ky_thuat IN ('bi_tu_choi','rejected','thay_the')");
   }
+  const baseWhere = [...where];
+  const baseBinds = [...binds];
+
   if (cursor) {
     const c = parseCursor(cursor);
     if (!sort) {
@@ -68,19 +71,24 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, techFilter, cursor
   // Default (no sort): order by source import row so items appear in spreadsheet order
   const innerOrderBy = sort ? `${sort.col} ${dir}, i.rfq_item_id ${dir}` : `COALESCE(i.source_row_number, 0) ASC, i.rfq_item_id ASC`;
   const outerOrderBy = sort ? `${sort.col.replace(/^\w+\./, '')} ${dir}, rfq_item_id ${dir}` : `COALESCE(source_row_number, 0) ASC, rfq_item_id ASC`;
-  const res = await db.prepare(
-    `WITH page AS (
-       SELECT i.*, r.ten_goi, r.ma_goi_tbmt
-       FROM rfq_items i LEFT JOIN rfqs r ON r.rfq_id = i.rfq_id
-       ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-       ORDER BY ${innerOrderBy} LIMIT ?
-     )
-     SELECT page.*,
-       (SELECT COUNT(*) FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL) AS clarification_count,
-       (SELECT tc.status_after FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL ORDER BY tc.created_at DESC, tc.sequence_no DESC LIMIT 1) AS clarification_status
-     FROM page ORDER BY ${outerOrderBy}`
-  ).bind(...binds, limit + 1).all();
+  const countSql = `SELECT COUNT(*) AS total FROM rfq_items i${baseWhere.length ? ` WHERE ${baseWhere.join(' AND ')}` : ''}`;
+  const [countRow, res] = await Promise.all([
+    db.prepare(countSql).bind(...baseBinds).first(),
+    db.prepare(
+      `WITH page AS (
+         SELECT i.*, r.ten_goi, r.ma_goi_tbmt
+         FROM rfq_items i LEFT JOIN rfqs r ON r.rfq_id = i.rfq_id
+         ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+         ORDER BY ${innerOrderBy} LIMIT ?
+       )
+       SELECT page.*,
+         (SELECT COUNT(*) FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL) AS clarification_count,
+         (SELECT tc.status_after FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL ORDER BY tc.created_at DESC, tc.sequence_no DESC LIMIT 1) AS clarification_status
+       FROM page ORDER BY ${outerOrderBy}`
+    ).bind(...binds, limit + 1).all(),
+  ]);
 
+  const totalCount = Number(countRow?.total ?? 0);
   const rows = res.results || [];
   const page = rows.slice(0, limit);
   let nextCursor = null;
@@ -92,7 +100,7 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, techFilter, cursor
       nextCursor = String(last.source_row_number ?? 0) + '|||' + last.rfq_item_id;
     }
   }
-  return { rows: page, hasMore: rows.length > limit, nextCursor };
+  return { rows: page, hasMore: rows.length > limit, nextCursor, totalCount };
 }
 
 export async function archiveRfqItemSQL(db, rfqItemId, now) {

@@ -29,7 +29,7 @@ async function listItems(request, env, actor) {
     cursor: p.cursor || '',
     sortBy: p.sortBy || '',
     sortDir: p.sortDir || '',
-    limit: clampLimit(p.limit),
+    limit: clampLimit(p.limit, 500, 10000),
   });
   return json({ ok: true, ...data });
 }

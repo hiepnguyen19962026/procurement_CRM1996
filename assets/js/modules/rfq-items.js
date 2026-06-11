@@ -62,19 +62,38 @@
     if (reset) state.cursor = '';
     state.q = document.getElementById('itemSearch').value || '';
     try {
+      var pageSizeEl = document.getElementById('itemPageSize');
+      var pageSizeVal = pageSizeEl ? pageSizeEl.value : '500';
+      var limit;
+      if (pageSizeVal === 'all') {
+        var known = state.totalCount || 0;
+        if (known > 2000) {
+          var ok = await Utils.confirmDanger(
+            'Tải toàn bộ dữ liệu',
+            'Bạn đang tải ' + known.toLocaleString('vi-VN') + ' dòng vật tư. Có thể mất vài giây.',
+            'Tiếp tục tải',
+            'Huỷ'
+          );
+          if (!ok) return;
+        }
+        limit = known > 0 ? known + 50 : 10000;
+      } else {
+        limit = Number(pageSizeVal) || 500;
+      }
       var params = {
         q: state.q,
         rfqId: document.getElementById('itemRfqId').value,
         status: document.getElementById('itemStatus').value,
         techFilter: (document.getElementById('itemTechFilter') || {}).value || '',
         cursor: state.cursor,
-        limit: 50,
+        limit: limit,
       };
       if (sort.by) { params.sortBy = sort.by; params.sortDir = sort.dir; }
       var data = await API.get('getRfqItems', params);
       state.rows = reset ? data.rows : state.rows.concat(data.rows || []);
       state.cursor = data.nextCursor || '';
       state.hasMore = !!data.hasMore;
+      if (data.totalCount != null) state.totalCount = Number(data.totalCount);
       render();
     } catch (err) {
       API.error(err);
@@ -179,12 +198,12 @@
     var rows = state.rows || [];
     if (!rows.length) { el.textContent = ''; return; }
     var rfqId = (document.getElementById('itemRfqId').value || '').trim();
+    var total = state.totalCount || rows.length;
+    var formatted = total.toLocaleString('vi-VN');
     if (rfqId) {
-      var rfq = (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === rfqId; });
-      var total = rfq && rfq.item_count != null ? Number(rfq.item_count) : (rows.length + (state.hasMore ? '+' : ''));
-      el.textContent = 'RFQ hiện tại: ' + total + ' dòng vật tư';
+      el.textContent = 'RFQ hiện tại: ' + formatted + ' dòng vật tư';
     } else {
-      el.textContent = 'Tổng: ' + rows.length + (state.hasMore ? '+' : '') + ' dòng vật tư';
+      el.textContent = 'Tổng: ' + formatted + ' dòng vật tư';
     }
   }
 
