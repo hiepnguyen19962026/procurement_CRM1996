@@ -73,7 +73,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="13" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="26" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -104,9 +104,21 @@
         + nameCell
         + renderCell(val(r, 'required_model', 'quy_cach_model_yeu_cau'), true)
         + renderCell(val(r, 'brand', 'nhan_hieu'), true)
-        + renderCell(val(r, 'manufacturer', 'hang_goc_nsx_goc'), true)
+        + renderCell(val(r, 'manufacture_year', 'nam_san_xuat'), true)
         + renderCell(val(r, 'origin_country', 'xuat_xu'), true)
-        + renderCell((val(r, 'quantity', 'so_luong') || 0) + ' ' + (val(r, 'unit', 'don_vi') || ''), false)
+        + renderCell(val(r, 'manufacturer', 'hang_goc_nsx_goc'), true)
+        + renderCell(val(r, 'technical_params', 'thong_so_ky_thuat'), true)
+        + renderCell(r.vat_lieu, true)
+        + renderCell(r.phu_tung_chuyen_dung, true)
+        + renderCell(r.yeu_cau_ky_thuat_bo_sung, true)
+        + renderCell(val(r, 'unit', 'don_vi'), true)
+        + renderCell(val(r, 'quantity', 'so_luong') || 0, false)
+        + renderCell(r.thue_suat != null && r.thue_suat !== 0 ? r.thue_suat + '%' : '', true)
+        + renderCell(r.don_gia_truoc_thue || r.don_gia_sau_thue, true)
+        + renderCell(r.thanh_tien_sau_thue, true)
+        + renderCell(r.gia_hop_dong, true)
+        + renderCell(r.delivery_time, true)
+        + renderCell(r.note, true)
         + '<td>' + technicalSummary(r) + '</td>'
         + '<td><span class="badge">' + API.esc(statusLabel(r.trang_thai_dong)) + '</span></td>'
         + '<td class="muted-cell" style="text-align:center">' + revisionBadge(r) + '</td>'
