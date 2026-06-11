@@ -280,42 +280,83 @@
     var isEdit = !!row.task_id;
     var title = isEdit ? 'Sửa task: ' + API.esc(row.title || row.task_id) : 'Thêm task mới';
 
-    var statusSel = '<select name="status">'
-      + STATUS_LIST.map(function (s) {
-          return '<option value="' + s[0] + '"' + ((row.status || 'dang_lam') === s[0] ? ' selected' : '') + '>' + s[1] + '</option>';
-        }).join('')
-      + '</select>';
-
     var priSel = '<select name="priority">'
       + PRIORITY_LIST.map(function (p) {
           return '<option value="' + p[0] + '"' + ((row.priority || 'trung_binh') === p[0] ? ' selected' : '') + '>' + p[1] + '</option>';
         }).join('')
       + '</select>';
 
+    var statusSel = '<select name="status" style="min-width:160px;max-width:220px">'
+      + STATUS_LIST.map(function (s) {
+          return '<option value="' + s[0] + '"' + ((row.status || 'dang_lam') === s[0] ? ' selected' : '') + '>' + s[1] + '</option>';
+        }).join('')
+      + '</select>';
+
+    // Row 1: company(3) + task_type(2) + title(5) + priority(2) = 12
+    // Row 2: start_date(3) + deadline(3) + followup(3) + progress(3) = 12
+    // Row 3: description full-width, large textarea
+    // Row 4: latest_note full-width, medium textarea
+    // Footer row: status select on left, separated by border-top
     var html = '<datalist id="taskCompanySuggest"></datalist>'
-      + '<label class="span-6">Công ty<input name="companyName" list="taskCompanySuggest" autocomplete="off" value="' + API.esc(row.company_name || '') + '" placeholder="Nhập hoặc chọn công ty..."></label>'
-      + '<label class="span-6">Loại task<input name="taskType" value="' + API.esc(row.task_type || '') + '" placeholder="VD: Báo giá, Kỹ thuật..."></label>'
-      + '<label class="span-12">Tên task<input name="title" required maxlength="300" value="' + API.esc(row.title || '') + '"></label>'
-      + '<label class="span-12 compact-ta">Mô tả<textarea name="description">' + API.esc(row.description || '') + '</textarea></label>'
-      + '<label class="span-3" style="color:var(--text-muted)">Ngày bắt đầu<input type="text" value="' + API.esc(startDate || '') + '" readonly style="background:var(--bg);color:var(--text-muted);cursor:default" tabindex="-1"></label>'
-      + '<label class="span-3">Deadline<input name="deadlineDate" type="text" value="' + API.esc(row.deadline_date || '') + '" placeholder="YYYY-MM-DD" onfocus="this.type=\'date\'" onblur="if(!this.value)this.type=\'text\'"></label>'
-      + '<label class="span-3">Follow-up tiếp theo<input name="nextFollowupDate" type="text" value="' + API.esc(row.next_followup_date || '') + '" placeholder="YYYY-MM-DD" onfocus="this.type=\'date\'" onblur="if(!this.value)this.type=\'text\'"></label>'
-      + '<label class="span-3">Tiến độ %<input name="progressPercent" type="number" min="0" max="100" value="' + API.esc(String(row.progress_percent != null ? row.progress_percent : 0)) + '"></label>'
-      + '<label class="span-6">Trạng thái' + statusSel + '</label>'
-      + '<label class="span-6">Ưu tiên' + priSel + '</label>'
-      + '<label class="span-12 compact-ta">Ghi chú / cập nhật gần nhất<textarea name="latestNote">' + API.esc(row.latest_note || '') + '</textarea></label>';
+
+      // ── Row 1 ──────────────────────────────────────────────────────────────
+      + '<label class="span-3">Công ty'
+        + '<input name="companyName" list="taskCompanySuggest" autocomplete="off"'
+        + ' value="' + API.esc(row.company_name || '') + '" placeholder="Nhập hoặc chọn công ty...">'
+        + '</label>'
+      + '<label class="span-2">Loại task'
+        + '<input name="taskType" value="' + API.esc(row.task_type || '') + '" placeholder="Báo giá, Kỹ thuật...">'
+        + '</label>'
+      + '<label class="span-5">Tên task'
+        + '<input name="title" required maxlength="300" value="' + API.esc(row.title || '') + '">'
+        + '</label>'
+      + '<label class="span-2">Ưu tiên' + priSel + '</label>'
+
+      // ── Row 2 ──────────────────────────────────────────────────────────────
+      + '<label class="span-3" style="color:var(--text-muted)">Ngày bắt đầu'
+        + '<input type="text" value="' + API.esc(startDate || '') + '"'
+        + ' readonly tabindex="-1"'
+        + ' style="background:var(--bg);color:var(--text-muted);cursor:default;pointer-events:none">'
+        + '</label>'
+      + '<label class="span-3">Deadline'
+        + '<input name="deadlineDate" type="date" value="' + API.esc(row.deadline_date || '') + '">'
+        + '</label>'
+      + '<label class="span-3">Follow-up tiếp theo'
+        + '<input name="nextFollowupDate" type="date" value="' + API.esc(row.next_followup_date || '') + '">'
+        + '</label>'
+      + '<label class="span-3">Tiến độ %'
+        + '<input name="progressPercent" type="number" min="0" max="100"'
+        + ' value="' + API.esc(String(row.progress_percent != null ? row.progress_percent : 0)) + '">'
+        + '</label>'
+
+      // ── Row 3 ──────────────────────────────────────────────────────────────
+      + '<label class="span-12">Mô tả chi tiết'
+        + '<textarea name="description" style="min-height:220px;resize:vertical">'
+        + API.esc(row.description || '') + '</textarea>'
+        + '</label>'
+
+      // ── Row 4 ──────────────────────────────────────────────────────────────
+      + '<label class="span-12">Ghi chú / cập nhật gần nhất'
+        + '<textarea name="latestNote" style="min-height:110px;resize:vertical">'
+        + API.esc(row.latest_note || '') + '</textarea>'
+        + '</label>'
+
+      // ── Footer row: status left-aligned, visual separator from buttons ─────
+      + '<div class="span-12" style="display:flex;align-items:center;gap:10px;padding-top:12px;margin-top:2px;border-top:1px solid var(--border)">'
+        + '<span style="font-size:13px;color:#4b5563;font-weight:500;white-space:nowrap">Trạng thái</span>'
+        + statusSel
+        + '</div>';
 
     Utils.openModal(title, html, async function (data) {
       try {
         if (isEdit) data.taskId = row.task_id;
-        var result = await API.call(isEdit ? 'updateTask' : 'createTask', data);
+        await API.call(isEdit ? 'updateTask' : 'createTask', data);
         Utils.closeModal();
         API.toast(isEdit ? 'Đã cập nhật task' : 'Đã tạo task mới', 'success');
         await load(true);
       } catch (err) { API.error(err); }
     });
 
-    // bind autocomplete after modal DOM is ready
     setTimeout(function () {
       bindCompanyAutocomplete(document.querySelector('#modalBody input[name="companyName"]'));
     }, 0);
