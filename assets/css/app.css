@@ -186,6 +186,8 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .btn-cancel:hover { background: var(--border); }
 .btn-danger { background: #dc2626; color: #fff; border: 1px solid #b91c1c; border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .btn-danger:hover { background: #b91c1c; border-color: #991b1b; }
+.btn-danger:disabled { background: #fca5a5; border-color: #fca5a5; cursor: not-allowed; }
+.confirm-input { width: 100%; box-sizing: border-box; padding: 8px 10px; margin: 0 0 16px; border: 1px solid var(--border-mid); border-radius: 6px; font-size: 13px; color: var(--text); }
 .btn-primary { background: var(--primary); color: #fff; border: 1px solid var(--primary); border-radius: 8px; padding: 8px 18px; font-size: 13px; font-weight: 600; cursor: pointer; }
 .btn-primary:hover { background: var(--primary-dk); border-color: var(--primary-dk); }
 /* archive X button in table rows */

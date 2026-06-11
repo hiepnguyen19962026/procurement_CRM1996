@@ -71,5 +71,29 @@
     });
   }
 
-  window.Utils = { formToObject: formToObject, openModal: openModal, closeModal: closeModal, bindModal: bindModal, roleCanWrite: roleCanWrite, confirmDanger: confirmDanger };
+  // Destructive confirm that requires the user to type a specific phrase before the action button activates.
+  function confirmTyping(title, message, requiredText) {
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML = '<div class="confirm-box">'
+        + '<div class="confirm-title">' + _esc(title) + '</div>'
+        + '<p class="confirm-desc">' + _esc(message) + '</p>'
+        + '<input type="text" class="confirm-input" placeholder="' + _esc(requiredText) + '" autocomplete="off">'
+        + '<div class="confirm-actions">'
+        + '<button type="button" class="btn-cancel">Hủy</button>'
+        + '<button type="button" class="btn-danger" disabled>Xóa vĩnh viễn</button>'
+        + '</div></div>';
+      document.body.appendChild(overlay);
+      function done(result) { document.body.removeChild(overlay); resolve(result); }
+      var inp = overlay.querySelector('.confirm-input');
+      var btn = overlay.querySelector('.btn-danger');
+      inp.oninput = function () { btn.disabled = inp.value !== requiredText; };
+      btn.onclick = function () { done(true); };
+      overlay.querySelector('.btn-cancel').onclick = function () { done(false); };
+      setTimeout(function () { inp.focus(); }, 0);
+    });
+  }
+
+  window.Utils = { formToObject: formToObject, openModal: openModal, closeModal: closeModal, bindModal: bindModal, roleCanWrite: roleCanWrite, confirmDanger: confirmDanger, confirmTyping: confirmTyping };
 })();

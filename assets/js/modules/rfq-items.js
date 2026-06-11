@@ -97,6 +97,7 @@
           + '<div class="muted">' + API.esc(val(r, 'technical_params', 'thong_so_ky_thuat')) + '</div></td>'
         : '<td>' + nameInner + '</td>';
       return '<tr>'
+        + '<td style="padding:0 4px;text-align:center;width:28px"><input type="checkbox" class="item-check" value="' + API.esc(r.rfq_item_id) + '" onchange="RfqItemsModule.onCheckChange()"></td>'
         + renderCell(r.stt_goc, true)
         + renderCell(r.ma_mua_sam, true)
         + renderCell(r.ma_vat_tu, true)
@@ -116,6 +117,15 @@
     }).join('');
     document.getElementById('itemMore').classList.toggle('hidden', !state.hasMore);
     Auth.applyRoleUI();
+    var selectAll = document.getElementById('itemSelectAll');
+    if (selectAll) selectAll.checked = false;
+    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
+    var delAllBtn = document.getElementById('itemDeleteAll');
+    if (delAllBtn) delAllBtn.classList.toggle('hidden', !rfqId);
+    var delSelBtn = document.getElementById('itemDeleteSelected');
+    if (delSelBtn) delSelBtn.classList.add('hidden');
+    var delCnt = document.getElementById('itemDeleteCount');
+    if (delCnt) delCnt.textContent = '0';
   }
 
   function technicalSummary(r) {
@@ -1064,6 +1074,60 @@
     } catch (err) { API.error(err); }
   }
 
+  function toggleSelectAll(chk) {
+    Array.prototype.forEach.call(document.querySelectorAll('#itemRows .item-check'), function (cb) {
+      cb.checked = chk.checked;
+    });
+    onCheckChange();
+  }
+
+  function onCheckChange() {
+    var checked = Array.prototype.filter.call(
+      document.querySelectorAll('#itemRows .item-check'),
+      function (cb) { return cb.checked; }
+    );
+    var btn = document.getElementById('itemDeleteSelected');
+    var cnt = document.getElementById('itemDeleteCount');
+    if (btn) btn.classList.toggle('hidden', !checked.length);
+    if (cnt) cnt.textContent = checked.length;
+  }
+
+  async function deleteSelected() {
+    var checked = Array.prototype.filter.call(
+      document.querySelectorAll('#itemRows .item-check'),
+      function (cb) { return cb.checked; }
+    );
+    if (!checked.length) return;
+    var ids = checked.map(function (cb) { return cb.value; });
+    var ok = await Utils.confirmDanger(
+      'Xóa vĩnh viễn ' + ids.length + ' dòng vật tư',
+      'Thao tác này xóa vĩnh viễn ' + ids.length + ' dòng và toàn bộ dữ liệu liên quan (báo giá, trao đổi kỹ thuật, quyết định giá, hợp đồng). Không thể hoàn tác.',
+      'Xóa vĩnh viễn'
+    );
+    if (!ok) return;
+    try {
+      var result = await API.call('hardDeleteRfqItems', { rfqItemIds: ids });
+      API.toast('Đã xóa ' + (result.deleted || ids.length) + ' dòng', 'success');
+      load(true);
+    } catch (err) { API.error(err); }
+  }
+
+  async function deleteAll() {
+    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
+    if (!rfqId) { API.toast('Lọc theo RFQ ID trước khi xóa toàn bộ', 'warn'); return; }
+    var ok = await Utils.confirmTyping(
+      'Xóa toàn bộ dòng vật tư của ' + rfqId,
+      'Nhập mã RFQ để xác nhận. Thao tác này xóa vĩnh viễn TẤT CẢ dòng vật tư và dữ liệu liên quan của gói này. Không thể hoàn tác.',
+      rfqId
+    );
+    if (!ok) return;
+    try {
+      var result = await API.call('hardDeleteAllRfqItems', { rfqId: rfqId });
+      API.toast('Đã xóa ' + (result.deleted || 0) + ' dòng', 'success');
+      load(true);
+    } catch (err) { API.error(err); }
+  }
+
   async function archiveQuote(rfqItemId, quoteId) {
     try {
       await API.call('archiveSupplierQuote', { quoteId: quoteId });
@@ -1566,7 +1630,7 @@
     'Tên vật tư / Danh mục hàng hóa', 'Ký mã hiệu / Model', 'Nhãn hiệu',
     'Năm sản xuất', 'Xuất xứ', 'Hãng sản xuất', 'Quy cách / thông số kỹ thuật',
     'Vật liệu', 'Phụ tùng chuyên dụng', 'Yêu cầu kỹ thuật bổ sung',
-    'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền',
+    'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền', 'Giá hợp đồng',
     'Thời gian giao hàng', 'Ghi chú',
   ];
 
@@ -1591,6 +1655,7 @@
     'Thuế suất': 'thueSuat',
     'Đơn giá': 'donGiaTruocThue',
     'Thành tiền': 'thanhTienSauThue',
+    'Giá hợp đồng': 'giaHopDong',
     'Thời gian giao hàng': 'deliveryTime',
     'Ghi chú': 'note',
     'Cột tổng hợp gốc để đối chiếu/export': 'originFullText',
@@ -1605,17 +1670,26 @@
     ['rfq_item_id', 'rfq_item_id (update)'],
     ['ten_vat_tu', 'Tên vật tư *'],
     ['stt_goc', 'STT'],
+    ['ma_mua_sam', 'Mã mua sắm'],
     ['ma_vat_tu', 'Mã vật tư'],
-    ['required_model', 'Quy cách / Model'],
-    ['manufacturer', 'HSX / Hãng sản xuất'],
+    ['required_model', 'Ký mã hiệu / Model'],
+    ['manufacturer', 'Hãng sản xuất'],
     ['brand', 'Nhãn hiệu'],
+    ['manufacture_year', 'Năm sản xuất'],
     ['origin_country', 'Xuất xứ'],
-    ['unit', 'Đơn vị'],
-    ['quantity', 'Số lượng'],
+    ['technical_params', 'Thông số kỹ thuật'],
+    ['vat_lieu', 'Vật liệu'],
+    ['phu_tung_chuyen_dung', 'Phụ tùng chuyên dụng'],
+    ['unit', 'Đơn vị tính'],
+    ['quantity', 'Khối lượng'],
     ['yeu_cau_ky_thuat_bo_sung', 'Yêu cầu kỹ thuật bổ sung'],
-    ['don_gia_sau_thue', 'Đơn giá'],
+    ['thue_suat', 'Thuế suất'],
+    ['don_gia_truoc_thue', 'Đơn giá (trước thuế)'],
+    ['don_gia_sau_thue', 'Đơn giá (sau thuế)'],
     ['thanh_tien_sau_thue', 'Thành tiền'],
-    ['delivery_time', 'Thời gian cấp / deadline'],
+    ['gia_hop_dong', 'Giá hợp đồng'],
+    ['note', 'Ghi chú'],
+    ['delivery_time', 'Thời gian giao hàng'],
     ['origin_full_text', 'Cột tổng hợp gốc'],
   ];
 
@@ -1638,6 +1712,7 @@
       r.thue_suat,
       r.don_gia_truoc_thue || r.don_gia_sau_thue,
       r.thanh_tien_sau_thue,
+      r.gia_hop_dong,
       r.delivery_time,
       r.note,
       r.rfq_item_id,
@@ -1766,9 +1841,7 @@
       + '</div>'
       + '<div id="importMapArea" style="color:var(--text-muted);font-size:13px">Chọn file CSV hoặc XLSX để xem preview và map cột.</div>'
       + '</div>';
-    Utils.openModal('Import CSV/XLSX nâng cao', html, async function () {
-      await commitImportMapping();
-    });
+    Utils.openModal('Import CSV/XLSX nâng cao', html, null);
   }
 
   function _onImportMapFileChange(input) {
@@ -1942,18 +2015,26 @@
     var h = normalizeHeader(header);
     if (h === 'rfqitemid' || h === 'rfq_item_id') return 'rfq_item_id';
     if (h === 'stt' || h === 'sttgoc') return 'stt_goc';
+    if (h.indexOf('mamuasam') >= 0) return 'ma_mua_sam';
     if (h.indexOf('mavattu') >= 0 || h.indexOf('mahang') >= 0) return 'ma_vat_tu';
     if (h.indexOf('tenvattu') >= 0 || h.indexOf('danhmuchanghoa') >= 0 || h === 'tenhang') return 'ten_vat_tu';
     if (h.indexOf('quycach') >= 0 || h.indexOf('model') >= 0 || h.indexOf('kymahieu') >= 0) return 'required_model';
     if (h === 'hsx' || h.indexOf('hangsanxuat') >= 0) return 'manufacturer';
     if (h.indexOf('nhanhieu') >= 0) return 'brand';
+    if (h.indexOf('namsanxuat') >= 0 || h.indexOf('namsxuat') >= 0) return 'manufacture_year';
     if (h.indexOf('xuatxu') >= 0) return 'origin_country';
+    if (h.indexOf('thongso') >= 0 && h.indexOf('kythuat') >= 0) return 'technical_params';
+    if (h.indexOf('vatlieu') >= 0) return 'vat_lieu';
+    if (h.indexOf('phutung') >= 0) return 'phu_tung_chuyen_dung';
     if (h.indexOf('donvi') >= 0 || h === 'dvt') return 'unit';
     if (h.indexOf('soluong') >= 0 || h.indexOf('khoiluong') >= 0) return 'quantity';
     if (h.indexOf('yeucaukythuat') >= 0) return 'yeu_cau_ky_thuat_bo_sung';
-    if (h.indexOf('dongia') >= 0) return 'don_gia_sau_thue';
+    if (h.indexOf('thuesuat') >= 0) return 'thue_suat';
+    if (h.indexOf('giahopdong') >= 0 || h.indexOf('giahd') >= 0) return 'gia_hop_dong';
+    if (h.indexOf('dongia') >= 0) return 'don_gia_truoc_thue';
     if (h.indexOf('thanhtien') >= 0) return 'thanh_tien_sau_thue';
     if (h.indexOf('deadline') >= 0 || h.indexOf('thoigiancap') >= 0 || h.indexOf('giaohang') >= 0) return 'delivery_time';
+    if (h.indexOf('ghichu') >= 0) return 'note';
     return '';
   }
 
@@ -2241,6 +2322,10 @@
     openContractFromRfqItemModal: openContractFromRfqItemModal,
     openRevisionHistory: openRevisionHistory,
     archiveRfqItem: archiveRfqItem,
+    toggleSelectAll: toggleSelectAll,
+    onCheckChange: onCheckChange,
+    deleteSelected: deleteSelected,
+    deleteAll: deleteAll,
     quickEditBadge: quickEditBadge,
     _togglePicker: togglePicker,
     _pickOption: pickOption,

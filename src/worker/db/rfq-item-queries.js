@@ -35,7 +35,14 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, cursor, sortBy, so
   }
   if (cursor) {
     const c = parseCursor(cursor);
-    if (!sort || c.sortVal === undefined) {
+    if (!sort) {
+      if (c.sortVal === undefined) {
+        where.push(`i.rfq_item_id > ?`); binds.push(c.pk);
+      } else {
+        where.push(`(COALESCE(i.source_row_number, 0) > ? OR (COALESCE(i.source_row_number, 0) = ? AND i.rfq_item_id > ?))`);
+        binds.push(Number(c.sortVal), Number(c.sortVal), c.pk);
+      }
+    } else if (c.sortVal === undefined) {
       where.push(`i.rfq_item_id ${op} ?`); binds.push(c.pk);
     } else {
       const wrap = `COALESCE(${sort.col}, '')`;
@@ -45,8 +52,9 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, cursor, sortBy, so
   }
 
   // innerOrderBy uses table alias `i.` (valid inside CTE); outerOrderBy strips it (CTE exposes bare column names)
-  const innerOrderBy = sort ? `${sort.col} ${dir}, i.rfq_item_id ${dir}` : `i.rfq_item_id ${dir}`;
-  const outerOrderBy = sort ? `${sort.col.replace(/^\w+\./, '')} ${dir}, rfq_item_id ${dir}` : `rfq_item_id ${dir}`;
+  // Default (no sort): order by source import row so items appear in spreadsheet order
+  const innerOrderBy = sort ? `${sort.col} ${dir}, i.rfq_item_id ${dir}` : `COALESCE(i.source_row_number, 0) ASC, i.rfq_item_id ASC`;
+  const outerOrderBy = sort ? `${sort.col.replace(/^\w+\./, '')} ${dir}, rfq_item_id ${dir}` : `COALESCE(source_row_number, 0) ASC, rfq_item_id ASC`;
   const res = await db.prepare(
     `WITH page AS (
        SELECT i.*, r.ten_goi, r.ma_goi_tbmt
@@ -65,7 +73,11 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, cursor, sortBy, so
   let nextCursor = null;
   if (rows.length > limit && page.length > 0) {
     const last = page[page.length - 1];
-    nextCursor = sort ? String(last[sort.rowKey] ?? '') + '|||' + last.rfq_item_id : String(last.rfq_item_id);
+    if (sort) {
+      nextCursor = String(last[sort.rowKey] ?? '') + '|||' + last.rfq_item_id;
+    } else {
+      nextCursor = String(last.source_row_number ?? 0) + '|||' + last.rfq_item_id;
+    }
   }
   return { rows: page, hasMore: rows.length > limit, nextCursor };
 }
@@ -87,17 +99,17 @@ export async function insertRfqItemSQL(db, row) {
       origin_full_text, delivery_time, note,
       quy_cach_model_yeu_cau, hang_goc_nsx_goc, hang_bao_gia_nsx_bao_gia, nhan_hieu, xuat_xu, nam_san_xuat,
       vat_lieu, phu_tung_chuyen_dung, thong_so_ky_thuat, yeu_cau_ky_thuat_bo_sung, so_luong, don_vi,
-      thue_suat, don_gia_truoc_thue, don_gia_sau_thue, thanh_tien_sau_thue, nguon_gia,
+      thue_suat, don_gia_truoc_thue, don_gia_sau_thue, thanh_tien_sau_thue, gia_hop_dong, nguon_gia,
       trang_thai_dong, trang_thai_ky_thuat, quy_cach_final, hang_final, xuat_xu_final, ghi_chu_final,
       item_id, normalized_search, raw_row_json, source_file_id, source_sheet_name, source_row_number, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     row.rfq_item_id, row.rfq_id, row.stt_goc, row.id_import_goc, row.ma_mua_sam, row.ma_vat_tu, row.ten_vat_tu,
     row.required_model, row.brand, row.manufacture_year, row.origin_country, row.manufacturer, row.technical_params, row.unit, row.quantity,
     row.origin_full_text, row.delivery_time, row.note,
     row.quy_cach_model_yeu_cau, row.hang_goc_nsx_goc, row.hang_bao_gia_nsx_bao_gia, row.nhan_hieu, row.xuat_xu, row.nam_san_xuat,
     row.vat_lieu, row.phu_tung_chuyen_dung, row.thong_so_ky_thuat, row.yeu_cau_ky_thuat_bo_sung, row.so_luong, row.don_vi,
-    row.thue_suat, row.don_gia_truoc_thue, row.don_gia_sau_thue, row.thanh_tien_sau_thue, row.nguon_gia,
+    row.thue_suat, row.don_gia_truoc_thue, row.don_gia_sau_thue, row.thanh_tien_sau_thue, row.gia_hop_dong || 0, row.nguon_gia,
     row.trang_thai_dong, row.trang_thai_ky_thuat, row.quy_cach_final, row.hang_final, row.xuat_xu_final, row.ghi_chu_final,
     row.item_id, row.normalized_search, row.raw_row_json, row.source_file_id, row.source_sheet_name, row.source_row_number, row.created_at, row.updated_at
   ).run();
@@ -111,7 +123,7 @@ export async function updateRfqItemSQL(db, row) {
       origin_full_text = ?, delivery_time = ?, note = ?,
       quy_cach_model_yeu_cau = ?, hang_goc_nsx_goc = ?, hang_bao_gia_nsx_bao_gia = ?, nhan_hieu = ?, xuat_xu = ?, nam_san_xuat = ?,
       vat_lieu = ?, phu_tung_chuyen_dung = ?, thong_so_ky_thuat = ?, yeu_cau_ky_thuat_bo_sung = ?, so_luong = ?, don_vi = ?,
-      thue_suat = ?, don_gia_truoc_thue = ?, don_gia_sau_thue = ?, thanh_tien_sau_thue = ?, nguon_gia = ?,
+      thue_suat = ?, don_gia_truoc_thue = ?, don_gia_sau_thue = ?, thanh_tien_sau_thue = ?, gia_hop_dong = ?, nguon_gia = ?,
       trang_thai_dong = ?, trang_thai_ky_thuat = ?, quy_cach_final = ?, hang_final = ?, xuat_xu_final = ?, ghi_chu_final = ?,
       item_id = ?, normalized_search = ?, raw_row_json = ?, source_file_id = ?, source_sheet_name = ?, source_row_number = ?, updated_at = ?
      WHERE rfq_item_id = ?`
@@ -121,7 +133,7 @@ export async function updateRfqItemSQL(db, row) {
     row.origin_full_text, row.delivery_time, row.note,
     row.quy_cach_model_yeu_cau, row.hang_goc_nsx_goc, row.hang_bao_gia_nsx_bao_gia, row.nhan_hieu, row.xuat_xu, row.nam_san_xuat,
     row.vat_lieu, row.phu_tung_chuyen_dung, row.thong_so_ky_thuat, row.yeu_cau_ky_thuat_bo_sung, row.so_luong, row.don_vi,
-    row.thue_suat, row.don_gia_truoc_thue, row.don_gia_sau_thue, row.thanh_tien_sau_thue, row.nguon_gia,
+    row.thue_suat, row.don_gia_truoc_thue, row.don_gia_sau_thue, row.thanh_tien_sau_thue, row.gia_hop_dong || 0, row.nguon_gia,
     row.trang_thai_dong, row.trang_thai_ky_thuat, row.quy_cach_final, row.hang_final, row.xuat_xu_final, row.ghi_chu_final,
     row.item_id, row.normalized_search, row.raw_row_json, row.source_file_id, row.source_sheet_name, row.source_row_number, row.updated_at,
     row.rfq_item_id

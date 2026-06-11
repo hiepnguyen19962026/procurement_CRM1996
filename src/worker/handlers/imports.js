@@ -21,30 +21,45 @@ const TARGET_FIELDS = new Set([
   'rfq_item_id',
   'ten_vat_tu',
   'stt_goc',
+  'ma_mua_sam',
   'ma_vat_tu',
   'required_model',
   'manufacturer',
   'brand',
+  'manufacture_year',
   'origin_country',
+  'technical_params',
   'unit',
   'quantity',
+  'vat_lieu',
+  'phu_tung_chuyen_dung',
   'yeu_cau_ky_thuat_bo_sung',
+  'thue_suat',
+  'don_gia_truoc_thue',
   'don_gia_sau_thue',
   'thanh_tien_sau_thue',
+  'gia_hop_dong',
+  'note',
   'delivery_time',
   'origin_full_text',
 ]);
 
 const TEXT_FIELDS = [
   'stt_goc',
+  'ma_mua_sam',
   'ma_vat_tu',
   'ten_vat_tu',
   'required_model',
   'manufacturer',
   'brand',
+  'manufacture_year',
   'origin_country',
+  'technical_params',
   'unit',
+  'vat_lieu',
+  'phu_tung_chuyen_dung',
   'yeu_cau_ky_thuat_bo_sung',
+  'note',
   'delivery_time',
   'origin_full_text',
 ];
@@ -254,11 +269,12 @@ function normalizeMapping(value) {
 function sanitizeMapped(mapped) {
   const source = objectOnly(mapped);
   const out = {};
+  const LONG_TEXT = new Set(['origin_full_text', 'yeu_cau_ky_thuat_bo_sung', 'technical_params', 'note', 'ten_vat_tu']);
   for (const field of TARGET_FIELDS) {
     if (source[field] === undefined || source[field] === null) continue;
-    if (field === 'quantity') out[field] = numberOrEmpty(source[field]);
-    else if (field === 'don_gia_sau_thue' || field === 'thanh_tien_sau_thue') out[field] = moneyOrEmpty(source[field]);
-    else out[field] = cleanString(source[field], field === 'origin_full_text' || field === 'yeu_cau_ky_thuat_bo_sung' ? 1500 : 500);
+    if (field === 'quantity' || field === 'thue_suat') out[field] = numberOrEmpty(source[field]);
+    else if (['don_gia_sau_thue', 'don_gia_truoc_thue', 'thanh_tien_sau_thue', 'gia_hop_dong'].includes(field)) out[field] = moneyOrEmpty(source[field]);
+    else out[field] = cleanString(source[field], LONG_TEXT.has(field) ? 1500 : 500);
   }
   return out;
 }
@@ -289,6 +305,8 @@ async function buildImportItemRow(db, { rfqId, mapped, oldRow, rawRow, sourceRow
   row.raw_row_json = JSON.stringify(rawRow);
 
   setText(row, mapped, 'stt_goc', 'stt_goc');
+  if (!row.stt_goc) row.stt_goc = String(sourceRowNumber - 1);
+  setText(row, mapped, 'ma_mua_sam', 'ma_mua_sam');
   setText(row, mapped, 'ma_vat_tu', 'ma_vat_tu');
   setText(row, mapped, 'ten_vat_tu', 'ten_vat_tu');
   setText(row, mapped, 'required_model', 'required_model');
@@ -296,17 +314,26 @@ async function buildImportItemRow(db, { rfqId, mapped, oldRow, rawRow, sourceRow
   setText(row, mapped, 'brand', 'brand');
   setText(row, mapped, 'origin_country', 'origin_country');
   setText(row, mapped, 'unit', 'unit');
+  setText(row, mapped, 'manufacture_year', 'manufacture_year');
+  setText(row, mapped, 'technical_params', 'technical_params');
+  setText(row, mapped, 'vat_lieu', 'vat_lieu');
+  setText(row, mapped, 'phu_tung_chuyen_dung', 'phu_tung_chuyen_dung');
   setText(row, mapped, 'yeu_cau_ky_thuat_bo_sung', 'yeu_cau_ky_thuat_bo_sung');
+  setText(row, mapped, 'note', 'note');
   setText(row, mapped, 'delivery_time', 'delivery_time');
   setText(row, mapped, 'origin_full_text', 'origin_full_text');
   setNumber(row, mapped, 'quantity', 'quantity');
+  setNumber(row, mapped, 'thue_suat', 'thue_suat');
+  setMoney(row, mapped, 'don_gia_truoc_thue', 'don_gia_truoc_thue');
   setMoney(row, mapped, 'don_gia_sau_thue', 'don_gia_sau_thue');
   setMoney(row, mapped, 'thanh_tien_sau_thue', 'thanh_tien_sau_thue');
+  setMoney(row, mapped, 'gia_hop_dong', 'gia_hop_dong');
 
   row.quy_cach_model_yeu_cau = row.required_model;
   row.hang_goc_nsx_goc = row.manufacturer;
   row.nhan_hieu = row.brand;
   row.xuat_xu = row.origin_country;
+  row.nam_san_xuat = row.manufacture_year;
   row.thong_so_ky_thuat = row.technical_params || '';
   row.so_luong = row.quantity || 0;
   row.don_vi = row.unit;
@@ -354,6 +381,7 @@ function emptyItemRow() {
     don_gia_truoc_thue: 0,
     don_gia_sau_thue: 0,
     thanh_tien_sau_thue: 0,
+    gia_hop_dong: 0,
     nguon_gia: '',
     trang_thai_dong: 'chua_xu_ly',
     trang_thai_ky_thuat: 'khong_can_xac_nhan',

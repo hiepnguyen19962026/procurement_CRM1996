@@ -11,6 +11,8 @@ export async function handleRfqItems(action, request, env, ctx, actor) {
   if (action === 'createRfqItem') return saveItem(request, env, ctx, actor, false);
   if (action === 'updateRfqItem') return saveItem(request, env, ctx, actor, true);
   if (action === 'archiveRfqItem') return archiveItem(request, env, ctx, actor);
+  if (action === 'hardDeleteRfqItems') return hardDelete(request, env, ctx, actor);
+  if (action === 'hardDeleteAllRfqItems') return hardDeleteAll(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown RFQ item action' }, 400);
 }
 
@@ -131,6 +133,7 @@ function normalizeItemRow(body, base) {
     don_gia_truoc_thue: cleanMoney(body.donGiaTruocThue ?? body.don_gia_truoc_thue),
     don_gia_sau_thue: cleanMoney(body.donGiaSauThue ?? body.don_gia_sau_thue),
     thanh_tien_sau_thue: cleanMoney(body.thanhTienSauThue ?? body.thanh_tien_sau_thue),
+    gia_hop_dong: cleanMoney(body.giaHopDong ?? body.gia_hop_dong),
     nguon_gia: v(body, 'nguonGia', 'nguon_gia', 120),
     trang_thai_dong: v(body, 'trangThaiDong', 'trang_thai_dong', 80) || 'chua_xu_ly',
     trang_thai_ky_thuat: v(body, 'trangThaiKyThuat', 'trang_thai_ky_thuat', 80) || 'khong_can_xac_nhan',
@@ -150,4 +153,51 @@ function normalizeItemRow(body, base) {
     row.technical_params, row.vat_lieu, row.yeu_cau_ky_thuat_bo_sung,
   ]);
   return row;
+}
+
+async function hardDelete(request, env, ctx, actor) {
+  const denied = requireRole(actor, MANAGE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const ids = (body.rfqItemIds || body.rfq_item_ids || []).map(s => cleanString(s, 80)).filter(Boolean);
+  if (!ids.length) return json({ ok: false, error: 'Khong co dong nao duoc chon' }, 400);
+  if (ids.length > 500) return json({ ok: false, error: 'Toi da 500 dong moi lan xoa' }, 400);
+  const ph = ids.map(() => '?').join(',');
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM technical_clarifications WHERE rfq_item_id IN (${ph})`).bind(...ids),
+    env.DB.prepare(`DELETE FROM supplier_quotes WHERE rfq_item_id IN (${ph})`).bind(...ids),
+    env.DB.prepare(`DELETE FROM pricing_decisions WHERE rfq_item_id IN (${ph})`).bind(...ids),
+    env.DB.prepare(`DELETE FROM contract_items WHERE rfq_item_id IN (${ph})`).bind(...ids),
+    env.DB.prepare(`DELETE FROM rfq_item_revisions WHERE rfq_item_id IN (${ph})`).bind(...ids),
+    env.DB.prepare(`UPDATE import_job_rows SET rfq_item_id = NULL WHERE rfq_item_id IN (${ph})`).bind(...ids),
+    env.DB.prepare(`DELETE FROM rfq_items WHERE rfq_item_id IN (${ph})`).bind(...ids),
+  ]);
+  ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
+  ctx.waitUntil(writeActionLog(env, { action: 'hardDeleteRfqItems', entityType: 'rfq_item', entityId: ids.join(','), actor }));
+  return json({ ok: true, deleted: ids.length });
+}
+
+async function hardDeleteAll(request, env, ctx, actor) {
+  const denied = requireRole(actor, MANAGE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const rfqId = cleanString(body.rfqId || body.rfq_id, 80);
+  if (!rfqId) return json({ ok: false, error: 'Thieu rfqId' }, 400);
+  const rfq = await getRfqSQL(env.DB, rfqId);
+  if (!rfq) return json({ ok: false, error: 'RFQ khong ton tai' }, 404);
+  const countRow = await env.DB.prepare('SELECT COUNT(*) AS n FROM rfq_items WHERE rfq_id = ?').bind(rfqId).first();
+  const totalCount = countRow?.n || 0;
+  if (!totalCount) return json({ ok: true, deleted: 0 });
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM technical_clarifications WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+    env.DB.prepare(`DELETE FROM supplier_quotes WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+    env.DB.prepare(`DELETE FROM pricing_decisions WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+    env.DB.prepare(`DELETE FROM contract_items WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+    env.DB.prepare(`DELETE FROM rfq_item_revisions WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+    env.DB.prepare(`UPDATE import_job_rows SET rfq_item_id = NULL WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+    env.DB.prepare(`DELETE FROM rfq_items WHERE rfq_id = ?`).bind(rfqId),
+  ]);
+  ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
+  ctx.waitUntil(writeActionLog(env, { action: 'hardDeleteAllRfqItems', entityType: 'rfq', entityId: rfqId, actor }));
+  return json({ ok: true, deleted: totalCount });
 }
