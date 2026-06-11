@@ -98,14 +98,14 @@
     var el = document.getElementById('taskSummaryCards');
     if (!el || !summary) return;
     el.innerHTML = [
-      { label: 'Đang làm',       count: summary.dang_lam,     style: 'border-left:3px solid #1d4ed8' },
-      { label: 'Chờ phản hồi',   count: summary.cho_phan_hoi, style: 'border-left:3px solid #d97706' },
-      { label: 'Sắp đến hạn',    count: summary.sap_den_han,  style: 'border-left:3px solid #ea7600' },
-      { label: 'Quá hạn',        count: summary.qua_han,      style: 'border-left:3px solid #dc2626' },
+      { label: 'Đang làm',     count: summary.dang_lam,     color: '#1d4ed8' },
+      { label: 'Chờ phản hồi', count: summary.cho_phan_hoi, color: '#d97706' },
+      { label: 'Sắp đến hạn',  count: summary.sap_den_han,  color: '#ea7600' },
+      { label: 'Quá hạn',      count: summary.qua_han,      color: '#dc2626' },
     ].map(function (c) {
-      return '<div class="metric-card" style="' + c.style + ';padding:12px 16px;min-width:110px">'
-        + '<div style="font-size:22px;font-weight:700;line-height:1">' + (c.count || 0) + '</div>'
-        + '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">' + c.label + '</div>'
+      return '<div class="task-stat-chip" style="border-left-color:' + c.color + '">'
+        + '<div class="tsc-val">' + (c.count || 0) + '</div>'
+        + '<div class="tsc-lbl">' + c.label + '</div>'
         + '</div>';
     }).join('');
   }
@@ -130,63 +130,104 @@
     } catch (err) { API.error(err); }
   }
 
+  var CARD_BORDER = { khan: '#dc2626', cao: '#ea7600', trung_binh: '#9ca3af', thap: '#15803d' };
+
   function render() {
     syncSort();
     var canWrite = Utils.roleCanWrite();
     var canDelete = AppState.get('user') && ['admin','manager'].indexOf(AppState.get('user').role) >= 0;
-    var offset = (state.rows || []).length - (state.rows || []).length; // always 0 for STT
-    document.getElementById('taskRows').innerHTML = (state.rows || []).map(function (r, i) {
-      var esc = API.esc;
-      // status quick select
+    var rows = state.rows || [];
+    var esc = API.esc;
+
+    // toggle empty state
+    var emptyEl = document.getElementById('taskEmpty');
+    if (emptyEl) emptyEl.classList.toggle('hidden', rows.length > 0);
+
+    // ── desktop table ──────────────────────────────────────────────────────
+    document.getElementById('taskRows').innerHTML = rows.map(function (r) {
       var statusSel = canWrite
         ? '<select style="font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid #d1d5db;cursor:pointer;'
           + (STATUS_STYLE[r.status] || '') + '"'
           + ' onchange="TasksModule.quickStatus(\'' + esc(r.task_id) + '\',this.value,this)">'
-          + STATUS_LIST.map(function (s) {
-              return '<option value="' + s[0] + '"' + (r.status === s[0] ? ' selected' : '') + '>' + s[1] + '</option>';
-            }).join('')
+          + STATUS_LIST.map(function (s) { return '<option value="' + s[0] + '"' + (r.status === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('')
           + '</select>'
         : '<span class="badge" style="' + (STATUS_STYLE[r.status]||'') + '">' + esc(statusLabel(r.status)) + '</span>';
-      // priority quick select
+
       var priSel = canWrite
         ? '<select style="font-size:11px;padding:2px 4px;border-radius:4px;border:1px solid #d1d5db;cursor:pointer;'
           + (PRIORITY_STYLE[r.priority] || '') + '"'
           + ' onchange="TasksModule.quickPriority(\'' + esc(r.task_id) + '\',this.value,this)">'
-          + PRIORITY_LIST.map(function (p) {
-              return '<option value="' + p[0] + '"' + (r.priority === p[0] ? ' selected' : '') + '>' + p[1] + '</option>';
-            }).join('')
+          + PRIORITY_LIST.map(function (p) { return '<option value="' + p[0] + '"' + (r.priority === p[0] ? ' selected' : '') + '>' + p[1] + '</option>'; }).join('')
           + '</select>'
         : '<span class="badge" style="' + (PRIORITY_STYLE[r.priority]||'') + '">' + esc(priorityLabel(r.priority)) + '</span>';
 
-      var activityDate = formatDate(r.last_activity_at || r.updated_at);
-      var followupCell = r.next_followup_date
-        ? '<span style="font-size:12px">' + esc(r.next_followup_date) + '</span>'
-        : '<span style="color:var(--text-faint)">—</span>';
-
-      var editBtn = canWrite
-        ? '<button type="button" class="btn-link" onclick="TasksModule.openEdit(\'' + esc(r.task_id) + '\')" style="margin-right:4px">Sửa</button>'
-        : '';
-      var delBtn = canDelete
-        ? '<button type="button" class="btn-x-archive" title="Xóa task" onclick="TasksModule.deleteTask(\'' + esc(r.task_id) + '\')">✕</button>'
-        : '';
+      var prog = Number(r.progress_percent || 0);
+      var preview = (r.latest_note || r.description || '').replace(/\n/g, ' ').slice(0, 80);
 
       return '<tr>'
-        + '<td style="text-align:center;color:var(--text-muted)">' + (i + 1) + '</td>'
-        + '<td>' + esc(r.company_name || '') + '</td>'
-        + '<td><span class="link-edit" onclick="TasksModule.openEdit(\'' + esc(r.task_id) + '\')">'
-          + esc(r.title) + '</span>'
-          + (r.progress_percent > 0 ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">' + esc(String(r.progress_percent)) + '%</div>' : '')
+        + '<td style="min-width:180px;max-width:300px">'
+          + '<div><span class="link-edit" onclick="TasksModule.openEdit(\'' + esc(r.task_id) + '\')" style="font-weight:600">' + esc(r.title) + '</span></div>'
+          + (preview ? '<div style="font-size:11px;color:var(--text-muted);overflow:hidden;white-space:nowrap;text-overflow:ellipsis;max-width:280px;margin-top:2px">' + esc(preview) + '</div>' : '')
           + '</td>'
-        + '<td style="color:var(--text-muted);font-size:12px">' + esc(r.start_date || '') + '</td>'
-        + '<td>' + deadlineCell(r.deadline_date) + '</td>'
-        + '<td>' + remainCell(r.deadline_date) + '</td>'
-        + '<td>' + followupCell + '</td>'
-        + '<td>' + statusSel + '</td>'
+        + '<td style="max-width:160px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">' + esc(r.company_name || '') + '</td>'
         + '<td>' + priSel + '</td>'
-        + '<td style="font-size:11px;color:var(--text-muted)">' + esc(activityDate) + '</td>'
-        + '<td style="white-space:nowrap">' + editBtn + delBtn + '</td>'
+        + '<td>' + statusSel + '</td>'
+        + '<td>'
+          + '<div style="font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:3px">' + prog + '%</div>'
+          + '<div style="height:4px;background:#e5e7eb;border-radius:2px;min-width:56px"><div style="height:4px;background:#1d4ed8;border-radius:2px;width:' + prog + '%"></div></div>'
+          + '</td>'
+        + '<td>'
+          + (r.deadline_date ? remainCell(r.deadline_date) : '<span style="color:var(--text-faint)">—</span>')
+          + (r.next_followup_date ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">↻ ' + esc(r.next_followup_date) + '</div>' : '')
+          + '</td>'
+        + '<td style="font-size:11px;color:var(--text-muted);white-space:nowrap">' + esc(formatDate(r.last_activity_at || r.updated_at)) + '</td>'
+        + '<td style="white-space:nowrap">'
+          + (canWrite ? '<button type="button" class="btn-link" onclick="TasksModule.openEdit(\'' + esc(r.task_id) + '\')" style="font-size:12px;padding:2px 6px;margin-right:2px">Sửa</button>' : '')
+          + (canDelete ? '<button type="button" class="btn-x-archive" title="Xóa" onclick="TasksModule.deleteTask(\'' + esc(r.task_id) + '\')">✕</button>' : '')
+          + '</td>'
         + '</tr>';
     }).join('');
+
+    // ── mobile cards ───────────────────────────────────────────────────────
+    document.getElementById('taskCards').innerHTML = rows.map(function (r) {
+      var borderColor = CARD_BORDER[r.priority] || '#9ca3af';
+      var prog = Number(r.progress_percent || 0);
+      var preview = (r.latest_note || r.description || '').replace(/\n/g, ' ').trim().slice(0, 120);
+
+      var mobileStatus = canWrite
+        ? '<select style="' + (STATUS_STYLE[r.status] || '') + ';font-size:13px;padding:6px 8px;border-radius:6px;cursor:pointer;min-height:36px;flex-shrink:0"'
+          + ' onchange="TasksModule.quickStatus(\'' + esc(r.task_id) + '\',this.value,this)">'
+          + STATUS_LIST.map(function (s) { return '<option value="' + s[0] + '"' + (r.status === s[0] ? ' selected' : '') + '>' + s[1] + '</option>'; }).join('')
+          + '</select>'
+        : '<span class="badge" style="' + (STATUS_STYLE[r.status] || '') + '">' + esc(statusLabel(r.status)) + '</span>';
+
+      return '<div class="task-card" style="border-left:3px solid ' + borderColor + '">'
+        + '<div class="task-card-head">'
+          + '<div class="task-card-title" onclick="TasksModule.openEdit(\'' + esc(r.task_id) + '\')">' + esc(r.title) + '</div>'
+          + '<span class="badge" style="' + (PRIORITY_STYLE[r.priority] || '') + ';flex-shrink:0;white-space:nowrap">' + esc(priorityLabel(r.priority)) + '</span>'
+          + '</div>'
+        + (r.company_name ? '<div class="task-card-meta">' + esc(r.company_name) + '</div>' : '')
+        + (preview ? '<div class="task-card-preview">' + esc(preview) + '</div>' : '')
+        + ((r.deadline_date || r.next_followup_date)
+          ? '<div class="task-card-dates">'
+              + (r.deadline_date ? remainCell(r.deadline_date) : '')
+              + (r.next_followup_date ? '<span style="color:var(--text-muted)">↻ ' + esc(r.next_followup_date) + '</span>' : '')
+              + '</div>'
+          : '')
+        + (prog > 0
+          ? '<div class="task-card-prog">'
+              + '<span style="font-size:11px;color:var(--text-muted);min-width:28px">' + prog + '%</span>'
+              + '<div class="task-card-prog-bar"><div class="task-card-prog-fill" style="width:' + prog + '%"></div></div>'
+              + '</div>'
+          : '')
+        + '<div class="task-card-footer">'
+          + mobileStatus
+          + (canWrite ? '<button type="button" class="task-card-btn" onclick="TasksModule.openEdit(\'' + esc(r.task_id) + '\')">Sửa</button>' : '')
+          + (canDelete ? '<button type="button" class="task-card-del" onclick="TasksModule.deleteTask(\'' + esc(r.task_id) + '\')">✕</button>' : '')
+          + '</div>'
+        + '</div>';
+    }).join('');
+
     document.getElementById('taskMore').classList.toggle('hidden', !state.hasMore);
     Auth.applyRoleUI();
   }

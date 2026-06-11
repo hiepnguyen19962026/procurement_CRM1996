@@ -95,45 +95,50 @@
 
         <section class="screen" id="screen-tasks">
           <div class="panel">
-            <div class="metrics" id="taskSummaryCards" style="margin-bottom:12px"></div>
-            <div class="toolbar" style="flex-wrap:wrap;gap:6px">
-              <input id="taskSearch" placeholder="Tìm công ty, tên task..." style="flex:2;min-width:160px">
-              <select id="taskFilterStatus">
-                <option value="">Tất cả trạng thái</option>
-                <option value="dang_lam">Đang làm</option>
-                <option value="cho_phan_hoi">Chờ phản hồi</option>
-                <option value="tam_dung">Tạm dừng</option>
-                <option value="hoan_thanh">Hoàn thành</option>
-                <option value="huy_bo">Hủy bỏ</option>
-              </select>
-              <select id="taskFilterPriority">
-                <option value="">Tất cả ưu tiên</option>
-                <option value="khan">Khẩn</option>
-                <option value="cao">Cao</option>
-                <option value="trung_binh">Trung bình</option>
-                <option value="thap">Thấp</option>
-              </select>
-              <button onclick="TasksModule.load(true)">Tìm kiếm</button>
+            <div class="task-summary" id="taskSummaryCards"></div>
+            <div class="task-toolbar">
+              <input id="taskSearch" placeholder="Tìm công ty, tên task...">
+              <div class="task-fc">
+                <select id="taskFilterStatus">
+                  <option value="">Tất cả trạng thái</option>
+                  <option value="dang_lam">Đang làm</option>
+                  <option value="cho_phan_hoi">Chờ phản hồi</option>
+                  <option value="tam_dung">Tạm dừng</option>
+                  <option value="hoan_thanh">Hoàn thành</option>
+                  <option value="huy_bo">Hủy bỏ</option>
+                </select>
+                <select id="taskFilterPriority">
+                  <option value="">Tất cả ưu tiên</option>
+                  <option value="khan">Khẩn</option>
+                  <option value="cao">Cao</option>
+                  <option value="trung_binh">Trung bình</option>
+                  <option value="thap">Thấp</option>
+                </select>
+                <button onclick="TasksModule.load(true)">Tìm kiếm</button>
+              </div>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap task-table-wrap">
               <table>
                 <thead>
                   <tr>
-                    <th style="width:36px;text-align:center">STT</th>
+                    <th data-sort-key="title">Task</th>
                     <th data-sort-key="company_name">Công ty</th>
-                    <th data-sort-key="title">Tên Task</th>
-                    <th>Ngày bắt đầu</th>
-                    <th data-sort-key="deadline_date">Deadline</th>
-                    <th>Còn lại</th>
-                    <th data-sort-key="next_followup_date">Follow-up</th>
-                    <th data-sort-key="status">Trạng thái</th>
                     <th data-sort-key="priority">Ưu tiên</th>
+                    <th data-sort-key="status">Trạng thái</th>
+                    <th>Tiến độ</th>
+                    <th data-sort-key="deadline_date">Deadline / Follow-up</th>
                     <th data-sort-key="last_activity_at">Cập nhật cuối</th>
-                    <th style="width:80px"></th>
+                    <th style="width:72px">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody id="taskRows"></tbody>
               </table>
+            </div>
+            <div id="taskCards" class="task-card-list"></div>
+            <div id="taskEmpty" class="task-empty hidden">
+              <div style="font-size:32px;margin-bottom:10px">☑</div>
+              <div style="margin-bottom:14px">Chưa có task nào</div>
+              <button class="primary" data-write onclick="TasksModule.openCreate()">+ Thêm task</button>
             </div>
             <p><button id="taskMore" class="hidden" onclick="TasksModule.load(false)">Tải thêm</button></p>
           </div>
