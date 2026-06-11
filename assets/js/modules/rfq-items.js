@@ -49,7 +49,8 @@
       if (!th.getAttribute('data-label')) th.setAttribute('data-label', th.textContent.trim());
       var label = th.getAttribute('data-label');
       var active = sort.by === key;
-      th.textContent = label + (active ? (sort.dir === 'asc' ? ' ▲' : ' ▼') : ' ↕');
+      var arrow = active ? (sort.dir === 'asc' ? '▲' : '▼') : '↕';
+      th.innerHTML = '<span class="th-label">' + label + '</span><span class="sort-mark">' + arrow + '</span>';
       th.onclick = function () {
         if (sort.by === key) { sort.dir = sort.dir === 'asc' ? 'desc' : 'asc'; }
         else { sort.by = key; sort.dir = 'asc'; }
