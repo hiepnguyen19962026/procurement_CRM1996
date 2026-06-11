@@ -115,9 +115,9 @@
         + renderCell(val(r, 'unit', 'don_vi'), true)
         + renderCell(val(r, 'quantity', 'so_luong') || 0, false)
         + renderCell(r.thue_suat != null && r.thue_suat !== 0 ? r.thue_suat + '%' : '', true)
-        + renderCell(r.don_gia_truoc_thue || r.don_gia_sau_thue, true)
-        + renderCell(r.thanh_tien_sau_thue, true)
-        + renderCell(r.gia_hop_dong, true)
+        + renderCell(API.money(r.don_gia_truoc_thue || r.don_gia_sau_thue), true)
+        + renderCell(API.money(r.thanh_tien_sau_thue), true)
+        + renderCell(API.money(r.gia_hop_dong), true)
         + renderCell(r.delivery_time, true)
         + renderCell(r.note, true)
         + '<td>' + technicalSummary(r) + '</td>'

@@ -62,20 +62,30 @@
     var wrap = document.createElement('div');
     wrap.className = 'dp-wrap';
 
+    // Hidden field carries the canonical YYYY-MM-DD value for form submission
     var hidden = document.createElement('input');
     hidden.type = 'hidden';
     hidden.name = inp.name;
     hidden.value = initIso;
 
-    var trigger = document.createElement('button');
-    trigger.type = 'button';
-    trigger.className = 'dp-trigger' + (inp.required ? '' : '');
-    trigger.textContent = sel ? toDisplay(sel) : 'Chọn ngày...';
-    if (!sel) trigger.style.color = 'var(--text-muted)';
+    // Editable text input — user can type or click to open the calendar
+    var textInp = document.createElement('input');
+    textInp.type = 'text';
+    textInp.className = 'dp-trigger';
+    textInp.placeholder = inp.placeholder || 'DD/MM/YYYY';
+    textInp.autocomplete = 'off';
+    textInp.value = sel ? toDisplay(sel) : '';
+    if (inp.required) textInp.required = true;
 
     var cal = document.createElement('div');
     cal.className = 'dp-cal dp-hidden';
     cal.id = 'dp-' + (++_uid);
+
+    function setDate(iso) {
+      hidden.value = iso;
+      var d = parseIso(iso);
+      textInp.value = d ? toDisplay(d) : '';
+    }
 
     function renderCal() {
       cal.innerHTML = buildGrid(view.y, view.m, hidden.value);
@@ -91,11 +101,7 @@
       cal.querySelectorAll('.dp-day').forEach(function (btn) {
         btn.addEventListener('click', function (e) {
           e.stopPropagation();
-          var iso = btn.getAttribute('data-v');
-          hidden.value = iso;
-          var d = parseIso(iso);
-          trigger.textContent = toDisplay(d);
-          trigger.style.color = '';
+          setDate(btn.getAttribute('data-v'));
           closeCal();
         });
       });
@@ -103,15 +109,50 @@
 
     function openCal() {
       document.querySelectorAll('.dp-cal:not(.dp-hidden)').forEach(function (c) { c.classList.add('dp-hidden'); });
+      // Sync calendar view to currently selected date when opening
+      var cur = parseIso(hidden.value);
+      if (cur) { view.y = cur.getFullYear(); view.m = cur.getMonth(); }
       renderCal();
       cal.classList.remove('dp-hidden');
     }
 
     function closeCal() { cal.classList.add('dp-hidden'); }
 
-    trigger.addEventListener('click', function (e) {
-      e.stopPropagation();
-      cal.classList.contains('dp-hidden') ? openCal() : closeCal();
+    function parseTyped(raw) {
+      // Accept YYYY-MM-DD
+      var d = parseIso(raw.trim());
+      if (d) return d;
+      // Accept DD/MM/YYYY
+      var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(raw.trim());
+      if (m) {
+        d = new Date(+m[3], +m[2] - 1, +m[1]);
+        return (!isNaN(d.getTime())) ? d : null;
+      }
+      return null;
+    }
+
+    // Prevent blur when the user clicks inside the calendar (mousedown fires before blur)
+    cal.addEventListener('mousedown', function (e) { e.preventDefault(); });
+
+    // Open calendar when input receives focus
+    textInp.addEventListener('focus', function () { openCal(); });
+
+    // Parse whatever the user typed when focus leaves
+    textInp.addEventListener('blur', function () {
+      var raw = textInp.value.trim();
+      if (!raw) { hidden.value = ''; closeCal(); return; }
+      var d = parseTyped(raw);
+      if (d) {
+        var iso = toIso(d);
+        hidden.value = iso;
+        textInp.value = toDisplay(d);
+        view.y = d.getFullYear();
+        view.m = d.getMonth();
+      } else {
+        // Invalid input — restore the last valid value
+        textInp.value = hidden.value ? toDisplay(parseIso(hidden.value)) : '';
+      }
+      closeCal();
     });
 
     // capture-phase outside-click to close
@@ -121,7 +162,7 @@
 
     inp.parentNode.insertBefore(wrap, inp);
     wrap.appendChild(hidden);
-    wrap.appendChild(trigger);
+    wrap.appendChild(textInp);
     wrap.appendChild(cal);
     inp.remove();
   }
