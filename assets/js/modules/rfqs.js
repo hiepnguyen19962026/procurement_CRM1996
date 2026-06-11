@@ -244,9 +244,10 @@
 
   function buildClientHelper(c) {
     var parts = [];
-    if (c.plant_name) parts.push('Nhà máy/alias: ' + c.plant_name);
-    if (c.tax_code)   parts.push('MST: ' + c.tax_code);
-    if (c.province)   parts.push('Tỉnh: ' + c.province);
+    if (c.plant_name)  parts.push('Nhà máy: ' + c.plant_name);
+    if (c.legal_name)  parts.push('Pháp nhân: ' + c.legal_name);
+    if (c.tax_code)    parts.push('MST: ' + c.tax_code);
+    if (c.province)    parts.push('Tỉnh: ' + c.province);
     if (c.client_type) parts.push(c.client_type);
     return parts.map(function (p) { return API.esc(p); }).join(' · ');
   }
@@ -270,7 +271,7 @@
       API.get('getClients', { q: r.client_id, limit: 5 }).then(function (data) {
         var match = (data.rows || []).find(function (c) { return c.client_id === r.client_id; });
         if (match) {
-          inp.value = match.legal_name || match.client_name || inp.value;
+          inp.value = match.plant_name || match.client_name || match.legal_name || inp.value;
           if (nhaMay) nhaMay.value = match.plant_name || match.client_name || '';
           if (helper) helper.innerHTML = buildClientHelper(match);
         } else if (helper && !helper.textContent.trim()) {
@@ -295,12 +296,13 @@
     function renderDrop(rows) {
       if (!rows.length) { drop.classList.add('dp-hidden'); return; }
       drop.innerHTML = rows.map(function (c) {
-        var primary = c.legal_name || c.client_name || c.client_id;
-        var secondary = [c.plant_name, c.tax_code ? 'MST: ' + c.tax_code : '', c.province, c.client_type].filter(Boolean);
+        var primary = c.plant_name || c.client_name || c.legal_name || c.client_id;
+        var secondary = [c.legal_name, c.tax_code ? 'MST: ' + c.tax_code : '', c.province, c.client_type].filter(Boolean);
         return '<div class="ac-item" tabindex="0"'
           + ' data-id="' + API.esc(c.client_id) + '"'
           + ' data-name="' + API.esc(primary) + '"'
           + ' data-plant="' + API.esc(c.plant_name || '') + '"'
+          + ' data-legalname="' + API.esc(c.legal_name || '') + '"'
           + ' data-taxcode="' + API.esc(c.tax_code || '') + '"'
           + ' data-province="' + API.esc(c.province || '') + '"'
           + ' data-ctype="' + API.esc(c.client_type || '') + '">'
@@ -322,6 +324,7 @@
       drop.classList.add('dp-hidden');
       lockSelection({
         plant_name:  item.getAttribute('data-plant'),
+        legal_name:  item.getAttribute('data-legalname'),
         tax_code:    item.getAttribute('data-taxcode'),
         province:    item.getAttribute('data-province'),
         client_type: item.getAttribute('data-ctype'),
