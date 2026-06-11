@@ -104,7 +104,8 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .badge-green  { background: #f0fdf4; color: #15803d; border: 1px solid #86efac; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
 .badge-amber  { background: #fffbeb; color: #b45309; border: 1px solid #fcd34d; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
 .badge-red    { background: #fef2f2; color: #b91c1c; border: 1px solid #fca5a5; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
-.badge-grey   { background: #f9fafb; color: #6b7280; border: 1px solid #d1d5db; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
+.badge-grey         { background: #f9fafb; color: #6b7280; border: 1px solid #d1d5db; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
+.badge-green-strong { background: #dcfce7; color: #166534; border: 1px solid #4ade80; border-radius: 999px; padding: 3px 8px; font-size: 12px; font-weight: 500; white-space: nowrap; display: inline-block; }
 /* latest clarification summary panel inside item form */
 .clar-summary { border: 1px solid var(--border); border-radius: 8px; padding: 7px 9px; background: #f8fafc; font-size: 12px; }
 .clar-summary-empty { color: var(--text-muted); font-size: 12px; }
@@ -156,6 +157,23 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .modal-body .check { grid-column: 1 / -1; }
 .modal-body textarea { min-height: 44px; resize: vertical; }
 .compact-ta textarea { min-height: 38px !important; max-height: 64px; }
+/* ── chip buttons for clarification type/status pickers ───────────────────── */
+.chip-group { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.chip { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1.5px solid transparent; transition: filter .1s, box-shadow .1s; min-height: 0; box-shadow: none; white-space: nowrap; }
+.chip:hover { filter: brightness(.95); }
+.chip-selected { box-shadow: 0 0 0 2px currentColor !important; font-weight: 700; }
+.chip-blue   { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+.chip-green  { background: #f0fdf4; color: #15803d; border-color: #86efac; }
+.chip-green-strong { background: #dcfce7; color: #166534; border-color: #4ade80; }
+.chip-orange { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
+.chip-amber  { background: #fffbeb; color: #b45309; border-color: #fcd34d; }
+.chip-red    { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
+.chip-grey   { background: #f9fafb; color: #6b7280; border-color: #d1d5db; }
+/* chip group label */
+.chip-group-wrap { grid-column: inherit; }
+.chip-group-wrap > .chip-group-label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 4px; }
+/* coming-soon attachment note */
+.attach-coming-soon { font-size: 12px; color: var(--text-muted); background: var(--bg); border: 1px dashed var(--border-mid); border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 6px; }
 /* ── 12-column span classes ────────────────────────────────────────────────── */
 .span-1  { grid-column: span 1; }
 .span-2  { grid-column: span 2; }

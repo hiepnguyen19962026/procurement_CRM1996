@@ -460,36 +460,70 @@
       + '</article>';
   }
 
+  var TYPE_CHIPS = [
+    { value: 'ask_supplier',     label: 'Hỏi hãng',       color: 'orange' },
+    { value: 'supplier_opinion', label: 'HSX ý kiến',      color: 'green' },
+    { value: 'supplier_reply',   label: 'HSX phản hồi',    color: 'green' },
+    { value: 'ask_client',       label: 'CĐT ý kiến',      color: 'blue' },
+    { value: 'client_reply',     label: 'CĐT phản hồi',    color: 'blue' },
+    { value: 'final_confirm',    label: 'Final confirm',    color: 'green-strong' },
+    { value: 'rejected',         label: 'Từ chối',          color: 'red' },
+    { value: 'other',            label: 'Khác',             color: 'grey' },
+  ];
+
+  var STATUS_CHIPS = [
+    { value: 'processing',       label: 'Đang xử lý',      color: 'grey' },
+    { value: 'waiting_supplier', label: 'Đang hỏi hãng',   color: 'orange' },
+    { value: 'waiting_client',   label: 'Đang chờ CĐT',    color: 'blue' },
+    { value: 'need_more_info',   label: 'Cần bổ sung',      color: 'amber' },
+    { value: 'final_confirmed',  label: 'Đã xác nhận',      color: 'green-strong' },
+    { value: 'rejected',         label: 'Bị từ chối',       color: 'red' },
+    { value: 'other',            label: 'Khác',             color: 'grey' },
+  ];
+
+  function renderChipGroup(labelText, groupName, chips, selectedValue) {
+    var chipsHtml = chips.map(function (c) {
+      var sel = c.value === selectedValue ? ' chip-selected' : '';
+      return '<button type="button" class="chip chip-' + c.color + sel + '"'
+        + ' data-chip-group="' + API.esc(groupName) + '" data-value="' + API.esc(c.value) + '"'
+        + ' onclick="RfqItemsModule._selectChip(this)">' + API.esc(c.label) + '</button>';
+    }).join('');
+    return '<input type="hidden" name="' + API.esc(groupName) + '" value="' + API.esc(selectedValue) + '">'
+      + '<span class="chip-group-label">' + API.esc(labelText) + '</span>'
+      + '<div class="chip-group">' + chipsHtml + '</div>';
+  }
+
+  function selectChip(btn) {
+    var group = btn.getAttribute('data-chip-group');
+    var value = btn.getAttribute('data-value');
+    var form = document.getElementById('modalForm');
+    if (!form) return;
+    form.querySelectorAll('.chip[data-chip-group="' + group + '"]').forEach(function (c) {
+      c.classList.remove('chip-selected');
+    });
+    btn.classList.add('chip-selected');
+    var hidden = form.querySelector('input[name="' + group + '"]');
+    if (hidden) hidden.value = value;
+  }
+
   function clarificationFields(item, r) {
     var type = r.clarification_type || 'ask_supplier';
     var status = r.status_after || 'waiting_supplier';
     return ''
-      // Row 1: type(2) + status(3) + title(7) = 12
-      + '<label class="span-2">Loại trao đổi<select name="clarificationType">'
-      + option('ask_supplier', 'Hỏi hãng', type)
-      + option('supplier_reply', 'Hãng phản hồi', type)
-      + option('ask_client', 'Hỏi CĐT', type)
-      + option('client_reply', 'CĐT phản hồi', type)
-      + option('replacement_proposal', 'Đề xuất thay thế', type)
-      + option('final_confirm', 'Final confirm', type)
-      + '</select></label>'
-      + '<label class="span-3">Trạng thái sau trao đổi<select name="statusAfter">'
-      + option('waiting_supplier', 'Đang hỏi hãng', status)
-      + option('waiting_client', 'Đang hỏi CĐT', status)
-      + option('need_more_info', 'Cần bổ sung', status)
-      + option('final_confirmed', 'Đã xác nhận', status)
-      + option('rejected', 'Bị từ chối', status)
-      + '</select></label>'
-      + input('title', 'Tiêu đề', r.title, 'required', 'span-7')
+      // Row 1: type chips (5) + status chips (7) = 12
+      + '<div class="span-5">' + renderChipGroup('Loại trao đổi', 'clarificationType', TYPE_CHIPS, type) + '</div>'
+      + '<div class="span-7">' + renderChipGroup('Trạng thái sau trao đổi', 'statusAfter', STATUS_CHIPS, status) + '</div>'
+      + input('title', 'Tiêu đề', r.title, 'required', 'span-12')
       + textarea('content', 'Nội dung', r.content, '', 'span-12 compact-ta')
-      // Row: model/spec fields (3+3+3+3) = 12
+      // Model/spec row (3+3+3+3) = 12
       + input('oldModel', 'Model cũ', r.old_model || val(item, 'required_model', 'quy_cach_model_yeu_cau'), '', 'span-3')
       + input('proposedModel', 'Model đề xuất / final', r.proposed_model || item.quy_cach_final, '', 'span-3')
       + input('proposedManufacturer', 'Hãng SX đề xuất', r.proposed_manufacturer || item.hang_final, '', 'span-3')
       + input('proposedOrigin', 'Xuất xứ đề xuất', r.proposed_origin || item.xuat_xu_final, '', 'span-3')
+      // Attachment: not yet supported for owner_type=technical_clarification
+      + '<div class="span-12"><div class="attach-coming-soon">📎 Upload minh chứng sẽ bổ sung sau. Không nhập file_id thủ công.</div></div>'
       + textarea('rawNote', 'Ghi chú gốc', r.raw_note, '', 'span-12 compact-ta')
-      + '<label class="check"><input type="checkbox" name="updateFinal"> Cập nhật quy cách final cho vật tư này</label>';
-    // Note: attachment upload for technical_clarification owner_type not yet implemented in backend.
+      + '<label class="check" style="font-size:13px"><input type="checkbox" name="updateFinal"> Cập nhật quy cách final cho vật tư này</label>';
   }
 
   function latestClarificationSummary(item, clarifications) {
@@ -522,21 +556,26 @@
   function typeBadgeClass(type) {
     return {
       ask_supplier: 'badge-orange',
+      supplier_opinion: 'badge-green',
       supplier_reply: 'badge-green',
       ask_client: 'badge-blue',
       client_reply: 'badge-blue',
       replacement_proposal: 'badge-amber',
-      final_confirm: 'badge-green',
+      final_confirm: 'badge-green-strong',
+      rejected: 'badge-red',
+      other: 'badge-grey',
     }[type] || 'badge-grey';
   }
 
   function statusBadgeClass(status) {
     return {
+      processing: 'badge-grey',
       waiting_supplier: 'badge-orange',
       waiting_client: 'badge-blue',
       need_more_info: 'badge-amber',
-      final_confirmed: 'badge-green',
+      final_confirmed: 'badge-green-strong',
       rejected: 'badge-red',
+      other: 'badge-grey',
     }[status] || 'badge-grey';
   }
 
@@ -559,22 +598,27 @@
       da_xac_nhan: 'Đã xác nhận',
       bi_tu_choi: 'Bị từ chối',
       thay_the: 'Thay thế',
+      processing: 'Đang xử lý',
       waiting_supplier: 'Đang hỏi hãng',
-      waiting_client: 'Đang hỏi CĐT',
+      waiting_client: 'Đang chờ CĐT',
       need_more_info: 'Cần bổ sung',
       final_confirmed: 'Đã xác nhận',
       rejected: 'Bị từ chối',
+      other: 'Khác',
     }[value] || 'Chưa xác nhận';
   }
 
   function typeLabel(value) {
     return {
       ask_supplier: 'Hỏi hãng',
-      supplier_reply: 'Hãng phản hồi',
-      ask_client: 'Hỏi CĐT',
+      supplier_opinion: 'HSX ý kiến',
+      supplier_reply: 'HSX phản hồi',
+      ask_client: 'CĐT ý kiến',
       client_reply: 'CĐT phản hồi',
       replacement_proposal: 'Đề xuất thay thế',
       final_confirm: 'Final confirm',
+      rejected: 'Từ chối',
+      other: 'Khác',
     }[value] || value || '';
   }
 
@@ -1955,5 +1999,6 @@
     exportPriceHistory: exportPriceHistory,
     loadContractItems: loadContractItems,
     openContractFromRfqItemModal: openContractFromRfqItemModal,
+    _selectChip: selectChip,
   };
 })();

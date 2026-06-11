@@ -15,20 +15,25 @@ import { cleanString } from '../lib/normalize.js';
 import { json, makeId, nowIso, readJson } from '../lib/utils.js';
 
 const CLARIFICATION_TYPES = new Set([
-  'ask_supplier',
-  'supplier_reply',
-  'ask_client',
-  'client_reply',
+  'ask_supplier',       // Hỏi hãng
+  'supplier_opinion',   // HSX ý kiến (new)
+  'supplier_reply',     // HSX phản hồi
+  'ask_client',         // CĐT ý kiến
+  'client_reply',       // CĐT phản hồi
   'replacement_proposal',
-  'final_confirm',
+  'final_confirm',      // Final confirm
+  'rejected',           // Từ chối (new)
+  'other',              // Khác (new)
 ]);
 
 const STATUS_AFTER = new Set([
-  'waiting_supplier',
-  'waiting_client',
-  'need_more_info',
-  'final_confirmed',
-  'rejected',
+  'processing',         // Đang xử lý (new)
+  'waiting_supplier',   // Đang hỏi hãng
+  'waiting_client',     // Đang chờ CĐT
+  'need_more_info',     // Cần bổ sung
+  'final_confirmed',    // Đã xác nhận
+  'rejected',           // Bị từ chối
+  'other',              // Khác (new)
 ]);
 
 const TECH_STATUS_MAP = {
