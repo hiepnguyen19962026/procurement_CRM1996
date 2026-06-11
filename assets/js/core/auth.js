@@ -14,7 +14,7 @@
     save(data.user);
     applyRoleUI();
     showApp();
-    DashboardModule.load();
+    document.querySelector('.nav button[data-screen="tasks"]').click();
   }
 
   async function logout() {
@@ -83,7 +83,7 @@
       save(data.user);
       applyRoleUI();
       showApp();
-      DashboardModule.load();
+      document.querySelector('.nav button[data-screen="tasks"]').click();
       return;
     }
     // Server error (5xx) or unexpected response — do not destroy session

@@ -286,7 +286,16 @@ async function commitRows(request, env, ctx, actor) {
   });
 
   ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
-  ctx.waitUntil(writeActionLog(env, { action: 'commitImportRows', entityType: 'import_job', entityId: jobId, newJson: summary, actor }));
+  const importParts = [`tạo ${summary.created}`, `cập nhật ${summary.updated}`, `bỏ qua ${summary.skipped}`];
+  if (summary.errors) importParts.push(`lỗi ${summary.errors}`);
+  ctx.waitUntil(writeActionLog(env, {
+    action:     'commitImportRows',
+    entityType: 'import_job',
+    entityId:   jobId,
+    message:    `Import dòng vật tư vào gói "${rfq.ten_goi}" (${rfqId}): ${importParts.join(', ')}`,
+    newJson:    summary,
+    actor,
+  }));
   return json({ ok: true, summary });
 }
 

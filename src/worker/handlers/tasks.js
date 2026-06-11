@@ -94,10 +94,12 @@ async function saveTask(request, env, ctx, actor, isUpdate) {
   if (isUpdate) await updateTaskSQL(env.DB, row);
   else          await insertTaskSQL(env.DB, row);
 
+  const taskLabel = row.company_name ? `"${row.title}" — ${row.company_name}` : `"${row.title}"`;
   ctx.waitUntil(writeActionLog(env, {
     action:     isUpdate ? 'updateTask' : 'createTask',
     entityType: 'task',
     entityId:   row.task_id,
+    message:    isUpdate ? `Cập nhật task: ${taskLabel}` : `Tạo task mới: ${taskLabel}`,
     oldJson:    oldRow,
     newJson:    row,
     actor,
@@ -115,10 +117,12 @@ async function deleteTask(request, env, ctx, actor) {
   if (!row) return json({ ok: false, error: 'Không tìm thấy task' }, 404);
   const now = nowIso();
   await softDeleteTaskSQL(env.DB, taskId, now);
+  const deletedLabel = row.company_name ? `"${row.title}" — ${row.company_name}` : `"${row.title}"`;
   ctx.waitUntil(writeActionLog(env, {
     action:     'deleteTask',
     entityType: 'task',
     entityId:   taskId,
+    message:    `Xóa task: ${deletedLabel}`,
     oldJson:    row,
     newJson:    null,
     actor,
@@ -145,6 +149,7 @@ async function quickUpdateStatus(request, env, ctx, actor) {
     action:     'quickUpdateTaskStatus',
     entityType: 'task',
     entityId:   taskId,
+    message:    `Đổi trạng thái task "${row.title}": ${row.status} → ${status}`,
     oldJson:    { status: row.status },
     newJson:    { status },
     actor,
@@ -168,6 +173,7 @@ async function quickUpdatePriority(request, env, ctx, actor) {
     action:     'quickUpdateTaskPriority',
     entityType: 'task',
     entityId:   taskId,
+    message:    `Đổi ưu tiên task "${row.title}": ${row.priority} → ${priority}`,
     oldJson:    { priority: row.priority },
     newJson:    { priority },
     actor,

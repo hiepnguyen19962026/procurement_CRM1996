@@ -78,6 +78,20 @@
     } catch (err) { API.error(err); }
   }
 
+  function rfqStatCell(r) {
+    var total = r.rfq_total || 0;
+    if (!total) return '<span class="muted">—</span>';
+    var parts = [];
+    if (r.rfq_dang_khao_gia) parts.push('<span title="Đang khảo giá">ĐKG:' + r.rfq_dang_khao_gia + '</span>');
+    if (r.rfq_da_bao)        parts.push('<span title="Đã báo">ĐB:' + r.rfq_da_bao + '</span>');
+    if (r.rfq_trung)         parts.push('<span title="Trúng" style="color:var(--green)">T:' + r.rfq_trung + '</span>');
+    if (r.rfq_khong_trung)   parts.push('<span title="Không trúng" style="color:var(--red)">KT:' + r.rfq_khong_trung + '</span>');
+    if (r.rfq_treo)          parts.push('<span title="Treo" style="color:var(--orange)">Treo:' + r.rfq_treo + '</span>');
+    if (r.rfq_tham_khao)     parts.push('<span title="Tham khảo">TK:' + r.rfq_tham_khao + '</span>');
+    return '<span style="font-weight:600">' + total + '</span>'
+      + (parts.length ? '<br><span style="font-size:11px;color:var(--text-muted)">' + parts.join(' ') + '</span>' : '');
+  }
+
   function render() {
     syncSort();
     var canWrite = Utils.roleCanWrite();
@@ -86,11 +100,15 @@
         ? '<span class="link-edit" onclick="ClientsModule.openEdit(\'' + API.esc(r.client_id) + '\')">' + API.esc(r.client_name) + '</span>'
         : API.esc(r.client_name);
       return '<tr>'
-        + '<td>' + API.esc(r.client_id) + '</td>'
         + '<td>' + nameCell + '</td>'
-        + '<td>' + API.esc(r.plant_name) + '</td>'
-        + '<td>' + API.esc(r.province) + '</td>'
-        + '<td>' + API.esc(r.note) + '</td>'
+        + '<td>' + API.esc(r.legal_name || '') + '</td>'
+        + '<td>' + API.esc(r.plant_name || '') + '</td>'
+        + '<td>' + API.esc(r.province || '') + '</td>'
+        + '<td style="font-size:12px">' + API.esc(r.tax_code || '') + '</td>'
+        + '<td style="font-size:12px">' + API.esc(r.email || '') + '</td>'
+        + '<td style="font-size:12px;white-space:nowrap">' + API.esc(r.phone || '') + '</td>'
+        + '<td style="font-size:12px">' + rfqStatCell(r) + '</td>'
+        + '<td>' + API.esc(r.note || '') + '</td>'
         + '<td data-role-only="admin,manager" style="text-align:center;padding:0 4px">'
           + '<button type="button" class="btn-x-archive" title="Lưu trữ khách hàng" onclick="ClientsModule.archiveClient(\'' + API.esc(r.client_id) + '\')">✕</button>'
           + '</td>'

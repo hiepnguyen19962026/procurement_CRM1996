@@ -43,7 +43,7 @@ async function archiveRfq(request, env, ctx, actor) {
   const now = nowIso();
   await archiveRfqSQL(env.DB, rfqId, now);
   ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
-  ctx.waitUntil(writeActionLog(env, { action: 'archiveRfq', entityType: 'rfq', entityId: rfqId, oldJson: row, newJson: null, actor }));
+  ctx.waitUntil(writeActionLog(env, { action: 'archiveRfq', entityType: 'rfq', entityId: rfqId, message: `Lưu trữ gói thầu: "${row.ten_goi}" (${rfqId})`, oldJson: row, newJson: null, actor }));
   return json({ ok: true });
 }
 
@@ -76,6 +76,6 @@ async function saveRfq(request, env, ctx, actor, isUpdate) {
   if (isUpdate) await updateRfqSQL(env.DB, row);
   else await insertRfqSQL(env.DB, row);
   ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
-  ctx.waitUntil(writeActionLog(env, { action: isUpdate ? 'updateRfq' : 'createRfq', entityType: 'rfq', entityId: row.rfq_id, oldJson: oldRow, newJson: row, actor }));
+  ctx.waitUntil(writeActionLog(env, { action: isUpdate ? 'updateRfq' : 'createRfq', entityType: 'rfq', entityId: row.rfq_id, message: isUpdate ? `Cập nhật gói thầu: "${row.ten_goi}" (${row.rfq_id})` : `Tạo gói thầu mới: "${row.ten_goi}" (${row.rfq_id})`, oldJson: oldRow, newJson: row, actor }));
   return json({ ok: true, rfq: row });
 }

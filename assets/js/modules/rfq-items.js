@@ -2467,6 +2467,7 @@
       if (!payload.rfqId) { errs.push('Dòng ' + rowNum + ': Thiếu rfqId'); continue; }
       if (!payload.tenVatTu) { errs.push('Dòng ' + rowNum + ': Thiếu Tên vật tư'); continue; }
       var action = payload.rfqItemId ? 'updateRfqItem' : 'createRfqItem';
+      payload.silent = true; // suppress per-row audit; importCsv logs its own summary via commitImportRows
       try {
         await API.call(action, payload);
         ok++;
@@ -2478,6 +2479,17 @@
     await load(true);
     if (ok > 0 && typeof RfqsModule !== 'undefined') await RfqsModule.load(true);
     var importRfqId = (document.getElementById('itemRfqId').value || '').trim();
+    // log one summary audit entry to replace the suppressed per-row entries
+    if (importRfqId && (ok > 0 || errs.length > 0)) {
+      var _rfqRowForLog = (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === importRfqId; });
+      API.call('logRfqItemImportSummary', {
+        rfqId: importRfqId,
+        rfqName: _rfqRowForLog ? (_rfqRowForLog.ten_goi || '') : '',
+        created: ok,
+        updated: 0,
+        errors: errs.length,
+      }).catch(function () {});
+    }
     var rfqRow = importRfqId ? (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === importRfqId; }) : null;
     var totalCount = rfqRow ? Number(rfqRow.item_count || 0) : state.rows.length;
     var borderColor = errs.length && ok === 0 ? 'var(--red)' : (errs.length ? 'var(--primary)' : 'var(--green)');

@@ -121,11 +121,14 @@ async function saveClarification(request, env, ctx, actor, isUpdate) {
 
   ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
   ctx.waitUntil(writeActionLog(env, {
-    action: isUpdate ? 'updateTechnicalClarification' : 'createTechnicalClarification',
+    action:     isUpdate ? 'updateTechnicalClarification' : 'createTechnicalClarification',
     entityType: 'technical_clarification',
-    entityId: row.clarification_id,
-    oldJson: oldRow,
-    newJson: row,
+    entityId:   row.clarification_id,
+    message:    isUpdate
+      ? `Cập nhật trao đổi kỹ thuật [${row.clarification_type}] — vật tư ${rfqItemId}`
+      : `Trao đổi kỹ thuật mới [${row.clarification_type}] — vật tư ${rfqItemId}`,
+    oldJson:    oldRow,
+    newJson:    row,
     actor,
   }));
   return json({ ok: true, clarification: row });
@@ -145,11 +148,12 @@ async function deleteClarification(request, env, ctx, actor) {
   const now = nowIso();
   await softDeleteTechnicalClarificationSQL(env.DB, { clarificationId, deletedAt: now });
   ctx.waitUntil(writeActionLog(env, {
-    action: 'deleteTechnicalClarification',
+    action:     'deleteTechnicalClarification',
     entityType: 'technical_clarification',
-    entityId: clarificationId,
-    oldJson: oldRow,
-    newJson: { ...oldRow, deleted_at: now },
+    entityId:   clarificationId,
+    message:    `Xóa trao đổi kỹ thuật [${oldRow.clarification_type}] — vật tư ${oldRow.rfq_item_id}`,
+    oldJson:    oldRow,
+    newJson:    { ...oldRow, deleted_at: now },
     actor,
   }));
   return json({ ok: true });

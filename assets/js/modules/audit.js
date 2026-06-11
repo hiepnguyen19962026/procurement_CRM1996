@@ -41,10 +41,39 @@
       render();
     } catch (err) { API.error(err); }
   }
+  var ACTION_LABELS = {
+    createRfq:                      'Tạo gói thầu',
+    updateRfq:                      'Sửa gói thầu',
+    archiveRfq:                     'Lưu trữ gói thầu',
+    createRfqItem:                  'Thêm dòng vật tư',
+    updateRfqItem:                  'Sửa dòng vật tư',
+    archiveRfqItem:                 'Lưu trữ dòng vật tư',
+    importRfqItems:                 'Import dòng vật tư',
+    commitImportRows:               'Import nâng cao',
+    createTask:                     'Tạo task',
+    updateTask:                     'Sửa task',
+    deleteTask:                     'Xóa task',
+    quickUpdateTaskStatus:          'Đổi trạng thái task',
+    quickUpdateTaskPriority:        'Đổi ưu tiên task',
+    createTechnicalClarification:   'Trao đổi KT mới',
+    updateTechnicalClarification:   'Sửa trao đổi KT',
+    deleteTechnicalClarification:   'Xóa trao đổi KT',
+    createClient:                   'Thêm khách hàng',
+    updateClient:                   'Sửa khách hàng',
+    archiveClient:                  'Lưu trữ khách hàng',
+  };
+
   function render() {
     syncSort();
     document.getElementById('auditRows').innerHTML = (state.rows || []).map(function (r) {
-      return '<tr><td>' + API.esc(r.created_at) + '</td><td>' + API.esc(r.actor_name) + '</td><td>' + API.esc(r.action) + '</td><td>' + API.esc(r.message) + '</td></tr>';
+      var actionLabel = ACTION_LABELS[r.action] || r.action;
+      var ts = r.created_at ? r.created_at.replace('T', ' ').replace('Z', '').slice(0, 16) : '';
+      return '<tr>'
+        + '<td style="white-space:nowrap;color:var(--text-muted);font-size:12px">' + API.esc(ts) + '</td>'
+        + '<td style="white-space:nowrap">' + API.esc(r.actor_name) + '</td>'
+        + '<td style="white-space:nowrap"><span class="badge">' + API.esc(actionLabel) + '</span></td>'
+        + '<td>' + API.esc(r.message) + '</td>'
+        + '</tr>';
     }).join('');
     document.getElementById('auditMore').classList.toggle('hidden', !state.hasMore);
   }

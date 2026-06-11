@@ -13,6 +13,7 @@ export async function handleRfqItems(action, request, env, ctx, actor) {
   if (action === 'archiveRfqItem') return archiveItem(request, env, ctx, actor);
   if (action === 'hardDeleteRfqItems') return hardDelete(request, env, ctx, actor);
   if (action === 'hardDeleteAllRfqItems') return hardDeleteAll(request, env, ctx, actor);
+  if (action === 'logRfqItemImportSummary') return logImportSummary(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown RFQ item action' }, 400);
 }
 
@@ -32,6 +33,28 @@ async function listItems(request, env, actor) {
     limit: clampLimit(p.limit, 500, 10000),
   });
   return json({ ok: true, ...data });
+}
+
+async function logImportSummary(request, env, ctx, actor) {
+  const denied = requireRole(actor, WRITE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const rfqId  = cleanString(body.rfqId  || body.rfq_id, 80);
+  const rfqName = cleanString(body.rfqName || '', 240);
+  const created = Math.max(0, Number(body.created) || 0);
+  const updated = Math.max(0, Number(body.updated) || 0);
+  const errors  = Math.max(0, Number(body.errors)  || 0);
+  const label   = rfqName ? `"${rfqName}" (${rfqId})` : rfqId;
+  const parts   = [`tạo ${created}`, `cập nhật ${updated}`];
+  if (errors) parts.push(`lỗi ${errors}`);
+  ctx.waitUntil(writeActionLog(env, {
+    action:     'importRfqItems',
+    entityType: 'rfq_item',
+    entityId:   rfqId,
+    message:    `Import dòng vật tư vào gói ${label}: ${parts.join(', ')}`,
+    actor,
+  }));
+  return json({ ok: true });
 }
 
 async function archiveItem(request, env, ctx, actor) {
@@ -71,7 +94,21 @@ async function saveItem(request, env, ctx, actor, isUpdate) {
   if (isUpdate) await updateRfqItemSQL(env.DB, row);
   else await insertRfqItemSQL(env.DB, row);
   ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
-  ctx.waitUntil(writeActionLog(env, { action: isUpdate ? 'updateRfqItem' : 'createRfqItem', entityType: 'rfq_item', entityId: row.rfq_item_id, oldJson: oldRow, newJson: row, actor }));
+  // silent=true is passed by the simple CSV import loop to avoid per-row audit spam;
+  // batch imports use commitImportRows which logs its own summary entry.
+  if (!body.silent) {
+    ctx.waitUntil(writeActionLog(env, {
+      action:     isUpdate ? 'updateRfqItem' : 'createRfqItem',
+      entityType: 'rfq_item',
+      entityId:   row.rfq_item_id,
+      message:    isUpdate
+        ? `Cập nhật dòng vật tư: "${name}" (${row.rfq_item_id}) — gói ${rfqId}`
+        : `Thêm dòng vật tư: "${name}" — gói ${rfqId}`,
+      oldJson:    oldRow,
+      newJson:    row,
+      actor,
+    }));
+  }
   return json({ ok: true, item: row });
 }
 

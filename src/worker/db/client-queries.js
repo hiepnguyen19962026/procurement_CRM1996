@@ -5,10 +5,11 @@ function parseCursor(cursor) {
 }
 
 const CLIENT_SORT = {
-  client_id:   { col: 'client_id',   rowKey: 'client_id',   type: 'text' },
-  client_name: { col: 'client_name', rowKey: 'client_name', type: 'text' },
-  plant_name:  { col: 'plant_name',  rowKey: 'plant_name',  type: 'text' },
-  province:    { col: 'province',    rowKey: 'province',    type: 'text' },
+  client_id:   { col: 'c.client_id',   rowKey: 'client_id',   type: 'text' },
+  client_name: { col: 'c.client_name', rowKey: 'client_name', type: 'text' },
+  legal_name:  { col: 'c.legal_name',  rowKey: 'legal_name',  type: 'text' },
+  plant_name:  { col: 'c.plant_name',  rowKey: 'plant_name',  type: 'text' },
+  province:    { col: 'c.province',    rowKey: 'province',    type: 'text' },
 };
 
 export async function listClientsSQL(db, { q, cursor, sortBy, sortDir, limit }) {
@@ -17,27 +18,49 @@ export async function listClientsSQL(db, { q, cursor, sortBy, sortDir, limit }) 
   const op  = dir === 'ASC' ? '>' : '<';
 
   const binds = [];
-  const where = ['deleted_at IS NULL'];
+  const where = ['c.deleted_at IS NULL'];
   if (q) {
     // LIKE on client_id: SQLite LIKE is case-insensitive for ASCII, so 'cl-2026%' matches 'CL-2026-00001'
-    where.push('(normalized_search LIKE ? OR client_name LIKE ? OR client_id LIKE ?)');
+    where.push('(c.normalized_search LIKE ? OR c.client_name LIKE ? OR c.client_id LIKE ?)');
     binds.push(`%${q}%`, `%${q}%`, `${q}%`);
   }
   if (cursor) {
-    const c = parseCursor(cursor);
-    if (!sort || c.sortVal === undefined) {
+    const cur = parseCursor(cursor);
+    if (!sort || cur.sortVal === undefined) {
       // default ASC by client_id
-      where.push('client_id > ?'); binds.push(c.pk);
+      where.push('c.client_id > ?'); binds.push(cur.pk);
     } else {
       const wrap = `COALESCE(${sort.col}, '')`;
-      where.push(`(${wrap} ${op} ? OR (${wrap} = ? AND client_id ${op} ?))`);
-      binds.push(c.sortVal, c.sortVal, c.pk);
+      where.push(`(${wrap} ${op} ? OR (${wrap} = ? AND c.client_id ${op} ?))`);
+      binds.push(cur.sortVal, cur.sortVal, cur.pk);
     }
   }
 
-  const orderBy = sort ? `${sort.col} ${dir}, client_id ${dir}` : 'client_id ASC';
+  const orderBy = sort ? `${sort.col} ${dir}, c.client_id ${dir}` : 'c.client_id ASC';
   const res = await db.prepare(
-    `SELECT * FROM clients ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+    `SELECT c.*,
+       COALESCE(rs.rfq_total, 0)        AS rfq_total,
+       COALESCE(rs.rfq_dang_khao_gia, 0) AS rfq_dang_khao_gia,
+       COALESCE(rs.rfq_da_bao, 0)        AS rfq_da_bao,
+       COALESCE(rs.rfq_trung, 0)         AS rfq_trung,
+       COALESCE(rs.rfq_khong_trung, 0)   AS rfq_khong_trung,
+       COALESCE(rs.rfq_treo, 0)          AS rfq_treo,
+       COALESCE(rs.rfq_tham_khao, 0)     AS rfq_tham_khao
+     FROM clients c
+     LEFT JOIN (
+       SELECT client_id,
+         COUNT(*) AS rfq_total,
+         SUM(CASE WHEN trang_thai_goi = 'dang_khao_gia' THEN 1 ELSE 0 END) AS rfq_dang_khao_gia,
+         SUM(CASE WHEN trang_thai_goi = 'da_bao'        THEN 1 ELSE 0 END) AS rfq_da_bao,
+         SUM(CASE WHEN trang_thai_goi = 'trung'         THEN 1 ELSE 0 END) AS rfq_trung,
+         SUM(CASE WHEN trang_thai_goi = 'khong_trung'   THEN 1 ELSE 0 END) AS rfq_khong_trung,
+         SUM(CASE WHEN trang_thai_goi = 'treo'          THEN 1 ELSE 0 END) AS rfq_treo,
+         SUM(CASE WHEN trang_thai_goi = 'tham_khao'     THEN 1 ELSE 0 END) AS rfq_tham_khao
+       FROM rfqs
+       WHERE deleted_at IS NULL AND client_id IS NOT NULL AND client_id != ''
+       GROUP BY client_id
+     ) rs ON rs.client_id = c.client_id
+     ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
      ORDER BY ${orderBy} LIMIT ?`
   ).bind(...binds, limit + 1).all();
 
