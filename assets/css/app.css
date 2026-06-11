@@ -114,7 +114,7 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .muted-cell { color: var(--text-muted); }
 #screen-items table { min-width: 2200px; table-layout: fixed; }
 #screen-items td { overflow-wrap: anywhere; white-space: normal; }
-#screen-items thead th { white-space: normal; word-break: break-word; line-height: 1.2; vertical-align: bottom; }
+#screen-items thead th { white-space: normal; word-break: keep-all; line-height: 1.25; vertical-align: bottom; }
 #screen-items .table-top-scroll > div { height: 1px; min-width: 2200px; }
 #screen-items input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; padding: 0; border-radius: 3px; border: 1px solid var(--border-mid); cursor: pointer; display: block; margin: auto; }
 #screen-items .table-top-scroll { overflow-x: auto; overflow-y: hidden; height: 14px; margin-bottom: 6px; }
