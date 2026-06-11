@@ -114,9 +114,10 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .muted-cell { color: var(--text-muted); }
 #screen-items table { min-width: 2200px; table-layout: fixed; }
 #screen-items td { overflow-wrap: anywhere; white-space: normal; }
-#screen-items thead th { white-space: normal; word-break: keep-all; overflow-wrap: normal; line-height: 1.2; vertical-align: bottom; text-align: center; }
-#screen-items thead th .th-label { display: inline; }
-#screen-items thead th .sort-mark { display: inline-block; margin-left: 2px; white-space: nowrap; color: var(--text-faint, #bbb); font-size: 10px; }
+#screen-items thead th { vertical-align: middle; text-align: center; white-space: normal; word-break: keep-all; overflow-wrap: normal; line-height: 1.15; padding: 8px 6px; }
+#screen-items thead th[data-sort-key] { cursor: pointer; }
+#screen-items .rfqi-th-label { display: block; max-width: 100%; white-space: normal; word-break: keep-all; overflow-wrap: normal; }
+#screen-items .rfqi-sort-mark { display: block; margin-top: 2px; font-size: 10px; line-height: 1; color: var(--text-faint, #bbb); }
 #screen-items .table-top-scroll > div { height: 1px; min-width: 2200px; }
 #screen-items input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; padding: 0; border-radius: 3px; border: 1px solid var(--border-mid); cursor: pointer; display: block; margin: auto; }
 #screen-items .table-top-scroll { overflow-x: auto; overflow-y: hidden; height: 14px; margin-bottom: 6px; }
