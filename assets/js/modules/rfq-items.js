@@ -11,6 +11,7 @@
       var el = document.getElementById(id);
       if (el) el.addEventListener('keydown', function (e) { if (e.key === 'Enter') load(true); });
     });
+    window.addEventListener('resize', syncTopScroll);
   }
 
   function syncSort() {
@@ -138,6 +139,7 @@
     if (delSelBtn) delSelBtn.classList.add('hidden');
     var delCnt = document.getElementById('itemDeleteCount');
     if (delCnt) delCnt.textContent = '0';
+    syncTopScroll();
   }
 
   function technicalSummary(r) {
@@ -2299,6 +2301,29 @@
     if (area) area.innerHTML = summary + errList;
     if (errs.length) console.warn('[Import CSV] Lỗi:', errs);
     API.toast(ok + ' dòng đã import' + (errs.length ? ', ' + errs.length + ' lỗi' : ''), errs.length ? 'warn' : 'success');
+  }
+
+  var _topScrollLock = false;
+  function syncTopScroll() {
+    var top = document.getElementById('itemsTopScroll');
+    if (!top) return;
+    var wrap = top.nextElementSibling;
+    if (!wrap) return;
+    var inner = top.firstElementChild;
+    if (!inner) return;
+    inner.style.width = wrap.scrollWidth + 'px';
+    top.onscroll = function () {
+      if (_topScrollLock) return;
+      _topScrollLock = true;
+      wrap.scrollLeft = top.scrollLeft;
+      _topScrollLock = false;
+    };
+    wrap.onscroll = function () {
+      if (_topScrollLock) return;
+      _topScrollLock = true;
+      top.scrollLeft = wrap.scrollLeft;
+      _topScrollLock = false;
+    };
   }
 
   window.RfqItemsModule = {
