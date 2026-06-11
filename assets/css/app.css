@@ -369,25 +369,21 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 
 /* ── task module ─────────────────────────────────────────────────────────── */
 
-/* compact summary strip — always horizontal, 4 chips in a row */
+/* summary strip — 4-column grid desktop, 2-column mobile */
 .task-summary {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 10px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
 }
 .task-stat-chip {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  padding: 8px 14px;
-  background: #fff;
+  min-width: 0;
+  display: block;
+  padding: 10px 12px;
   border: 1px solid var(--border);
-  border-left-width: 3px;
-  border-radius: 8px;
-  min-width: 100px;
-  flex: 1;
+  border-left: 4px solid currentColor;
+  border-radius: 10px;
+  background: #fff;
 }
 .task-stat-chip .tsc-val { font-size: 22px; font-weight: 700; line-height: 1; color: var(--text); }
 .task-stat-chip .tsc-lbl { font-size: 11px; color: var(--text-muted); margin-top: 4px; white-space: nowrap; }
@@ -413,12 +409,16 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 .task-preview {
   font-size: 11px;
   color: var(--text-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow: hidden;
+  line-height: 1.35;
+  max-height: 2.7em;
+  word-break: break-word;
   margin-top: 3px;
-  line-height: 1.45;
 }
 .task-col-co { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-tbl-sel {
@@ -456,9 +456,11 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 .task-co-item:last-child { border-bottom: none; }
 .task-co-item:hover { background: var(--primary-bg); color: var(--primary-dk); }
 
-/* desktop table visible, mobile cards hidden */
-.task-table-wrap { display: block; }
-.task-card-list  { display: none; }
+/* desktop: table visible, mobile cards hidden */
+@media (min-width: 861px) {
+  .task-table-wrap { display: block !important; }
+  .task-card-list  { display: none !important; }
+}
 
 /* mobile cards */
 .task-card {
@@ -544,24 +546,18 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 /* empty state */
 .task-empty { text-align: center; padding: 48px 16px; color: var(--text-muted); }
 
-/* ── @media 767px — mobile task overrides ─────────────────────────────── */
-@media (max-width: 767px) {
+/* ── @media 860px — task table/card swap + summary grid ─────────────────── */
+@media (max-width: 860px) {
   .task-table-wrap { display: none !important; }
-  .task-card-list  { display: block; }
+  .task-card-list  { display: block !important; }
+  .task-card-list  { overflow-x: hidden; }
+  .task-summary    { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .task-stat-chip  { min-height: 52px; padding: 8px 10px; }
+}
 
-  /* summary: 2×2 compact grid */
-  .task-summary {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 5px;
-    overflow-x: visible;
-  }
-  .task-stat-chip { padding: 6px 8px; min-width: 0; }
-  .task-stat-chip .tsc-val { font-size: 15px; }
-  .task-stat-chip .tsc-lbl { font-size: 10px; margin-top: 2px; }
-
+/* ── @media 767px — task toolbar + modal overrides ──────────────────────── */
+@media (max-width: 767px) {
   /* toolbar: search full width, controls on next row */
-  .task-card-list { overflow-x: hidden; }
   .task-toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
   .task-toolbar > #taskSearch { flex: none; width: 100%; min-width: 0; }
   .task-fc { width: 100%; }

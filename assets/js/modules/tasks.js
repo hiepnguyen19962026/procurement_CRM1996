@@ -161,7 +161,7 @@
         : '<span class="badge" style="' + (PRIORITY_STYLE[r.priority]||'') + '">' + esc(priorityLabel(r.priority)) + '</span>';
 
       var prog = Number(r.progress_percent || 0);
-      var preview = (r.latest_note || r.description || '').replace(/\n/g, ' ').slice(0, 200);
+      var preview = (r.latest_note || r.description || '').replace(/\n/g, ' ').slice(0, 120);
 
       return '<tr>'
         + '<td>'
