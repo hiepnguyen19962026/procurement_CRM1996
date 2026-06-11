@@ -172,6 +172,14 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 /* chip group label */
 .chip-group-wrap { grid-column: inherit; }
 .chip-group-wrap > .chip-group-label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 4px; }
+/* confirmation overlay (revision confirm dialog) */
+.confirm-overlay { position: fixed; inset: 0; background: rgba(17,24,39,.55); display: flex; align-items: center; justify-content: center; z-index: 500; }
+.confirm-box { background: #fff; border-radius: 12px; padding: 28px 32px; max-width: 400px; width: 90%; box-shadow: 0 8px 32px rgba(0,0,0,.18); }
+.confirm-title { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 10px; }
+.confirm-desc { font-size: 13px; color: var(--text-muted); margin: 0 0 22px; line-height: 1.55; }
+.confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
+.btn-cancel { background: var(--bg); color: var(--text-muted); border: 1px solid var(--border-mid); border-radius: 8px; padding: 8px 16px; font-size: 13px; cursor: pointer; }
+.btn-cancel:hover { background: var(--border); }
 /* compact dropdown picker (clarification type/status) */
 .picker-wrap { position: relative; }
 .picker-btn { cursor: pointer; }

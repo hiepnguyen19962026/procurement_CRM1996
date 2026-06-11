@@ -72,7 +72,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="11" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="12" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -107,6 +107,7 @@
         + renderCell((val(r, 'quantity', 'so_luong') || 0) + ' ' + (val(r, 'unit', 'don_vi') || ''), false)
         + '<td>' + technicalSummary(r) + '</td>'
         + '<td><span class="badge">' + API.esc(statusLabel(r.trang_thai_dong)) + '</span></td>'
+        + '<td class="muted-cell" style="text-align:center">' + revisionBadge(r) + '</td>'
         + '</tr>';
     }).join('');
     document.getElementById('itemMore').classList.toggle('hidden', !state.hasMore);
@@ -124,6 +125,92 @@
       + '<span>' + API.esc(count + ' lần trao đổi') + '</span>'
       + (finalText ? '<strong>' + API.esc(finalText) + '</strong>' : '')
       + '</div>';
+  }
+
+  // --- Revision history ---
+
+  function revisionBadge(r) {
+    var n = Number(r.current_revision_no || 0);
+    if (!n) return '';
+    return '<span class="link-edit" title="Xem lịch sử thay đổi quy cách" onclick="RfqItemsModule.openRevisionHistory(\''
+      + API.esc(r.rfq_item_id) + '\')">' + n + '</span>';
+  }
+
+  function openRevisionHistory(rfqItemId) {
+    var item = (state.rows || []).find(function (r) { return r.rfq_item_id === rfqItemId; }) || {};
+    API.get('getItemRevisions', { rfqItemId: rfqItemId }).then(function (data) {
+      Utils.openModal(
+        'Lịch sử thay đổi quy cách' + (item.ten_vat_tu ? ' — ' + item.ten_vat_tu : ''),
+        revisionHistoryHtml(data.rows || []),
+        null
+      );
+    }).catch(API.error);
+  }
+
+  function revisionHistoryHtml(revisions) {
+    if (!revisions.length) {
+      return '<div class="span-12"><div class="empty-state small">Chưa có lịch sử thay đổi quy cách.</div></div>';
+    }
+    var FIELDS = [
+      { key: 'ma_mua_sam',       label: 'Mã mua sắm' },
+      { key: 'ma_vat_tu',        label: 'Mã vật tư' },
+      { key: 'ten_vat_tu',       label: 'Tên vật tư' },
+      { key: 'required_model',   label: 'Model yêu cầu' },
+      { key: 'manufacturer',     label: 'Hãng SX' },
+      { key: 'brand',            label: 'Nhãn hiệu' },
+      { key: 'origin_country',   label: 'Xuất xứ' },
+      { key: 'technical_params', label: 'Thông số KT' },
+      { key: 'note',             label: 'Ghi chú' },
+      { key: 'quy_cach_final',   label: 'Model final' },
+      { key: 'hang_final',       label: 'Hãng final' },
+      { key: 'xuat_xu_final',    label: 'Xuất xứ final' },
+    ];
+    return '<div class="span-12">'
+      + '<div class="quotes-table-wrap"><table class="quotes-mini-table"><thead><tr>'
+      + '<th>Rev.</th><th>Ngày</th><th>Người tạo</th><th>Trao đổi</th>'
+      + FIELDS.map(function (f) { return '<th>' + API.esc(f.label) + '</th>'; }).join('')
+      + '</tr></thead><tbody>'
+      + revisions.map(function (r) {
+          var revBadge = r.revision_no === 0
+            ? '<span class="badge badge-grey">Gốc</span>'
+            : '<span class="badge badge-orange">' + r.revision_no + '</span>';
+          return '<tr>'
+            + '<td style="text-align:center">' + revBadge + '</td>'
+            + '<td style="white-space:nowrap;font-size:11px">' + API.esc(formatDate(r.created_at)) + '</td>'
+            + '<td>' + API.esc(r.created_by_name || r.created_by || '-') + '</td>'
+            + '<td style="font-size:12px">' + API.esc(r.clarification_title || '-') + '</td>'
+            + FIELDS.map(function (f) {
+                return '<td>' + API.esc(r[f.key] || '-') + '</td>';
+              }).join('')
+            + '</tr>';
+        }).join('')
+      + '</tbody></table></div>'
+      + '</div>';
+  }
+
+  // Shows a professional confirmation overlay (Promise-based).
+  // Resolves true if user confirms, false if user cancels.
+  function showRevisionConfirm() {
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML = '<div class="confirm-box">'
+        + '<div class="confirm-title">Xác nhận thay đổi quy cách vật tư?</div>'
+        + '<p class="confirm-desc">Hệ thống sẽ lưu lại lịch sử quy cách trước khi cập nhật quy cách final mới cho dòng vật tư này.</p>'
+        + '<div class="confirm-actions">'
+        + '<button type="button" class="btn-cancel" id="revConfirmNo">Không — chỉ lưu trao đổi</button>'
+        + '<button type="button" class="btn-primary" id="revConfirmYes">Có, xác nhận thay đổi</button>'
+        + '</div></div>';
+      document.body.appendChild(overlay);
+      overlay.querySelector('#revConfirmYes').onclick = function () {
+        document.body.removeChild(overlay);
+        resolve(true);
+      };
+      overlay.querySelector('#revConfirmNo').onclick = function () {
+        document.body.removeChild(overlay);
+        resolve(false);
+      };
+    });
   }
 
   function openCreate() {
@@ -206,9 +293,19 @@
         try {
           form.rfqItemId = rfqItemId;
           if (row.clarification_id) form.clarificationId = row.clarification_id;
-          await API.call(row.clarification_id ? 'updateTechnicalClarification' : 'createTechnicalClarification', form);
+          var action = row.clarification_id ? 'updateTechnicalClarification' : 'createTechnicalClarification';
+          // When type=final_confirm or status=final_confirmed, ask user to confirm spec revision.
+          var isFinal = form.clarificationType === 'final_confirm' || form.statusAfter === 'final_confirmed';
+          if (isFinal) {
+            var confirmed = await showRevisionConfirm();
+            form.confirmRevision = confirmed;
+          }
+          await API.call(action, form);
           Utils.closeModal();
-          API.toast('Đã lưu trao đổi kỹ thuật', 'success');
+          var msg = isFinal && form.confirmRevision
+            ? 'Đã lưu trao đổi và tạo lịch sử thay đổi quy cách'
+            : 'Đã lưu trao đổi kỹ thuật';
+          API.toast(msg, 'success');
           await load(true);
         } catch (err) {
           API.error(err);
@@ -2019,6 +2116,7 @@
     exportPriceHistory: exportPriceHistory,
     loadContractItems: loadContractItems,
     openContractFromRfqItemModal: openContractFromRfqItemModal,
+    openRevisionHistory: openRevisionHistory,
     _togglePicker: togglePicker,
     _pickOption: pickOption,
   };
