@@ -169,7 +169,23 @@
     if (delSelBtn) delSelBtn.classList.add('hidden');
     var delCnt = document.getElementById('itemDeleteCount');
     if (delCnt) delCnt.textContent = '0';
+    updateCountInfo();
     syncTopScroll();
+  }
+
+  function updateCountInfo() {
+    var el = document.getElementById('itemCountInfo');
+    if (!el) return;
+    var rows = state.rows || [];
+    if (!rows.length) { el.textContent = ''; return; }
+    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
+    if (rfqId) {
+      var rfq = (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === rfqId; });
+      var total = rfq && rfq.item_count != null ? Number(rfq.item_count) : (rows.length + (state.hasMore ? '+' : ''));
+      el.textContent = 'RFQ hiện tại: ' + total + ' dòng vật tư';
+    } else {
+      el.textContent = 'Tổng: ' + rows.length + (state.hasMore ? '+' : '') + ' dòng vật tư';
+    }
   }
 
   function technicalSummary(r) {

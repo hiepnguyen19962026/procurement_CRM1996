@@ -112,11 +112,12 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .badge-items:hover { background: #d1fae5; color: #15803d; border-color: #4ade80; }
 .rfq-note { display: block; max-width: 280px; white-space: normal; overflow-wrap: anywhere; }
 .muted-cell { color: var(--text-muted); }
-#screen-items table { min-width: 2100px; table-layout: fixed; }
+#screen-items table { min-width: 2200px; table-layout: fixed; }
 #screen-items td { overflow-wrap: anywhere; white-space: normal; }
+#screen-items thead th { white-space: normal; word-break: break-word; line-height: 1.2; vertical-align: bottom; }
+#screen-items .table-top-scroll > div { height: 1px; min-width: 2200px; }
 #screen-items input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; padding: 0; border-radius: 3px; border: 1px solid var(--border-mid); cursor: pointer; display: block; margin: auto; }
 #screen-items .table-top-scroll { overflow-x: auto; overflow-y: hidden; height: 14px; margin-bottom: 6px; }
-#screen-items .table-top-scroll > div { height: 1px; min-width: 2100px; }
 .tech-summary { display: grid; gap: 5px; min-width: 130px; }
 .tech-summary strong { font-size: 12px; font-weight: 600; }
 .modal-section { grid-column: 1 / -1; border-top: 1px solid var(--border); margin-top: 8px; padding-top: 14px; }
