@@ -153,7 +153,7 @@
 
   function panelCoverage(items, quotes) {
     return panel('Độ phủ báo giá & master item',
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:10px">'
+      '<div class="coverage-grid">'
       + coverageStat('Có báo giá', items.with_quotes, items.total, items.quote_coverage_pct)
       + coverageStat('Liên kết master', items.with_master_link, items.total, items.master_link_pct)
       + '</div>'
@@ -256,7 +256,7 @@
     var thead = '<thead><tr>'
       + headers.map(function (h) { return '<th>' + API.esc(h) + '</th>'; }).join('')
       + '</tr></thead>';
-    return '<div class="table-wrap" style="margin-top:6px">'
+    return '<div class="table-wrap dashboard-table-wrap" style="margin-top:6px">'
       + '<table class="quotes-mini-table">' + thead + '<tbody>' + bodyRows + '</tbody></table>'
       + '</div>';
   }
