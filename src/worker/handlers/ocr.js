@@ -39,18 +39,21 @@ export async function handleOcr(action, request, env, _ctx, actor) {
   }
 
   let rawText = '';
-  let mapped = {};
   try {
     const resp = await env.AI.run(VISION_MODEL, {
       prompt: buildPrompt(mode),
       image: [...new Uint8Array(bytes)],
     });
     rawText = (resp && resp.response) ? String(resp.response) : '';
-    mapped = extractJson(rawText);
   } catch (err) {
     return json({ ok: false, error: 'Lỗi OCR: ' + (err.message || String(err)) }, 500);
   }
 
+  if (mode === 'item') {
+    const rows = extractTableRows(rawText);
+    return json({ ok: true, mode, kind: 'table', rows, rawText });
+  }
+  const mapped = extractJson(rawText);
   return json({ ok: true, mapped, rawText, mode });
 }
 
@@ -67,14 +70,10 @@ function buildPrompt(mode) {
       + '"country":"country","zalo":"Zalo number if present or empty string","wechat":"WeChat ID if present or empty string",'
       + '"note":"job title, address, website, and any other info concatenated as one string"}';
   }
-  return 'Extract material or equipment data from this image. Return ONLY a valid JSON object, no extra text:\n'
-    + '{"tenVatTu":"material or equipment name","maVatTu":"material code or empty string",'
-    + '"requiredModel":"model or spec code or empty string","manufacturer":"manufacturer name or empty string",'
-    + '"brand":"brand name or empty string","originCountry":"country of origin or empty string",'
-    + '"unit":"unit of measure or empty string","quantity":"number only or empty string",'
-    + '"thueSuat":"tax rate number only or empty string","donGiaSauThue":"unit price after tax number only or empty string",'
-    + '"thanhTienSauThue":"total amount number only or empty string",'
-    + '"technicalParams":"technical specifications or empty string","note":"other notes or empty string"}';
+  return 'Extract ALL material rows from the procurement table in this image. '
+    + 'Chinese header mapping: 序号→sttGoc, 物资编码→maVatTu, 物资名称→tenVatTu, 规格型号→requiredModel, 单位→unit, 数量→quantity. '
+    + 'Return ONLY valid JSON. No markdown. No explanation.\n'
+    + '{"rows":[{"sttGoc":"","maVatTu":"","tenVatTu":"","requiredModel":"","unit":"","quantity":""}]}';
 }
 
 function extractJson(text) {
@@ -83,6 +82,31 @@ function extractJson(text) {
   const match = text.match(/\{[\s\S]*\}/);
   if (match) { try { return JSON.parse(match[0]); } catch (_) {} }
   return {};
+}
+
+function extractTableRows(text) {
+  if (!text) return [];
+  let parsed = null;
+  try { parsed = JSON.parse(text.trim()); } catch (_) {}
+  if (!parsed) {
+    const m = text.match(/\{[\s\S]*\}/);
+    if (m) { try { parsed = JSON.parse(m[0]); } catch (_) {} }
+  }
+  if (!parsed) return [];
+  const rawRows = Array.isArray(parsed.rows) ? parsed.rows
+    : Array.isArray(parsed) ? parsed
+    : [];
+  return rawRows
+    .filter(r => r && typeof r === 'object')
+    .map(r => ({
+      sttGoc:        String(r.sttGoc        ?? r['序号']   ?? '').trim(),
+      maVatTu:       String(r.maVatTu       ?? r['物资编码'] ?? '').trim(),
+      tenVatTu:      String(r.tenVatTu      ?? r['物资名称'] ?? '').trim(),
+      requiredModel: String(r.requiredModel ?? r['规格型号'] ?? '').trim(),
+      unit:          String(r.unit          ?? r['单位']   ?? '').trim(),
+      quantity:      String(r.quantity      ?? r['数量']   ?? '').trim(),
+      rawRow:        r,
+    }));
 }
 
 function detectMime(buffer) {

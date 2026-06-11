@@ -98,12 +98,108 @@
   // ── RFQ Item OCR ───────────────────────────────────────────────────────────
   function openItemOcr() {
     pickFile(ACCEPT_IMAGE, async function (file) {
-      API.toast('Đang nhận dạng ảnh...', 'info');
+      API.toast('Đang nhận dạng bảng vật tư...', 'info');
       try {
         var result = await sendOcr(file, 'item');
-        showItemPreview(result.mapped || {});
+        if (result.kind === 'table') {
+          showItemTablePreview(result.rows || []);
+        } else {
+          showItemPreview(result.mapped || {});
+        }
       } catch (err) { API.error(err); }
     });
+  }
+
+  function showItemTablePreview(rows) {
+    if (rows.length > 100) {
+      API.toast('OCR trả về ' + rows.length + ' dòng — vui lòng dùng import XLSX cho danh sách lớn', 'warn');
+      return;
+    }
+    if (!rows.length) {
+      API.toast('OCR không tìm thấy bảng vật tư trong ảnh', 'warn');
+      return;
+    }
+    var rfqIdEl = document.getElementById('itemRfqId');
+    var rfqId = rfqIdEl ? rfqIdEl.value.trim() : '';
+    Utils.openModal(
+      'OCR — Bảng vật tư (' + rows.length + ' dòng) — kiểm tra trước khi lưu',
+      itemTableHtml(rows, rfqId),
+      async function (data) {
+        var targetRfqId = (data.ocr_rfqId || '').trim();
+        if (!targetRfqId) { API.toast('Thiếu RFQ ID', 'warn'); return; }
+        var rowCount = Number(data.ocr_rowCount || 0);
+        var commitRows = [];
+        for (var i = 0; i < rowCount; i++) {
+          var tenVatTu = (data['ocr_r' + i + '_tenVatTu'] || '').trim();
+          if (!tenVatTu) continue;
+          commitRows.push({
+            sourceRowNumber: i + 1,
+            rawRow: {},
+            mapped: {
+              stt_goc:       (data['ocr_r' + i + '_sttGoc']        || '').trim(),
+              ma_vat_tu:     (data['ocr_r' + i + '_maVatTu']       || '').trim(),
+              ten_vat_tu:    tenVatTu,
+              required_model:(data['ocr_r' + i + '_requiredModel'] || '').trim(),
+              unit:          (data['ocr_r' + i + '_unit']          || '').trim(),
+              quantity:      (data['ocr_r' + i + '_quantity']      || '').trim(),
+            },
+          });
+        }
+        if (!commitRows.length) { API.toast('Không có dòng hợp lệ (Tên vật tư là bắt buộc)', 'warn'); return; }
+        try {
+          var result = await API.call('commitImportRows', {
+            rfqId: targetRfqId,
+            sourceSheetName: 'ocr',
+            rows: commitRows,
+          });
+          Utils.closeModal();
+          var s = result.summary || {};
+          var msg = 'OCR nhập ' + (s.created || 0) + ' mới'
+            + (s.updated ? ', ' + s.updated + ' cập nhật' : '')
+            + (s.errors  ? ', ' + s.errors  + ' lỗi'      : '');
+          API.toast(msg, s.errors ? 'warn' : 'success');
+          if (typeof RfqItemsModule !== 'undefined') await RfqItemsModule.load(true);
+          if (typeof DashboardModule !== 'undefined') DashboardModule.load();
+        } catch (err) { API.error(err); }
+      }
+    );
+  }
+
+  function itemTableHtml(rows, rfqId) {
+    var head = '<thead><tr>'
+      + '<th style="min-width:38px">STT</th>'
+      + '<th style="min-width:110px">Mã vật tư</th>'
+      + '<th style="min-width:220px">Tên vật tư <small style="color:#c00">*</small></th>'
+      + '<th style="min-width:170px">Quy cách / Model</th>'
+      + '<th style="min-width:52px">ĐVT</th>'
+      + '<th style="min-width:52px">SL</th>'
+      + '</tr></thead>';
+    var body = '<tbody>'
+      + rows.map(function (r, i) {
+          var emptyName = !r.tenVatTu;
+          var nameStyle = 'width:100%' + (emptyName ? ';border-left:3px solid #c00' : '');
+          return '<tr>'
+            + '<td><input name="ocr_r' + i + '_sttGoc" value="' + API.esc(r.sttGoc || '') + '" style="width:36px"></td>'
+            + '<td><input name="ocr_r' + i + '_maVatTu" value="' + API.esc(r.maVatTu || '') + '" style="width:100%"></td>'
+            + '<td><input name="ocr_r' + i + '_tenVatTu" value="' + API.esc(r.tenVatTu || '') + '" style="' + nameStyle + '"></td>'
+            + '<td><input name="ocr_r' + i + '_requiredModel" value="' + API.esc(r.requiredModel || '') + '" style="width:100%"></td>'
+            + '<td><input name="ocr_r' + i + '_unit" value="' + API.esc(r.unit || '') + '" style="width:50px"></td>'
+            + '<td><input name="ocr_r' + i + '_quantity" value="' + API.esc(r.quantity || '') + '" inputmode="decimal" style="width:50px"></td>'
+            + '</tr>';
+        }).join('')
+      + '</tbody>';
+    return ocrBanner()
+      + '<div class="span-12">'
+      + '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">'
+      + '<label style="margin:0;flex:0 0 auto;font-weight:600">RFQ ID <small style="color:#c00">*</small></label>'
+      + '<input name="ocr_rfqId" value="' + API.esc(rfqId) + '" placeholder="VD: RFQ-2026-001" style="max-width:200px">'
+      + '</div>'
+      + '<p style="margin:0 0 8px;font-size:12px;color:var(--text-muted)">Chỉnh sửa trực tiếp trong bảng. Dòng không có Tên vật tư sẽ bị bỏ qua khi nhập.</p>'
+      + '<div style="overflow:auto;max-height:400px">'
+      + '<table class="quotes-mini-table" style="min-width:680px">' + head + body + '</table>'
+      + '</div>'
+      + '<input type="hidden" name="ocr_rowCount" value="' + rows.length + '">'
+      + '</div>';
   }
 
   function showItemPreview(m) {
