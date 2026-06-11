@@ -8,6 +8,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icon-192.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
   <link rel="stylesheet" href="/assets/css/app.css">
   <title>Procurement CRM</title>
 </head>
@@ -44,9 +46,10 @@
         <span>Phiên bản 1.0.0</span>
       </div>
     </aside>
+    <div class="mobile-nav-backdrop" onclick="document.body.classList.remove('mobile-nav-open')"></div>
     <main class="main">
       <header class="topbar">
-        <div class="topbar-left"><button class="hamburger" type="button" onclick="document.body.classList.toggle('sidebar-collapsed')">☰</button><strong id="screenTitle">Tổng quan</strong><div id="screenActions" class="screen-actions"></div></div>
+        <div class="topbar-left"><button class="hamburger" type="button" onclick="if(window.innerWidth<=860){document.body.classList.toggle('mobile-nav-open')}else{document.body.classList.toggle('sidebar-collapsed')}">☰</button><strong id="screenTitle">Tổng quan</strong><div id="screenActions" class="screen-actions"></div></div>
         <div class="topbar-right">
           <label class="quick-search"><span>⌕</span><input id="quickSearch" placeholder="Tìm kiếm nhanh..."><kbd>Ctrl K</kbd></label>
           <div class="userbar" id="currentUser"></div>
@@ -204,6 +207,7 @@
     });
     document.getElementById('nav').addEventListener('click', function (e) {
       if (!e.target.matches('button[data-screen]')) return;
+      document.body.classList.remove('mobile-nav-open');
       document.querySelectorAll('.nav button').forEach(function (b) { b.classList.remove('active'); });
       e.target.classList.add('active');
       var screen = e.target.getAttribute('data-screen');

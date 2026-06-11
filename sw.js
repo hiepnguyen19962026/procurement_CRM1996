@@ -1,6 +1,9 @@
 // bump CACHE_NAME on every deploy that changes JS/CSS to bust stale asset cache
-const CACHE_NAME = 'procurement-crm-v19';
+const CACHE_NAME = 'procurement-crm-v20';
 const STATIC_ASSETS = [
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
   '/assets/css/app.css',
   '/assets/js/core/api.js',
   '/assets/js/core/state.js',

@@ -227,6 +227,9 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
   .sidebar-collapsed .sidebar { display: none; }
 }
 
+/* mobile nav backdrop — hidden everywhere by default */
+.mobile-nav-backdrop { display: none; }
+
 /* clickable identifier cells in tables */
 span.link-edit { cursor: pointer; }
 span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
@@ -240,16 +243,28 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 }
 
 @media (max-width: 860px) {
+  /* app layout: sidebar is fixed off-canvas, main fills full width */
   .is-auth .app { grid-template-columns: 1fr; }
-  .sidebar { position: sticky; top: 0; z-index: 10; height: auto; border-right: 0; border-bottom: 1px solid var(--border); padding: 12px; }
-  .brand { min-height: 44px; }
-  .logo-mark { width: 38px; height: 38px; flex-basis: 38px; font-size: 12px; }
-  .nav { display: flex; overflow: auto; gap: 6px; padding-bottom: 2px; }
-  .nav-section, .sidebar-foot { display: none; }
-  .nav button { white-space: nowrap; width: auto; min-height: 38px; }
+
+  /* sidebar: fixed off-canvas left drawer */
+  .sidebar { position: fixed; left: 0; top: 0; height: 100vh; width: 280px; z-index: 50; transform: translateX(-100%); transition: transform 0.22s ease; overflow-y: auto; border-right: 1px solid var(--border); border-bottom: none; padding: 18px 16px; }
+  body.mobile-nav-open .sidebar { transform: translateX(0); box-shadow: var(--shadow-md); }
+
+  /* backdrop behind open drawer */
+  .mobile-nav-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.4); z-index: 49; display: none; }
+  body.mobile-nav-open .mobile-nav-backdrop { display: block; }
+
+  /* nav: restore vertical grid layout */
+  .nav { display: grid; gap: 5px; overflow: visible; padding-bottom: 0; }
+  .nav button { width: 100%; white-space: normal; min-height: 42px; }
+  .nav-section { display: block; }
+  .sidebar-foot { display: grid; }
+
+  /* topbar and main content */
   .topbar { padding: 6px 12px; }
   .topbar-right { gap: 8px; }
-  .content { padding: 16px 12px; }
+  .main { overflow-x: hidden; max-width: 100vw; }
+  .content { padding: 16px 12px; overflow-x: hidden; }
   .page-actions { justify-content: flex-start; }
   .toolbar input, .toolbar select { max-width: 100%; flex: 1 1 220px; }
   .metrics { grid-template-columns: 1fr; }

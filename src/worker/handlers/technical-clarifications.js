@@ -138,6 +138,10 @@ async function deleteClarification(request, env, ctx, actor) {
   const clarificationId = cleanString(body.clarificationId || body.clarification_id, 80);
   const oldRow = await getTechnicalClarificationSQL(env.DB, clarificationId);
   if (!oldRow || oldRow.deleted_at) return json({ ok: false, error: 'Khong tim thay trao doi ky thuat' }, 404);
+  const linkedRev = await env.DB.prepare(
+    `SELECT 1 FROM rfq_item_revisions WHERE source_clarification_id = ? LIMIT 1`
+  ).bind(clarificationId).first();
+  if (linkedRev) return json({ ok: false, error: 'Trao doi nay da tao lich su thay doi quy cach va khong the xoa' }, 409);
   const now = nowIso();
   await softDeleteTechnicalClarificationSQL(env.DB, { clarificationId, deletedAt: now });
   ctx.waitUntil(writeActionLog(env, {
