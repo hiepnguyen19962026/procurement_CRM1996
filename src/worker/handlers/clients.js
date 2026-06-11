@@ -1,5 +1,5 @@
-import { getClientSQL, insertClientSQL, listClientsSQL, updateClientSQL } from '../db/client-queries.js';
-import { ALL_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
+import { archiveClientSQL, getClientSQL, insertClientSQL, listClientsSQL, updateClientSQL } from '../db/client-queries.js';
+import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
 import { buildSearchText, cleanString, normalizeText } from '../lib/normalize.js';
 import { clampLimit, json, nextEntityId, nowIso, readJson } from '../lib/utils.js';
@@ -10,6 +10,7 @@ export async function handleClients(action, request, env, ctx, actor) {
   if (action === 'getClients') return listClients(request, env, actor);
   if (action === 'createClient') return saveClient(request, env, ctx, actor, false);
   if (action === 'updateClient') return saveClient(request, env, ctx, actor, true);
+  if (action === 'archiveClient') return archiveClient(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown client action' }, 400);
 }
 
@@ -19,6 +20,20 @@ async function listClients(request, env, actor) {
   const p = await readJson(request);
   const data = await listClientsSQL(env.DB, { q: normalizeText(p.q), cursor: p.cursor || '', sortBy: p.sortBy || '', sortDir: p.sortDir || '', limit: clampLimit(p.limit) });
   return json({ ok: true, ...data });
+}
+
+async function archiveClient(request, env, ctx, actor) {
+  const denied = requireRole(actor, MANAGE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const clientId = cleanString(body.clientId || body.client_id, 80);
+  if (!clientId) return json({ ok: false, error: 'Thieu ma khach hang' }, 400);
+  const row = await getClientSQL(env.DB, clientId);
+  if (!row) return json({ ok: false, error: 'Khong tim thay khach hang' }, 404);
+  const now = nowIso();
+  await archiveClientSQL(env.DB, clientId, now);
+  ctx.waitUntil(writeActionLog(env, { action: 'archiveClient', entityType: 'client', entityId: clientId, oldJson: row, newJson: null, actor }));
+  return json({ ok: true });
 }
 
 async function saveClient(request, env, ctx, actor, isUpdate) {

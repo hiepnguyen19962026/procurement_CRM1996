@@ -22,15 +22,15 @@ import { actorFromRequest, validateActorSession, validateSecret } from './lib/au
 import { json, readJson } from './lib/utils.js';
 
 const ACCOUNT_ACTIONS = ['authLogin', 'initSetup', 'logout', 'getSession', 'changePassword', 'getAccounts', 'createAccount', 'updateAccount'];
-const CLIENT_ACTIONS = ['getClients', 'createClient', 'updateClient'];
+const CLIENT_ACTIONS = ['getClients', 'createClient', 'updateClient', 'archiveClient'];
 const CLIENT_EQUIPMENT_ACTIONS    = ['getClientEquipment', 'createClientEquipment', 'updateClientEquipment', 'archiveClientEquipment', 'importClientEquipment'];
 const CLIENT_CONTACT_ACTIONS      = ['getClientContacts', 'createClientContact', 'updateClientContact', 'archiveClientContact', 'importClientContacts'];
 const CLIENT_BANK_ACCOUNT_ACTIONS = ['getClientBankAccounts', 'createClientBankAccount', 'updateClientBankAccount', 'archiveClientBankAccount'];
 const CLIENT_LEGAL_HISTORY_ACTIONS = ['getClientLegalHistory', 'addClientLegalHistory'];
 const RFQ_CONTACT_ACTIONS         = ['getRfqContacts', 'addRfqContact', 'archiveRfqContact'];
-const SUPPLIER_ACTIONS = ['getSuppliers', 'createSupplier', 'updateSupplier'];
-const RFQ_ACTIONS = ['getDashboard', 'getRfqs', 'createRfq', 'updateRfq'];
-const RFQ_ITEM_ACTIONS = ['getRfqItems', 'createRfqItem', 'updateRfqItem'];
+const SUPPLIER_ACTIONS = ['getSuppliers', 'createSupplier', 'updateSupplier', 'archiveSupplier'];
+const RFQ_ACTIONS = ['getDashboard', 'getRfqs', 'createRfq', 'updateRfq', 'archiveRfq'];
+const RFQ_ITEM_ACTIONS = ['getRfqItems', 'createRfqItem', 'updateRfqItem', 'archiveRfqItem'];
 const TECHNICAL_CLARIFICATION_ACTIONS = ['getTechnicalClarifications', 'getItemRevisions', 'createTechnicalClarification', 'updateTechnicalClarification', 'deleteTechnicalClarification'];
 const SUPPLIER_QUOTE_ACTIONS = ['getSupplierQuotes', 'searchSupplierQuotes', 'createSupplierQuote', 'updateSupplierQuote', 'archiveSupplierQuote'];
 const PRICING_DECISION_ACTIONS = ['getPricingDecisions', 'createPricingDecision'];

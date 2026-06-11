@@ -68,7 +68,7 @@
               <select id="rfqStatus"><option value="">Tất cả trạng thái</option><option value="dang_khao_gia">Đang khảo giá</option><option value="da_bao">Đã báo</option><option value="trung">Trúng</option><option value="khong_trung">Không trúng</option><option value="treo">Treo</option></select>
               <button onclick="RfqsModule.load(true)">Tìm kiếm</button>
             </div>
-            <div class="table-wrap"><table><thead><tr><th data-sort-key="rfq_id">ID</th><th data-sort-key="ma_goi">Mã gói</th><th data-sort-key="ten_goi">Tên gói</th><th data-sort-key="client_name">CĐT</th><th data-sort-key="ngay_dang_tai">Ngày đăng tải</th><th data-sort-key="han_nop">Hạn nộp</th><th>Dòng vật tư</th><th data-sort-key="du_toan">Dự toán</th><th data-sort-key="trang_thai">Trạng thái</th><th>Ghi chú</th></tr></thead><tbody id="rfqRows"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th data-sort-key="rfq_id">ID</th><th data-sort-key="ma_goi">Mã gói</th><th data-sort-key="ten_goi">Tên gói</th><th data-sort-key="client_name">CĐT</th><th data-sort-key="ngay_dang_tai">Ngày đăng tải</th><th data-sort-key="han_nop">Hạn nộp</th><th>Dòng vật tư</th><th data-sort-key="du_toan">Dự toán</th><th data-sort-key="trang_thai">Trạng thái</th><th>Ghi chú</th><th data-role-only="admin,manager" style="width:28px"></th></tr></thead><tbody id="rfqRows"></tbody></table></div>
             <p><button id="rfqMore" class="hidden" onclick="RfqsModule.load(false)">Tải thêm</button></p>
           </div>
         </section>
@@ -81,17 +81,17 @@
               <select id="itemStatus"><option value="">Tất cả</option><option value="chua_xu_ly">Chưa xử lý</option><option value="dang_hoi_gia">Đang hỏi giá</option><option value="du_gia">Đủ giá</option><option value="da_final">Đã final</option></select>
               <button onclick="RfqItemsModule.load(true)">Tìm kiếm</button>
             </div>
-            <div class="table-wrap"><table><thead><tr><th data-sort-key="stt">STT</th><th data-sort-key="ma_mua_sam">Mã mua sắm</th><th data-sort-key="ma_vat_tu">Mã vật tư</th><th data-sort-key="ten_vat_tu">Tên vật tư / Danh mục hàng hóa</th><th data-sort-key="required_model">Ký mã hiệu / Model</th><th data-sort-key="brand">Nhãn hiệu</th><th data-sort-key="manufacturer">Hãng sản xuất</th><th data-sort-key="origin_country">Xuất xứ</th><th>Khối lượng</th><th>Xác nhận kỹ thuật</th><th data-sort-key="trang_thai">Trạng thái gói</th><th title="Lịch sử thay đổi quy cách">Thay đổi</th></tr></thead><tbody id="itemRows"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th data-sort-key="stt">STT</th><th data-sort-key="ma_mua_sam">Mã mua sắm</th><th data-sort-key="ma_vat_tu">Mã vật tư</th><th data-sort-key="ten_vat_tu">Tên vật tư / Danh mục hàng hóa</th><th data-sort-key="required_model">Ký mã hiệu / Model</th><th data-sort-key="brand">Nhãn hiệu</th><th data-sort-key="manufacturer">Hãng sản xuất</th><th data-sort-key="origin_country">Xuất xứ</th><th>Khối lượng</th><th>Xác nhận kỹ thuật</th><th data-sort-key="trang_thai">Trạng thái gói</th><th title="Lịch sử thay đổi quy cách">Thay đổi</th><th data-role-only="admin,manager" style="width:28px"></th></tr></thead><tbody id="itemRows"></tbody></table></div>
             <p><button id="itemMore" class="hidden" onclick="RfqItemsModule.load(false)">Tải thêm</button></p>
           </div>
         </section>
 
         <section class="screen" id="screen-clients">
-          <div class="panel"><div class="toolbar"><input id="clientSearch" placeholder="Tìm khách hàng, nhà máy, tỉnh"><button onclick="ClientsModule.load(true)">Tìm kiếm</button></div><div class="table-wrap"><table><thead><tr><th data-sort-key="client_id">ID</th><th data-sort-key="client_name">Tên</th><th data-sort-key="plant_name">Nhà máy</th><th data-sort-key="province">Tỉnh</th><th>Ghi chú</th></tr></thead><tbody id="clientRows"></tbody></table></div><p><button id="clientMore" class="hidden" onclick="ClientsModule.load(false)">Tải thêm</button></p></div>
+          <div class="panel"><div class="toolbar"><input id="clientSearch" placeholder="Tìm khách hàng, nhà máy, tỉnh"><button onclick="ClientsModule.load(true)">Tìm kiếm</button></div><div class="table-wrap"><table><thead><tr><th data-sort-key="client_id">ID</th><th data-sort-key="client_name">Tên</th><th data-sort-key="plant_name">Nhà máy</th><th data-sort-key="province">Tỉnh</th><th>Ghi chú</th><th data-role-only="admin,manager" style="width:28px"></th></tr></thead><tbody id="clientRows"></tbody></table></div><p><button id="clientMore" class="hidden" onclick="ClientsModule.load(false)">Tải thêm</button></p></div>
         </section>
 
         <section class="screen" id="screen-suppliers">
-          <div class="panel"><div class="toolbar"><input id="supplierSearch" placeholder="Tìm nhà cung cấp, liên hệ"><button onclick="SuppliersModule.load(true)">Tìm kiếm</button></div><div class="table-wrap"><table><thead><tr><th data-sort-key="supplier_id">ID</th><th data-sort-key="supplier_name">Tên</th><th data-sort-key="supplier_type">Loại</th><th data-sort-key="country">Quốc gia</th><th>Liên hệ</th><th>Email</th></tr></thead><tbody id="supplierRows"></tbody></table></div><p><button id="supplierMore" class="hidden" onclick="SuppliersModule.load(false)">Tải thêm</button></p></div>
+          <div class="panel"><div class="toolbar"><input id="supplierSearch" placeholder="Tìm nhà cung cấp, liên hệ"><button onclick="SuppliersModule.load(true)">Tìm kiếm</button></div><div class="table-wrap"><table><thead><tr><th data-sort-key="supplier_id">ID</th><th data-sort-key="supplier_name">Tên</th><th data-sort-key="supplier_type">Loại</th><th data-sort-key="country">Quốc gia</th><th>Liên hệ</th><th>Email</th><th data-role-only="admin,manager" style="width:28px"></th></tr></thead><tbody id="supplierRows"></tbody></table></div><p><button id="supplierMore" class="hidden" onclick="SuppliersModule.load(false)">Tải thêm</button></p></div>
         </section>
 
         <section class="screen" id="screen-quotes">
@@ -136,6 +136,7 @@
                     <th>Bảo hành</th>
                     <th>Trạng thái</th>
                     <th>Thao tác</th>
+                    <th data-role-only="admin,manager" style="width:28px"></th>
                   </tr>
                 </thead>
                 <tbody id="sqRows"></tbody>

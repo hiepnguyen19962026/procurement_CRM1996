@@ -127,6 +127,9 @@
       + (quoteSourceText(r) ? '<br><small style="color:var(--text-muted)">' + API.esc(quoteSourceText(r)) + '</small>' : '')
       + (r.received_at ? '<br><small style="color:var(--text-muted)">Nhận: ' + API.esc(r.received_at) + '</small>' : '');
 
+    var archiveBtn = r.status !== 'archived'
+      ? '<button type="button" data-role-only="admin,manager" class="btn-x-archive" title="Lưu trữ báo giá" onclick="SupplierQuotesModule.archiveQuote(\'' + API.esc(r.quote_id) + '\')">✕</button>'
+      : '';
     return '<tr>' +
       '<td>' + rfqCell + '</td>' +
       '<td>' + itemCell + '</td>' +
@@ -139,6 +142,7 @@
       '<td>' + API.esc(r.warranty || '') + '</td>' +
       '<td>' + statusBadge + '</td>' +
       '<td><button onclick="SupplierQuotesModule.openItem(\'' + r.rfq_item_id + '\')">Xem vật tư</button></td>' +
+      '<td data-role-only="admin,manager" style="text-align:center;padding:0 4px">' + archiveBtn + '</td>' +
       '</tr>';
   }
 
@@ -165,5 +169,14 @@
     }
   }
 
-  window.SupplierQuotesModule = { init: init, load: load, search: search, reset: reset, loadMore: loadMore, openItem: openItem };
+  async function archiveQuote(quoteId) {
+    if (!window.confirm('Lưu trữ báo giá này?')) return;
+    try {
+      await API.call('archiveSupplierQuote', { quoteId: quoteId });
+      API.toast('Đã lưu trữ báo giá', 'success');
+      await load(true);
+    } catch (err) { API.error(err); }
+  }
+
+  window.SupplierQuotesModule = { init: init, load: load, search: search, reset: reset, loadMore: loadMore, openItem: openItem, archiveQuote: archiveQuote };
 })();

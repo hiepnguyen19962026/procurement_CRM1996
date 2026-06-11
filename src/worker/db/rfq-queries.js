@@ -27,7 +27,11 @@ export async function listRfqsSQL(db, { q, status, cursor, sortBy, sortDir, limi
     where.push('(r.normalized_search LIKE ? OR r.ten_goi LIKE ? OR r.ma_goi_tbmt LIKE ?)');
     binds.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
-  if (status) { where.push('r.trang_thai_goi = ?'); binds.push(status); }
+  if (status) {
+    where.push('r.trang_thai_goi = ?'); binds.push(status);
+  } else {
+    where.push("r.trang_thai_goi != 'archived'");
+  }
   if (cursor) {
     const c = parseCursor(cursor);
     if (!sort || c.sortVal === undefined) {
@@ -77,6 +81,11 @@ export async function updateRfqSQL(db, row) {
        ngay_het_han = ?, du_toan = ?, trang_thai_goi = ?, source_file_id = ?, note = ?, normalized_search = ?, updated_at = ?
      WHERE rfq_id = ?`
   ).bind(row.client_id, row.ma_goi_tbmt, row.ten_goi, row.nha_may_cdt, row.ngay_nhan_hoac_dang_tai, row.ngay_het_han, row.du_toan, row.trang_thai_goi, row.source_file_id, row.note, row.normalized_search, row.updated_at, row.rfq_id).run();
+}
+
+export async function archiveRfqSQL(db, rfqId, now) {
+  return db.prepare("UPDATE rfqs SET trang_thai_goi = 'archived', updated_at = ? WHERE rfq_id = ?")
+    .bind(now, rfqId).run();
 }
 
 export async function getDashboardSQL(db) {

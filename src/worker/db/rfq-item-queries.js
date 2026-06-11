@@ -28,7 +28,11 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, cursor, sortBy, so
     binds.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   }
   if (rfqId) { where.push('i.rfq_id = ?'); binds.push(rfqId); }
-  if (status) { where.push('i.trang_thai_dong = ?'); binds.push(status); }
+  if (status) {
+    where.push('i.trang_thai_dong = ?'); binds.push(status);
+  } else {
+    where.push("i.trang_thai_dong != 'archived'");
+  }
   if (cursor) {
     const c = parseCursor(cursor);
     if (!sort || c.sortVal === undefined) {
@@ -64,6 +68,11 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, cursor, sortBy, so
     nextCursor = sort ? String(last[sort.rowKey] ?? '') + '|||' + last.rfq_item_id : String(last.rfq_item_id);
   }
   return { rows: page, hasMore: rows.length > limit, nextCursor };
+}
+
+export async function archiveRfqItemSQL(db, rfqItemId, now) {
+  return db.prepare("UPDATE rfq_items SET trang_thai_dong = 'archived', updated_at = ? WHERE rfq_item_id = ?")
+    .bind(now, rfqItemId).run();
 }
 
 export async function getRfqItemSQL(db, id) {

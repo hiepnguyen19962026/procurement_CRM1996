@@ -84,6 +84,9 @@
         + '<td style="white-space:nowrap;text-align:right">' + (API.money(r.du_toan) || '<span class="muted">—</span>') + '</td>'
         + '<td style="white-space:nowrap">' + statCell + '</td>'
         + '<td>' + noteCell(r.note) + '</td>'
+        + '<td data-role-only="admin,manager" style="text-align:center;padding:0 4px">'
+          + '<button type="button" class="btn-x-archive" title="Lưu trữ RFQ" onclick="RfqsModule.archiveRfq(\'' + API.esc(r.rfq_id) + '\')">✕</button>'
+          + '</td>'
         + '</tr>';
     }).join('');
     document.getElementById('rfqMore').classList.toggle('hidden', !state.hasMore);
@@ -469,6 +472,15 @@
     } catch (err) { API.error(err); }
   }
 
+  async function archiveRfq(rfqId) {
+    if (!window.confirm('Lưu trữ RFQ ' + rfqId + '? RFQ sẽ bị ẩn khỏi danh sách.')) return;
+    try {
+      await API.call('archiveRfq', { rfqId: rfqId });
+      API.toast('Đã lưu trữ RFQ', 'success');
+      await load(true);
+    } catch (err) { API.error(err); }
+  }
+
   // ─── helpers ───────────────────────────────────────────────────────────────
 
   function valueOrDash(value) {
@@ -502,5 +514,6 @@
     openContactPicker: openContactPicker,
     _addRfqContact:   _addRfqContact,
     archiveRfqContact: archiveRfqContact,
+    archiveRfq:        archiveRfq,
   };
 })();

@@ -1,5 +1,5 @@
-import { getDashboardSQL, getRfqSQL, insertRfqSQL, listRfqsSQL, updateRfqSQL } from '../db/rfq-queries.js';
-import { ALL_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
+import { archiveRfqSQL, getDashboardSQL, getRfqSQL, insertRfqSQL, listRfqsSQL, updateRfqSQL } from '../db/rfq-queries.js';
+import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { getKv, setKv, invalidateKv } from '../lib/cache.js';
 import { writeActionLog } from '../lib/action-log.js';
 import { buildSearchText, cleanMoney, cleanString, normalizeText } from '../lib/normalize.js';
@@ -10,6 +10,7 @@ export async function handleRfqs(action, request, env, ctx, actor) {
   if (action === 'getRfqs') return listRfqs(request, env, actor);
   if (action === 'createRfq') return saveRfq(request, env, ctx, actor, false);
   if (action === 'updateRfq') return saveRfq(request, env, ctx, actor, true);
+  if (action === 'archiveRfq') return archiveRfq(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown RFQ action' }, 400);
 }
 
@@ -29,6 +30,21 @@ async function listRfqs(request, env, actor) {
   const p = await readJson(request);
   const data = await listRfqsSQL(env.DB, { q: normalizeText(p.q), status: p.status || '', cursor: p.cursor || '', sortBy: p.sortBy || '', sortDir: p.sortDir || '', limit: clampLimit(p.limit) });
   return json({ ok: true, ...data });
+}
+
+async function archiveRfq(request, env, ctx, actor) {
+  const denied = requireRole(actor, MANAGE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const rfqId = cleanString(body.rfqId || body.rfq_id, 80);
+  if (!rfqId) return json({ ok: false, error: 'Thieu ma RFQ' }, 400);
+  const row = await getRfqSQL(env.DB, rfqId);
+  if (!row) return json({ ok: false, error: 'Khong tim thay RFQ' }, 404);
+  const now = nowIso();
+  await archiveRfqSQL(env.DB, rfqId, now);
+  ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
+  ctx.waitUntil(writeActionLog(env, { action: 'archiveRfq', entityType: 'rfq', entityId: rfqId, oldJson: row, newJson: null, actor }));
+  return json({ ok: true });
 }
 
 async function saveRfq(request, env, ctx, actor, isUpdate) {

@@ -17,7 +17,7 @@ export async function listSuppliersSQL(db, { q, cursor, sortBy, sortDir, limit }
   const op  = dir === 'ASC' ? '>' : '<';
 
   const binds = [];
-  const where = [];
+  const where = ['deleted_at IS NULL'];
   if (q) {
     where.push('(normalized_search LIKE ? OR supplier_name LIKE ?)');
     binds.push(`%${q}%`, `%${q}%`);
@@ -47,6 +47,11 @@ export async function listSuppliersSQL(db, { q, cursor, sortBy, sortDir, limit }
     nextCursor = sort ? String(last[sort.rowKey] ?? '') + '|||' + last.supplier_id : last.supplier_id;
   }
   return { rows: page, hasMore: rows.length > limit, nextCursor };
+}
+
+export async function archiveSupplierSQL(db, supplierId, now) {
+  return db.prepare('UPDATE suppliers SET deleted_at = ? WHERE supplier_id = ?')
+    .bind(now, supplierId).run();
 }
 
 export async function getSupplierSQL(db, id) {

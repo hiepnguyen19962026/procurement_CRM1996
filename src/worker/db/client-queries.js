@@ -17,7 +17,7 @@ export async function listClientsSQL(db, { q, cursor, sortBy, sortDir, limit }) 
   const op  = dir === 'ASC' ? '>' : '<';
 
   const binds = [];
-  const where = [];
+  const where = ['deleted_at IS NULL'];
   if (q) {
     // LIKE on client_id: SQLite LIKE is case-insensitive for ASCII, so 'cl-2026%' matches 'CL-2026-00001'
     where.push('(normalized_search LIKE ? OR client_name LIKE ? OR client_id LIKE ?)');
@@ -49,6 +49,11 @@ export async function listClientsSQL(db, { q, cursor, sortBy, sortDir, limit }) 
     nextCursor = sort ? String(last[sort.rowKey] ?? '') + '|||' + last.client_id : last.client_id;
   }
   return { rows: page, hasMore: rows.length > limit, nextCursor };
+}
+
+export async function archiveClientSQL(db, clientId, now) {
+  return db.prepare('UPDATE clients SET deleted_at = ? WHERE client_id = ?')
+    .bind(now, clientId).run();
 }
 
 export async function getClientSQL(db, id) {

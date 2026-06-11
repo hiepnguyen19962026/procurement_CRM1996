@@ -1,5 +1,5 @@
-import { getSupplierSQL, insertSupplierSQL, listSuppliersSQL, updateSupplierSQL } from '../db/supplier-queries.js';
-import { ALL_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
+import { archiveSupplierSQL, getSupplierSQL, insertSupplierSQL, listSuppliersSQL, updateSupplierSQL } from '../db/supplier-queries.js';
+import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
 import { buildSearchText, cleanString, normalizeText } from '../lib/normalize.js';
 import { clampLimit, json, nextEntityId, nowIso, readJson } from '../lib/utils.js';
@@ -8,6 +8,7 @@ export async function handleSuppliers(action, request, env, ctx, actor) {
   if (action === 'getSuppliers') return listSuppliers(request, env, actor);
   if (action === 'createSupplier') return saveSupplier(request, env, ctx, actor, false);
   if (action === 'updateSupplier') return saveSupplier(request, env, ctx, actor, true);
+  if (action === 'archiveSupplier') return archiveSupplier(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown supplier action' }, 400);
 }
 
@@ -17,6 +18,20 @@ async function listSuppliers(request, env, actor) {
   const p = await readJson(request);
   const data = await listSuppliersSQL(env.DB, { q: normalizeText(p.q), cursor: p.cursor || '', sortBy: p.sortBy || '', sortDir: p.sortDir || '', limit: clampLimit(p.limit) });
   return json({ ok: true, ...data });
+}
+
+async function archiveSupplier(request, env, ctx, actor) {
+  const denied = requireRole(actor, MANAGE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const supplierId = cleanString(body.supplierId || body.supplier_id, 80);
+  if (!supplierId) return json({ ok: false, error: 'Thieu ma nha cung cap' }, 400);
+  const row = await getSupplierSQL(env.DB, supplierId);
+  if (!row) return json({ ok: false, error: 'Khong tim thay nha cung cap' }, 404);
+  const now = nowIso();
+  await archiveSupplierSQL(env.DB, supplierId, now);
+  ctx.waitUntil(writeActionLog(env, { action: 'archiveSupplier', entityType: 'supplier', entityId: supplierId, oldJson: row, newJson: null, actor }));
+  return json({ ok: true });
 }
 
 async function saveSupplier(request, env, ctx, actor, isUpdate) {

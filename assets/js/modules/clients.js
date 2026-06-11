@@ -91,6 +91,9 @@
         + '<td>' + API.esc(r.plant_name) + '</td>'
         + '<td>' + API.esc(r.province) + '</td>'
         + '<td>' + API.esc(r.note) + '</td>'
+        + '<td data-role-only="admin,manager" style="text-align:center;padding:0 4px">'
+          + '<button type="button" class="btn-x-archive" title="Lưu trữ khách hàng" onclick="ClientsModule.archiveClient(\'' + API.esc(r.client_id) + '\')">✕</button>'
+          + '</td>'
         + '</tr>';
     }).join('');
     document.getElementById('clientMore').classList.toggle('hidden', !state.hasMore);
@@ -649,6 +652,15 @@
     URL.revokeObjectURL(url);
   }
 
+  async function archiveClient(clientId) {
+    if (!window.confirm('Lưu trữ khách hàng ' + clientId + '? Khách hàng sẽ bị ẩn khỏi danh sách.')) return;
+    try {
+      await API.call('archiveClient', { clientId: clientId });
+      API.toast('Đã lưu trữ khách hàng', 'success');
+      await load(true);
+    } catch (err) { API.error(err); }
+  }
+
   // ─── public API ────────────────────────────────────────────────────────────
 
   window.ClientsModule = {
@@ -669,5 +681,6 @@
     downloadClientTemplate: downloadClientTemplate,
     importClientsCsv: importClientsCsv,
     exportClientsCsv: exportClientsCsv,
+    archiveClient: archiveClient,
   };
 })();

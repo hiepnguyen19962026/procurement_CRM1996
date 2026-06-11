@@ -1,6 +1,6 @@
-import { getRfqItemSQL, insertRfqItemSQL, listRfqItemsSQL, updateRfqItemSQL } from '../db/rfq-item-queries.js';
+import { archiveRfqItemSQL, getRfqItemSQL, insertRfqItemSQL, listRfqItemsSQL, updateRfqItemSQL } from '../db/rfq-item-queries.js';
 import { getRfqSQL } from '../db/rfq-queries.js';
-import { ALL_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
+import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { invalidateKv } from '../lib/cache.js';
 import { writeActionLog } from '../lib/action-log.js';
 import { buildSearchText, cleanMoney, cleanNumber, cleanString, normalizeText } from '../lib/normalize.js';
@@ -10,6 +10,7 @@ export async function handleRfqItems(action, request, env, ctx, actor) {
   if (action === 'getRfqItems') return listItems(request, env, actor);
   if (action === 'createRfqItem') return saveItem(request, env, ctx, actor, false);
   if (action === 'updateRfqItem') return saveItem(request, env, ctx, actor, true);
+  if (action === 'archiveRfqItem') return archiveItem(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown RFQ item action' }, 400);
 }
 
@@ -27,6 +28,21 @@ async function listItems(request, env, actor) {
     limit: clampLimit(p.limit),
   });
   return json({ ok: true, ...data });
+}
+
+async function archiveItem(request, env, ctx, actor) {
+  const denied = requireRole(actor, MANAGE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const rfqItemId = cleanString(body.rfqItemId || body.rfq_item_id, 80);
+  if (!rfqItemId) return json({ ok: false, error: 'Thieu ma dong vat tu' }, 400);
+  const row = await getRfqItemSQL(env.DB, rfqItemId);
+  if (!row) return json({ ok: false, error: 'Khong tim thay dong vat tu' }, 404);
+  const now = nowIso();
+  await archiveRfqItemSQL(env.DB, rfqItemId, now);
+  ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
+  ctx.waitUntil(writeActionLog(env, { action: 'archiveRfqItem', entityType: 'rfq_item', entityId: rfqItemId, oldJson: row, newJson: null, actor }));
+  return json({ ok: true });
 }
 
 async function saveItem(request, env, ctx, actor, isUpdate) {

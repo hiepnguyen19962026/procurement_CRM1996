@@ -2,6 +2,7 @@
   var state = AppState.list('rfqItems');
   var sort = { by: '', dir: 'desc' };
   var _setupDone = false;
+  var clarificationDataCache = {};
 
   function setupOnce() {
     if (_setupDone) return;
@@ -72,7 +73,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="12" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="13" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -108,6 +109,9 @@
         + '<td>' + technicalSummary(r) + '</td>'
         + '<td><span class="badge">' + API.esc(statusLabel(r.trang_thai_dong)) + '</span></td>'
         + '<td class="muted-cell" style="text-align:center">' + revisionBadge(r) + '</td>'
+        + '<td data-role-only="admin,manager" style="text-align:center;padding:0 4px">'
+          + '<button type="button" class="btn-x-archive" title="Lưu trữ dòng vật tư" onclick="RfqItemsModule.archiveRfqItem(\'' + API.esc(r.rfq_item_id) + '\')">✕</button>'
+          + '</td>'
         + '</tr>';
     }).join('');
     document.getElementById('itemMore').classList.toggle('hidden', !state.hasMore);
@@ -211,6 +215,94 @@
         resolve(false);
       };
     });
+  }
+
+  function quickEditBadge(ev, rfqItemId) {
+    ev.stopPropagation();
+    var btn = ev.currentTarget;
+    var clarificationId = btn.dataset.clid;
+    var field = btn.dataset.field;
+    var chips = field === 'clarification_type' ? TYPE_CHIPS : STATUS_CHIPS;
+
+    var existing = document.getElementById('tcl-badge-pop');
+    if (existing) {
+      var wasSame = existing.dataset.clid === clarificationId && existing.dataset.field === field;
+      existing.remove();
+      if (wasSame) return;
+    }
+
+    var row = clarificationDataCache[clarificationId];
+    var currentVal = row ? (field === 'clarification_type' ? row.clarification_type : row.status_after) : '';
+
+    var pop = document.createElement('div');
+    pop.id = 'tcl-badge-pop';
+    pop.className = 'picker-list';
+    pop.dataset.clid = clarificationId;
+    pop.dataset.field = field;
+    pop.innerHTML = chips.map(function (c) {
+      return '<button type="button" class="picker-option' + (c.value === currentVal ? ' active' : '') + '" data-val="' + API.esc(c.value) + '">'
+        + '<span class="chip chip-' + c.color + '" style="font-size:11px;padding:2px 7px">' + API.esc(c.label) + '</span>'
+        + '</button>';
+    }).join('');
+
+    var rect = btn.getBoundingClientRect();
+    pop.style.cssText = 'position:fixed;z-index:400;top:' + (rect.bottom + 4) + 'px;left:' + rect.left + 'px;min-width:160px;';
+    document.body.appendChild(pop);
+
+    pop.querySelectorAll('.picker-option').forEach(function (opt) {
+      opt.addEventListener('click', async function (e) {
+        e.stopPropagation();
+        pop.remove();
+        document.removeEventListener('click', outsideClick, true);
+        await _applyQuickBadgeEdit(clarificationId, field, opt.getAttribute('data-val'), rfqItemId, row);
+      });
+    });
+
+    function outsideClick(e) {
+      if (!pop.contains(e.target) && !btn.contains(e.target)) {
+        pop.remove();
+        document.removeEventListener('click', outsideClick, true);
+      }
+    }
+    setTimeout(function () { document.addEventListener('click', outsideClick, true); }, 0);
+  }
+
+  async function _applyQuickBadgeEdit(clarificationId, field, newVal, rfqItemId, cachedRow) {
+    var row = cachedRow;
+    if (!row) {
+      try {
+        var data = await API.get('getTechnicalClarifications', { rfqItemId: rfqItemId });
+        row = (data.rows || []).find(function (r) { return r.clarification_id === clarificationId; }) || {};
+        clarificationDataCache[clarificationId] = row;
+      } catch (err) { API.error(err); return; }
+    }
+    var newType   = field === 'clarification_type' ? newVal : (row.clarification_type || '');
+    var newStatus = field === 'status_after'       ? newVal : (row.status_after       || '');
+    var isFinal   = newType === 'final_confirm' || newStatus === 'final_confirmed';
+    var confirmRevision = false;
+    if (isFinal) { confirmRevision = await showRevisionConfirm(); }
+    try {
+      await API.call('updateTechnicalClarification', {
+        rfqItemId:            rfqItemId,
+        clarificationId:      clarificationId,
+        clarificationType:    newType,
+        statusAfter:          newStatus,
+        title:                row.title || '',
+        content:              row.content || '',
+        oldModel:             row.old_model || '',
+        proposedModel:        row.proposed_model || '',
+        proposedManufacturer: row.proposed_manufacturer || '',
+        proposedOrigin:       row.proposed_origin || '',
+        rawNote:              row.raw_note || '',
+        confirmRevision:      confirmRevision,
+      });
+      var msg = isFinal && confirmRevision
+        ? 'Đã cập nhật và tạo lịch sử thay đổi quy cách'
+        : 'Đã cập nhật';
+      API.toast(msg, 'success');
+      await load(true);
+      openClarificationTimeline(rfqItemId);
+    } catch (err) { API.error(err); }
   }
 
   function openCreate() {
@@ -318,6 +410,7 @@
     var item = (state.rows || []).find(function (r) { return r.rfq_item_id === rfqItemId; }) || {};
     API.get('getTechnicalClarifications', { rfqItemId: rfqItemId }).then(function (data) {
       var rows = data.rows || [];
+      rows.forEach(function (r) { clarificationDataCache[r.clarification_id] = r; });
       var canWrite = Utils.roleCanWrite();
       var html = '<div style="grid-column:1/-1">'
         + '<div class="section-head" style="margin-bottom:10px">'
@@ -329,7 +422,7 @@
           : '')
         + '</div>'
         + (rows.length
-          ? rows.map(function (r) { return timelineItem(rfqItemId, r); }).join('')
+          ? rows.map(function (r) { return timelineItem(rfqItemId, r, canWrite); }).join('')
           : '<div class="empty-state small">Chưa có trao đổi kỹ thuật.</div>')
         + '</div>';
       Utils.openModal('Xác nhận kỹ thuật', html, null);
@@ -528,13 +621,29 @@
 
   function technicalSection(item, rows) {
     if (!item.rfq_item_id) return '';
+    var canWrite = Utils.roleCanWrite();
+    rows.forEach(function (r) { clarificationDataCache[r.clarification_id] = r; });
     return '<section class="modal-section technical-section">'
       + '<div class="section-head"><h4>Xác nhận kỹ thuật</h4><button type="button" data-write onclick="RfqItemsModule.openClarificationForm(\'' + API.esc(item.rfq_item_id) + '\')">+ Thêm trao đổi</button></div>'
-      + (rows.length ? rows.map(function (r) { return timelineItem(item.rfq_item_id, r); }).join('') : '<div class="empty-state small">Chưa có trao đổi kỹ thuật.</div>')
+      + (rows.length ? rows.map(function (r) { return timelineItem(item.rfq_item_id, r, canWrite); }).join('') : '<div class="empty-state small">Chưa có trao đổi kỹ thuật.</div>')
       + '</section>';
   }
 
-  function timelineItem(rfqItemId, r) {
+  function timelineItem(rfqItemId, r, canWrite) {
+    var clid = API.esc(r.clarification_id);
+    var itemId = API.esc(rfqItemId);
+    var typeBadge = canWrite
+      ? '<button type="button" class="badge ' + typeBadgeClass(r.clarification_type) + '" style="font-size:11px;padding:2px 7px;white-space:nowrap;cursor:pointer"'
+        + ' data-clid="' + clid + '" data-field="clarification_type"'
+        + ' onclick="RfqItemsModule.quickEditBadge(event,\'' + itemId + '\')">'
+        + API.esc(typeLabel(r.clarification_type)) + ' ▾</button>'
+      : '<span class="badge ' + typeBadgeClass(r.clarification_type) + '" style="font-size:11px;padding:2px 7px;white-space:nowrap">' + API.esc(typeLabel(r.clarification_type)) + '</span>';
+    var statusBadge = canWrite
+      ? '<button type="button" class="badge ' + statusBadgeClass(r.status_after) + '" style="font-size:11px;padding:2px 7px;white-space:nowrap;cursor:pointer"'
+        + ' data-clid="' + clid + '" data-field="status_after"'
+        + ' onclick="RfqItemsModule.quickEditBadge(event,\'' + itemId + '\')">'
+        + API.esc(technicalStatusLabel(r.status_after)) + ' ▾</button>'
+      : '<span class="badge ' + statusBadgeClass(r.status_after) + '" style="font-size:11px;padding:2px 7px;white-space:nowrap">' + API.esc(technicalStatusLabel(r.status_after)) + '</span>';
     var modelChange = (r.old_model || r.proposed_model)
       ? '<div style="font-size:12px;color:var(--text-muted);margin-top:2px">' + API.esc(r.old_model || '—') + ' → ' + API.esc(r.proposed_model || '—') + '</div>'
       : '';
@@ -543,8 +652,8 @@
       : '';
     return '<article class="timeline-item" style="display:grid;grid-template-columns:130px 1fr auto;gap:8px;align-items:start;padding:7px 9px;margin-bottom:4px">'
       + '<div style="display:flex;flex-direction:column;gap:3px">'
-      + '<span class="' + typeBadgeClass(r.clarification_type) + '" style="font-size:11px;padding:2px 7px;white-space:nowrap">' + API.esc(typeLabel(r.clarification_type)) + '</span>'
-      + '<span class="' + statusBadgeClass(r.status_after) + '" style="font-size:11px;padding:2px 7px;white-space:nowrap">' + API.esc(technicalStatusLabel(r.status_after)) + '</span>'
+      + typeBadge
+      + statusBadge
       + '<span style="font-size:11px;color:var(--text-muted);margin-top:2px">' + API.esc(formatDate(r.created_at)) + '</span>'
       + '</div>'
       + '<div style="min-width:0">'
@@ -553,7 +662,7 @@
       + modelChange + propSpec
       + (r.attachment_file_id ? '<div style="font-size:12px;color:var(--text-muted);margin-top:2px">📎 ' + API.esc(r.attachment_file_name || r.attachment_file_id) + '</div>' : '')
       + '</div>'
-      + '<div><button type="button" data-role-only="admin,manager" style="font-size:12px;min-height:28px;padding:3px 8px" onclick="RfqItemsModule.openClarificationForm(\'' + API.esc(rfqItemId) + '\', \'' + API.esc(r.clarification_id) + '\')">Sửa</button></div>'
+      + '<div><button type="button" data-role-only="admin,manager" style="font-size:12px;min-height:28px;padding:3px 8px" onclick="RfqItemsModule.openClarificationForm(\'' + itemId + '\', \'' + clid + '\')">Sửa</button></div>'
       + '</article>';
   }
 
@@ -939,6 +1048,15 @@
       );
       Auth.applyRoleUI();
     }).catch(API.error);
+  }
+
+  async function archiveRfqItem(rfqItemId) {
+    if (!window.confirm('Lưu trữ dòng vật tư này? Hành động này ẩn dòng khỏi danh sách.')) return;
+    try {
+      await API.call('archiveRfqItem', { rfqItemId: rfqItemId });
+      API.toast('Đã lưu trữ dòng vật tư', 'success');
+      await load(true);
+    } catch (err) { API.error(err); }
   }
 
   async function archiveQuote(rfqItemId, quoteId) {
@@ -2117,6 +2235,8 @@
     loadContractItems: loadContractItems,
     openContractFromRfqItemModal: openContractFromRfqItemModal,
     openRevisionHistory: openRevisionHistory,
+    archiveRfqItem: archiveRfqItem,
+    quickEditBadge: quickEditBadge,
     _togglePicker: togglePicker,
     _pickOption: pickOption,
   };

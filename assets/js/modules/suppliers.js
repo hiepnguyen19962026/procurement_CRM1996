@@ -55,6 +55,9 @@
         + '<td>' + API.esc(r.country) + '</td>'
         + '<td>' + API.esc(r.contact_name) + '<br>' + API.esc(r.phone) + '</td>'
         + '<td>' + API.esc(r.email) + '</td>'
+        + '<td data-role-only="admin,manager" style="text-align:center;padding:0 4px">'
+          + '<button type="button" class="btn-x-archive" title="Lưu trữ nhà cung cấp" onclick="SuppliersModule.archiveSupplier(\'' + API.esc(r.supplier_id) + '\')">✕</button>'
+          + '</td>'
         + '</tr>';
     }).join('');
     document.getElementById('supplierMore').classList.toggle('hidden', !state.hasMore);
@@ -101,5 +104,14 @@
       trader: 'Thương mại',
     }[value] || value || '';
   }
-  window.SuppliersModule = { load: load, openCreate: openCreate, openEdit: openEdit };
+  async function archiveSupplier(supplierId) {
+    if (!window.confirm('Lưu trữ nhà cung cấp ' + supplierId + '? Nhà cung cấp sẽ bị ẩn khỏi danh sách.')) return;
+    try {
+      await API.call('archiveSupplier', { supplierId: supplierId });
+      API.toast('Đã lưu trữ nhà cung cấp', 'success');
+      await load(true);
+    } catch (err) { API.error(err); }
+  }
+
+  window.SuppliersModule = { load: load, openCreate: openCreate, openEdit: openEdit, archiveSupplier: archiveSupplier };
 })();
