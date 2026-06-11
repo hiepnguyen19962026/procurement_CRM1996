@@ -3,15 +3,42 @@
   var sort = { by: '', dir: 'desc' };
   var _setupDone = false;
   var clarificationDataCache = {};
+  var _pendingRfqFilter = '';
 
   function setupOnce() {
     if (_setupDone) return;
     _setupDone = true;
-    ['itemSearch', 'itemRfqId'].forEach(function (id) {
-      var el = document.getElementById(id);
-      if (el) el.addEventListener('keydown', function (e) { if (e.key === 'Enter') load(true); });
-    });
+    var searchEl = document.getElementById('itemSearch');
+    if (searchEl) searchEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') load(true); });
     window.addEventListener('resize', syncTopScroll);
+  }
+
+  async function populateRfqSelect() {
+    var sel = document.getElementById('itemRfqId');
+    if (!sel || sel.tagName !== 'SELECT') return;
+    var rfqs = AppState.list('rfqs').rows || [];
+    if (!rfqs.length) {
+      try {
+        var data = await API.get('getRfqs', { limit: 500 });
+        AppState.list('rfqs').rows = data.rows || [];
+        rfqs = AppState.list('rfqs').rows;
+      } catch (e) { /* ignore — filter just stays as "Tất cả" */ }
+    }
+    var pending = _pendingRfqFilter;
+    _pendingRfqFilter = '';
+    // Only rebuild DOM when count changes (avoids resetting value on every load)
+    if (sel.options.length - 1 !== rfqs.length) {
+      sel.innerHTML = '<option value="">Tất cả gói thầu</option>'
+        + rfqs.map(function (r) {
+            var label = r.ten_goi ? r.ten_goi + (r.ma_goi_tbmt ? ' — ' + r.ma_goi_tbmt : '') : r.rfq_id;
+            return '<option value="' + API.esc(r.rfq_id) + '">' + API.esc(label) + '</option>';
+          }).join('');
+    }
+    if (pending) sel.value = pending;
+  }
+
+  function filterByRfq(rfqId) {
+    _pendingRfqFilter = rfqId;
   }
 
   function syncSort() {
@@ -31,6 +58,7 @@
 
   async function load(reset) {
     setupOnce();
+    await populateRfqSelect();
     if (reset) state.cursor = '';
     state.q = document.getElementById('itemSearch').value || '';
     try {
@@ -38,6 +66,7 @@
         q: state.q,
         rfqId: document.getElementById('itemRfqId').value,
         status: document.getElementById('itemStatus').value,
+        techFilter: (document.getElementById('itemTechFilter') || {}).value || '',
         cursor: state.cursor,
         limit: 50,
       };
@@ -74,7 +103,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="26" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="27" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -99,6 +128,7 @@
         : '<td>' + nameInner + '</td>';
       return '<tr>'
         + '<td style="padding:0 4px;text-align:center;width:28px"><input type="checkbox" class="item-check" value="' + API.esc(r.rfq_item_id) + '" onchange="RfqItemsModule.onCheckChange()"></td>'
+        + renderCell(r.ten_goi || r.ma_goi_tbmt || '', true)
         + renderCell(r.stt_goc, true)
         + renderCell(r.ma_mua_sam, true)
         + renderCell(r.ma_vat_tu, true)
@@ -2488,6 +2518,7 @@
     commitImportMapping: commitImportMapping,
     _doCommitImport: _doCommitImport,
     _cancelImport: _cancelImport,
+    filterByRfq: filterByRfq,
     loadPriceHistory: loadPriceHistory,
     exportPriceHistory: exportPriceHistory,
     loadContractItems: loadContractItems,

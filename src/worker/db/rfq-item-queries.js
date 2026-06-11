@@ -16,7 +16,7 @@ const ITEM_SORT = {
   trang_thai:     { col: 'i.trang_thai_dong',   rowKey: 'trang_thai_dong',  type: 'text' },
 };
 
-export async function listRfqItemsSQL(db, { q, rfqId, status, cursor, sortBy, sortDir, limit }) {
+export async function listRfqItemsSQL(db, { q, rfqId, status, techFilter, cursor, sortBy, sortDir, limit }) {
   const sort = ITEM_SORT[sortBy] || null;
   const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
   const op  = dir === 'ASC' ? '>' : '<';
@@ -32,6 +32,19 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, cursor, sortBy, so
     where.push('i.trang_thai_dong = ?'); binds.push(status);
   } else {
     where.push("i.trang_thai_dong != 'archived'");
+  }
+  if (techFilter === 'has_clarification') {
+    where.push('EXISTS (SELECT 1 FROM technical_clarifications tc WHERE tc.rfq_item_id = i.rfq_item_id AND tc.deleted_at IS NULL)');
+  } else if (techFilter === 'no_clarification') {
+    where.push('NOT EXISTS (SELECT 1 FROM technical_clarifications tc WHERE tc.rfq_item_id = i.rfq_item_id AND tc.deleted_at IS NULL)');
+  } else if (techFilter === 'khong_can') {
+    where.push("i.trang_thai_ky_thuat = 'khong_can_xac_nhan'");
+  } else if (techFilter === 'dang_hoi') {
+    where.push("i.trang_thai_ky_thuat IN ('dang_hoi','can_bo_sung','processing','waiting_supplier','waiting_client','need_more_info')");
+  } else if (techFilter === 'da_xac_nhan') {
+    where.push("i.trang_thai_ky_thuat IN ('da_xac_nhan','final_confirmed')");
+  } else if (techFilter === 'bi_tu_choi') {
+    where.push("i.trang_thai_ky_thuat IN ('bi_tu_choi','rejected','thay_the')");
   }
   if (cursor) {
     const c = parseCursor(cursor);

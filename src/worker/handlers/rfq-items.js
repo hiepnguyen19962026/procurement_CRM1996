@@ -20,10 +20,12 @@ async function listItems(request, env, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
   const p = await readJson(request);
+  const VALID_TECH_FILTERS = new Set(['has_clarification','no_clarification','khong_can','dang_hoi','da_xac_nhan','bi_tu_choi']);
   const data = await listRfqItemsSQL(env.DB, {
     q: normalizeText(p.q),
     rfqId: p.rfqId || p.rfq_id || '',
     status: p.status || '',
+    techFilter: VALID_TECH_FILTERS.has(p.techFilter) ? p.techFilter : '',
     cursor: p.cursor || '',
     sortBy: p.sortBy || '',
     sortDir: p.sortDir || '',

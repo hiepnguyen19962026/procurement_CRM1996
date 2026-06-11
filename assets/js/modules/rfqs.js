@@ -501,7 +501,11 @@
     return '📋 ' + Number(value || 0) + ' dòng';
   }
   function drillDown(rfqId) {
-    document.getElementById('itemRfqId').value = rfqId;
+    if (typeof RfqItemsModule !== 'undefined' && RfqItemsModule.filterByRfq) {
+      RfqItemsModule.filterByRfq(rfqId);
+    } else {
+      document.getElementById('itemRfqId').value = rfqId;
+    }
     var navBtn = document.querySelector('.nav button[data-screen="items"]');
     if (navBtn) navBtn.click();
   }
