@@ -653,7 +653,12 @@
   }
 
   async function archiveClient(clientId) {
-    if (!window.confirm('Lưu trữ khách hàng ' + clientId + '? Khách hàng sẽ bị ẩn khỏi danh sách.')) return;
+    var ok = await Utils.confirmDanger(
+      'Lưu trữ khách hàng',
+      'Lưu trữ "' + clientId + '"? Khách hàng sẽ bị ẩn khỏi danh sách. Gói thầu và thiết bị liên quan vẫn được giữ.',
+      'Lưu trữ'
+    );
+    if (!ok) return;
     try {
       await API.call('archiveClient', { clientId: clientId });
       API.toast('Đã lưu trữ khách hàng', 'success');

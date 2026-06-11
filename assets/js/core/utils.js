@@ -46,5 +46,30 @@
     return ['admin', 'manager', 'purchasing'].indexOf(role) >= 0;
   }
 
-  window.Utils = { formToObject: formToObject, openModal: openModal, closeModal: closeModal, bindModal: bindModal, roleCanWrite: roleCanWrite };
+  function _esc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // Styled in-app confirm for destructive/archive actions. Returns Promise<boolean>.
+  // Clicking outside and ESC intentionally do nothing — match main modal policy.
+  function confirmDanger(title, message, confirmLabel, cancelLabel) {
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML = '<div class="confirm-box">'
+        + '<div class="confirm-title">' + _esc(title) + '</div>'
+        + '<p class="confirm-desc">' + _esc(message) + '</p>'
+        + '<div class="confirm-actions">'
+        + '<button type="button" class="btn-cancel">' + _esc(cancelLabel || 'Hủy') + '</button>'
+        + '<button type="button" class="btn-danger">' + _esc(confirmLabel || 'Xác nhận') + '</button>'
+        + '</div></div>';
+      document.body.appendChild(overlay);
+      function done(result) { document.body.removeChild(overlay); resolve(result); }
+      overlay.querySelector('.btn-danger').onclick = function () { done(true); };
+      overlay.querySelector('.btn-cancel').onclick  = function () { done(false); };
+    });
+  }
+
+  window.Utils = { formToObject: formToObject, openModal: openModal, closeModal: closeModal, bindModal: bindModal, roleCanWrite: roleCanWrite, confirmDanger: confirmDanger };
 })();

@@ -105,7 +105,12 @@
     }[value] || value || '';
   }
   async function archiveSupplier(supplierId) {
-    if (!window.confirm('Lưu trữ nhà cung cấp ' + supplierId + '? Nhà cung cấp sẽ bị ẩn khỏi danh sách.')) return;
+    var ok = await Utils.confirmDanger(
+      'Lưu trữ nhà cung cấp',
+      'Lưu trữ "' + supplierId + '"? Nhà cung cấp sẽ bị ẩn khỏi danh sách. Báo giá liên quan vẫn được giữ.',
+      'Lưu trữ'
+    );
+    if (!ok) return;
     try {
       await API.call('archiveSupplier', { supplierId: supplierId });
       API.toast('Đã lưu trữ nhà cung cấp', 'success');

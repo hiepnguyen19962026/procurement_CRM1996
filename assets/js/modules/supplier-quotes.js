@@ -170,7 +170,12 @@
   }
 
   async function archiveQuote(quoteId) {
-    if (!window.confirm('Lưu trữ báo giá này?')) return;
+    var ok = await Utils.confirmDanger(
+      'Lưu trữ báo giá',
+      'Báo giá sẽ bị ẩn khỏi danh sách. Dữ liệu vẫn được lưu trong hệ thống.',
+      'Lưu trữ'
+    );
+    if (!ok) return;
     try {
       await API.call('archiveSupplierQuote', { quoteId: quoteId });
       API.toast('Đã lưu trữ báo giá', 'success');

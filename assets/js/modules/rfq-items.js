@@ -1051,7 +1051,12 @@
   }
 
   async function archiveRfqItem(rfqItemId) {
-    if (!window.confirm('Lưu trữ dòng vật tư này? Hành động này ẩn dòng khỏi danh sách.')) return;
+    var ok = await Utils.confirmDanger(
+      'Lưu trữ dòng vật tư',
+      'Dòng vật tư sẽ bị ẩn khỏi danh sách. Dữ liệu liên quan (báo giá, trao đổi kỹ thuật, lịch sử quy cách) vẫn được giữ nguyên.',
+      'Lưu trữ'
+    );
+    if (!ok) return;
     try {
       await API.call('archiveRfqItem', { rfqItemId: rfqItemId });
       API.toast('Đã lưu trữ dòng vật tư', 'success');

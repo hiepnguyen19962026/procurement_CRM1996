@@ -473,7 +473,12 @@
   }
 
   async function archiveRfq(rfqId) {
-    if (!window.confirm('Lưu trữ RFQ ' + rfqId + '? RFQ sẽ bị ẩn khỏi danh sách.')) return;
+    var ok = await Utils.confirmDanger(
+      'Lưu trữ RFQ',
+      'Lưu trữ gói thầu "' + rfqId + '"? Gói sẽ bị ẩn khỏi danh sách. Dữ liệu vật tư và báo giá vẫn được giữ nguyên.',
+      'Lưu trữ'
+    );
+    if (!ok) return;
     try {
       await API.call('archiveRfq', { rfqId: rfqId });
       API.toast('Đã lưu trữ RFQ', 'success');
