@@ -50,7 +50,7 @@ export default {
     if (request.method === 'OPTIONS') return cors(json({ ok: true }));
     if (!validateSecret(request, env)) return cors(json({ ok: false, error: 'Forbidden' }, 403));
 
-    const action = await getAction(request);
+    const { action, parsedBody } = await getActionAndBody(request);
     if (!action) return cors(json({ ok: false, error: 'Missing action' }, 400));
 
     let actor = null;
@@ -63,7 +63,7 @@ export default {
 
     let res;
     if (ACCOUNT_ACTIONS.includes(action)) res = await handleAccounts(action, request, env, ctx, actor);
-    else if (CLIENT_ACTIONS.includes(action)) res = await handleClients(action, request, env, ctx, actor);
+    else if (CLIENT_ACTIONS.includes(action)) res = await handleClients(action, request, env, ctx, actor, parsedBody);
     else if (CLIENT_EQUIPMENT_ACTIONS.includes(action))    res = await handleClientEquipment(action, request, env, ctx, actor);
     else if (CLIENT_CONTACT_ACTIONS.includes(action))      res = await handleClientContacts(action, request, env, ctx, actor);
     else if (CLIENT_BANK_ACCOUNT_ACTIONS.includes(action)) res = await handleClientBankAccounts(action, request, env, ctx, actor);
@@ -88,14 +88,17 @@ export default {
   },
 };
 
-async function getAction(request) {
-  if (request.method === 'GET') return new URL(request.url).searchParams.get('action') || '';
+async function getActionAndBody(request) {
+  if (request.method === 'GET') {
+    return { action: new URL(request.url).searchParams.get('action') || '', parsedBody: null };
+  }
   if ((request.headers.get('content-type') || '').includes('multipart/form-data')) {
     const cloned = request.clone();
-    return (await cloned.formData().catch(() => new FormData())).get('action') || 'uploadMedia';
+    const action = (await cloned.formData().catch(() => new FormData())).get('action') || 'uploadMedia';
+    return { action, parsedBody: null };
   }
-  const body = await readJson(request.clone());
-  return body.action || '';
+  const parsedBody = await readJson(request.clone());
+  return { action: parsedBody.action || '', parsedBody };
 }
 
 function cors(response) {

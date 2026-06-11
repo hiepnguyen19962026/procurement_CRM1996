@@ -6,26 +6,26 @@ import { clampLimit, json, nextEntityId, nowIso, readJson } from '../lib/utils.j
 
 const VALID_CLIENT_TYPES = new Set(['company', 'individual', 'other']);
 
-export async function handleClients(action, request, env, ctx, actor) {
-  if (action === 'getClients') return listClients(request, env, actor);
-  if (action === 'createClient') return saveClient(request, env, ctx, actor, false);
-  if (action === 'updateClient') return saveClient(request, env, ctx, actor, true);
-  if (action === 'archiveClient') return archiveClient(request, env, ctx, actor);
+export async function handleClients(action, request, env, ctx, actor, body) {
+  if (action === 'getClients') return listClients(request, env, actor, body);
+  if (action === 'createClient') return saveClient(request, env, ctx, actor, false, body);
+  if (action === 'updateClient') return saveClient(request, env, ctx, actor, true, body);
+  if (action === 'archiveClient') return archiveClient(request, env, ctx, actor, body);
   return json({ ok: false, error: 'Unknown client action' }, 400);
 }
 
-async function listClients(request, env, actor) {
+async function listClients(request, env, actor, body) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
-  const p = await readJson(request);
+  const p = body || await readJson(request);
   const data = await listClientsSQL(env.DB, { q: normalizeText(p.q), cursor: p.cursor || '', sortBy: p.sortBy || '', sortDir: p.sortDir || '', limit: clampLimit(p.limit) });
   return json({ ok: true, ...data });
 }
 
-async function archiveClient(request, env, ctx, actor) {
+async function archiveClient(request, env, ctx, actor, body) {
   const denied = requireRole(actor, MANAGE_ROLES);
   if (denied) return denied;
-  const body = await readJson(request);
+  body = body || await readJson(request);
   const clientId = cleanString(body.clientId || body.client_id, 80);
   if (!clientId) return json({ ok: false, error: 'Thieu ma khach hang' }, 400);
   const row = await getClientSQL(env.DB, clientId);
@@ -36,10 +36,10 @@ async function archiveClient(request, env, ctx, actor) {
   return json({ ok: true });
 }
 
-async function saveClient(request, env, ctx, actor, isUpdate) {
+async function saveClient(request, env, ctx, actor, isUpdate, body) {
   const denied = requireRole(actor, WRITE_ROLES);
   if (denied) return denied;
-  const body = await readJson(request);
+  body = body || await readJson(request);
   const name = cleanString(body.clientName || body.client_name, 180);
   if (!name) return json({ ok: false, error: 'Ten CDT/khach hang la bat buoc' }, 400);
 
