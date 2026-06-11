@@ -4,6 +4,7 @@
   var _setupDone = false;
   var clarificationDataCache = {};
   var _lightboxEl = null;
+  var _supDebounce = null;
   var _pendingRfqFilter = '';
 
   function setupOnce() {
@@ -616,7 +617,9 @@
     var searchId = 'master_search_' + suffix;
     var resultsId = 'master_results_' + suffix;
     return '<section class="modal-section master-item-section">'
-      + '<div class="section-head"><h4>Master v&#7853;t t&#432;</h4></div>'
+      + '<div class="section-head"><h4>Master v&#7853;t t&#432;</h4>'
+      + '<small style="font-weight:400;color:var(--text-muted);font-size:12px">Gom c&#249;ng 1 v&#7853;t t&#432; qua nhi&#7873;u g&#243;i &#8212; tra l&#7883;ch s&#7917; gi&#225;</small>'
+      + '</div>'
       + (linked
         ? '<div class="timeline-item">'
           + masterItemSummary(linked)
@@ -624,7 +627,9 @@
           + '<button type="button" onclick="RfqItemsModule.refreshMasterItem(\'' + API.esc(item.rfq_item_id) + '\')">L&#224;m m&#7899;i</button>'
           + '<button type="button" data-write onclick="RfqItemsModule.unlinkMasterItem(\'' + API.esc(item.rfq_item_id) + '\')">B&#7887; li&#234;n k&#7871;t</button>'
           + '</div></div>'
-        : '<div class="empty-state small">Ch&#432;a li&#234;n k&#7871;t master item.</div>'
+        : '<details>'
+          + '<summary style="cursor:pointer;font-size:13px;padding:4px 0;color:var(--text-muted)">Li&#234;n k&#7871;t ho&#7863;c t&#7841;o master item&#8230;</summary>'
+          + '<div class="empty-state small" style="margin-top:8px">Ch&#432;a li&#234;n k&#7871;t master item.</div>'
           + '<div data-write style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap">'
           + '<button type="button" onclick="RfqItemsModule.createMasterFromRfqItem(\'' + API.esc(item.rfq_item_id) + '\')">T&#7841;o master t&#7915; d&#242;ng n&#224;y</button>'
           + '</div>'
@@ -635,6 +640,7 @@
           + (suggestionsFailed
             ? '<div style="margin-top:8px;font-size:12px;color:var(--text-muted);padding:6px 8px;background:#fffbeb;border:1px solid #fcd34d;border-radius:6px">⚠ Không tải được gợi ý master item.</div>'
             : '<div id="' + resultsId + '" style="margin-top:8px">' + masterSuggestionList(item.rfq_item_id, suggestions) + '</div>')
+          + '</details>'
           )
       + '</section>';
   }
@@ -1272,34 +1278,89 @@
   }
 
   function quoteFields(r) {
-    var currency = r.currency || 'VND';
     var sourceChannel = r.source_channel || '';
     var vndDisplay = r.price_vnd_incl_tax ? API.money(r.price_vnd_incl_tax) : '';
     return ''
-      // Row 1: source ref (2+3+7) = 12
+      // Row 1: nguồn (2+3+7) = 12
       + quoteReferenceFields(r, sourceChannel)
-      // Row 2: supplier (4+3) + date(2) + currency(1) = 10 → pricing continues
-      + input('supplierName', 'Tên nhà cung cấp', r.supplier_name || '', 'placeholder="VD: SKF Vietnam"', 'span-4')
+      // Row 2: supplier typeahead (5) + hãng (3) + ngày báo giá (2) = 10; currency/rate as hidden
+      + supplierTypeaheadBlock(r)
       + input('manufacturer', 'Hãng sản xuất', r.manufacturer || '', 'placeholder="VD: SKF"', 'span-3')
       + input('quoteDate', 'Ngày báo giá', r.quote_date || '', 'type="date"', 'span-2')
-      + '<label class="span-1">Tiền tệ<select name="currency">'
-      + option('VND', 'VND', currency)
-      + option('USD', 'USD', currency)
-      + option('EUR', 'EUR', currency)
-      + option('JPY', 'JPY', currency)
-      + option('CNY', 'CNY', currency)
-      + option('SGD', 'SGD', currency)
-      + option('KRW', 'KRW', currency)
-      + '</select></label>'
-      // Row 3: pricing (3+2+1+3) + delivery/validity (2+2+2) = 15, wraps naturally
-      + input('quotedPrice', 'Giá báo', r.quoted_price || '', 'inputmode="decimal" placeholder="0"', 'span-3')
-      + input('exchangeRate', 'Tỷ giá (1 NTệ=?VND)', r.exchange_rate || 1, 'inputmode="decimal" placeholder="1"', 'span-2')
+      + '<input type="hidden" name="currency" value="VND">'
+      + '<input type="hidden" name="exchangeRate" value="1">'
+      // Row 3: giá (3) + thuế (1) + VND+thuế (3) + giao hàng (2) + hiệu lực (2) + bảo hành (1) = 12
+      + input('quotedPrice', 'Giá báo VND', r.quoted_price || '', 'inputmode="decimal" placeholder="0"', 'span-3')
       + input('taxRate', 'Thuế (%)', r.tax_rate || 0, 'inputmode="decimal" placeholder="0"', 'span-1')
       + '<label class="span-3 readonly-field">VND + Thuế<input value="' + API.esc(vndDisplay) + '" readonly tabindex="-1"></label>'
       + input('leadTime', 'Thời gian giao hàng', r.lead_time || '', 'placeholder="VD: 4-6 tuần"', 'span-2')
       + input('validUntil', 'Hiệu lực đến', r.valid_until || '', 'type="date"', 'span-2')
-      + input('warranty', 'Bảo hành', r.warranty || '', 'placeholder="VD: 12 tháng"', 'span-2')
+      + input('warranty', 'Bảo hành (ngày)', r.warranty || '', 'inputmode="numeric" placeholder="VD: 365"', 'span-1')
       + textarea('note', 'Ghi chú', r.note || '', '', 'span-12 compact-ta');
+  }
+
+  function supplierTypeaheadBlock(r) {
+    var name = API.esc(r.supplier_name || '');
+    var id = API.esc(r.supplier_id || '');
+    return '<div class="span-5">'
+      + '<label style="display:grid;gap:6px;margin-bottom:0;font-size:13px;color:var(--text-muted);font-weight:500">Tên nhà cung cấp'
+      + '<input id="sqSupName" name="supplierName" value="' + name + '"'
+      + ' autocomplete="off" placeholder="Nhập để tìm trong danh sách..."'
+      + ' oninput="RfqItemsModule._onSupplierInput(this)">'
+      + '</label>'
+      + '<input type="hidden" name="supplierId" id="sqSupId" value="' + id + '">'
+      + '<div id="sqSupResults" class="sup-dropdown hidden"></div>'
+      + '</div>';
+  }
+
+  function _onSupplierInput(inputEl) {
+    var q = (inputEl.value || '').trim();
+    var hiddenEl = document.getElementById('sqSupId');
+    if (hiddenEl) hiddenEl.value = '';
+    clearTimeout(_supDebounce);
+    var resEl = document.getElementById('sqSupResults');
+    if (!q) {
+      if (resEl) resEl.classList.add('hidden');
+      return;
+    }
+    _supDebounce = setTimeout(function () {
+      API.get('getSuppliers', { q: q, limit: 10 })
+        .then(function (data) {
+          var rows = data.rows || [];
+          if (!resEl) return;
+          if (!rows.length) {
+            resEl.innerHTML = '<div class="sup-dropdown-empty">Không tìm thấy — tên sẽ được lưu tự do</div>';
+            resEl.classList.remove('hidden');
+            return;
+          }
+          resEl.innerHTML = rows.map(function (s) {
+            var sub = [
+              s.tax_code ? 'MST: ' + s.tax_code : '',
+              s.contact_name || '',
+              s.phone || '',
+            ].filter(Boolean).join(' · ');
+            return '<button type="button" class="sup-dropdown-item"'
+              + ' onclick="RfqItemsModule._selectSupplier(\''
+              + API.esc(s.supplier_name) + '\', \'' + API.esc(s.supplier_id) + '\')">'
+              + '<strong>' + API.esc(s.supplier_name) + '</strong>'
+              + (sub ? '<span>' + API.esc(sub) + '</span>' : '')
+              + '</button>';
+          }).join('');
+          resEl.classList.remove('hidden');
+        })
+        .catch(function () {
+          if (resEl) resEl.classList.add('hidden');
+        });
+    }, 280);
+  }
+
+  function _selectSupplier(name, id) {
+    var nameEl = document.getElementById('sqSupName');
+    var idEl = document.getElementById('sqSupId');
+    var resEl = document.getElementById('sqSupResults');
+    if (nameEl) nameEl.value = name;
+    if (idEl) idEl.value = id;
+    if (resEl) resEl.classList.add('hidden');
   }
 
   function quoteReferenceFields(r, sourceChannel) {
@@ -1315,7 +1376,7 @@
       + sourceOption('other', 'Other', sourceChannel)
       + '</select></label>'
       + input('receivedAt', 'Thời điểm nhận', r.received_at || '', 'placeholder="YYYY-MM-DD HH:mm"', 'span-3')
-      + textarea('sourceRef', 'Ghi chú nguồn / tham chiếu', r.source_ref || '', '', 'span-7 compact-ta');
+      + textarea('sourceRef', 'Ghi chú nguồn / tham chiếu', r.source_ref || '', 'placeholder="VD: email subject, Zalo/Wechat người gửi, tên file báo giá, số báo giá..."', 'span-7 compact-ta');
   }
 
   function sourceOption(value, label, current) {
@@ -2632,5 +2693,7 @@
     quickEditBadge: quickEditBadge,
     _togglePicker: togglePicker,
     _pickOption: pickOption,
+    _onSupplierInput: _onSupplierInput,
+    _selectSupplier: _selectSupplier,
   };
 })();

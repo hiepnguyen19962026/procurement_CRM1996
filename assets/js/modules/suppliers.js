@@ -53,6 +53,7 @@
         + '<td>' + nameCell + '</td>'
         + '<td>' + API.esc(typeLabel(r.supplier_type)) + '</td>'
         + '<td>' + API.esc(r.country) + '</td>'
+        + '<td>' + API.esc(r.tax_code || '') + '</td>'
         + '<td>' + API.esc(r.contact_name) + '<br>' + API.esc(r.phone) + '</td>'
         + '<td>' + API.esc(r.email) + '</td>'
         + '<td data-role-only="admin,manager" style="text-align:center;padding:0 4px">'
@@ -78,10 +79,10 @@
   }
   function fields(r) {
     var sel = (r.supplier_type || 'unknown');
-    // Row 1: tên(5) + loại(2) + quốc gia(2) + liên hệ(3) = 12
+    // Row 1: tên(4) + loại(2) + quốc gia(2) + MST(2) + liên hệ(2) = 12
     // Row 2: email(3) + phone(3) + zalo(3) + wechat(3) = 12
     // Row 3: ghi chú(12)
-    return '<label class="span-5">Tên nhà cung cấp<input name="supplierName" required value="' + API.esc(r.supplier_name) + '"></label>'
+    return '<label class="span-4">Tên nhà cung cấp<input name="supplierName" required value="' + API.esc(r.supplier_name) + '"></label>'
       + '<label class="span-2">Loại<select name="supplierType">'
       + '<option value="unknown"' + (sel === 'unknown' ? ' selected' : '') + '>Chưa phân loại</option>'
       + '<option value="manufacturer"' + (sel === 'manufacturer' ? ' selected' : '') + '>Nhà sản xuất</option>'
@@ -89,7 +90,8 @@
       + '<option value="trader"' + (sel === 'trader' ? ' selected' : '') + '>Thương mại</option>'
       + '</select></label>'
       + '<label class="span-2">Quốc gia<input name="country" value="' + API.esc(r.country) + '"></label>'
-      + '<label class="span-3">Người liên hệ<input name="contactName" value="' + API.esc(r.contact_name) + '"></label>'
+      + '<label class="span-2">MST / Thuế<input name="taxCode" placeholder="VD: 0123456789" value="' + API.esc(r.tax_code || '') + '"></label>'
+      + '<label class="span-2">Người liên hệ<input name="contactName" value="' + API.esc(r.contact_name) + '"></label>'
       + '<label class="span-3">Email<input name="email" value="' + API.esc(r.email) + '"></label>'
       + '<label class="span-3">Điện thoại<input name="phone" value="' + API.esc(r.phone) + '"></label>'
       + '<label class="span-3">Zalo<input name="zalo" value="' + API.esc(r.zalo) + '"></label>'

@@ -60,15 +60,15 @@ export async function getSupplierSQL(db, id) {
 
 export async function insertSupplierSQL(db, row) {
   return db.prepare(
-    `INSERT INTO suppliers (supplier_id, supplier_name, supplier_type, country, contact_name, email, phone, zalo, wechat, note, normalized_search, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(row.supplier_id, row.supplier_name, row.supplier_type, row.country, row.contact_name, row.email, row.phone, row.zalo, row.wechat, row.note, row.normalized_search, row.created_at, row.updated_at).run();
+    `INSERT INTO suppliers (supplier_id, supplier_name, supplier_type, country, tax_code, contact_name, email, phone, zalo, wechat, note, normalized_search, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(row.supplier_id, row.supplier_name, row.supplier_type, row.country, row.tax_code, row.contact_name, row.email, row.phone, row.zalo, row.wechat, row.note, row.normalized_search, row.created_at, row.updated_at).run();
 }
 
 export async function updateSupplierSQL(db, row) {
   return db.prepare(
-    `UPDATE suppliers SET supplier_name = ?, supplier_type = ?, country = ?, contact_name = ?, email = ?, phone = ?,
+    `UPDATE suppliers SET supplier_name = ?, supplier_type = ?, country = ?, tax_code = ?, contact_name = ?, email = ?, phone = ?,
        zalo = ?, wechat = ?, note = ?, normalized_search = ?, updated_at = ?
      WHERE supplier_id = ?`
-  ).bind(row.supplier_name, row.supplier_type, row.country, row.contact_name, row.email, row.phone, row.zalo, row.wechat, row.note, row.normalized_search, row.updated_at, row.supplier_id).run();
+  ).bind(row.supplier_name, row.supplier_type, row.country, row.tax_code, row.contact_name, row.email, row.phone, row.zalo, row.wechat, row.note, row.normalized_search, row.updated_at, row.supplier_id).run();
 }
