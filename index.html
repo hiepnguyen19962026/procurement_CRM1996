@@ -30,11 +30,11 @@
         <div><strong>Procurement CRM</strong><span>Quản lý mua sắm</span></div>
       </div>
       <nav class="nav" id="nav">
-        <button data-screen="dashboard" data-title="Tổng quan"><span>▦</span>Tổng quan</button>
+        <button data-screen="dashboard" data-title="Tổng quan" class="active"><span>▦</span>Tổng quan</button>
         <div class="nav-section">Nghiệp vụ</div>
         <button data-screen="rfqs" data-title="Gói thầu (RFQ)"><span>□</span>Gói thầu (RFQ)</button>
         <button data-screen="items" data-title="Dòng vật tư"><span>◇</span>Dòng vật tư</button>
-        <button data-screen="tasks" data-title="Task" class="active"><span>☑</span>Task</button>
+        <button data-screen="tasks" data-title="Task"><span>☑</span>Task</button>
         <button data-screen="clients" data-title="Khách hàng / CĐT"><span>◎</span>Khách hàng / CĐT</button>
         <button data-screen="suppliers" data-title="Nhà cung cấp"><span>◌</span>Nhà cung cấp</button>
         <button data-screen="quotes" data-title="Báo giá NCC"><span>◈</span>Báo giá NCC</button>
@@ -57,7 +57,7 @@
         </div>
       </header>
       <div class="content">
-        <section class="screen" id="screen-dashboard">
+        <section class="screen active" id="screen-dashboard">
           <div class="metrics" id="dashboardStats"></div>
           <div class="dashboard-grid" id="dashboardPanels">
             <section class="panel"><div class="empty-state">Đang tải tổng quan...</div></section>
@@ -95,7 +95,7 @@
           </div>
         </section>
 
-        <section class="screen active" id="screen-tasks">
+        <section class="screen" id="screen-tasks">
           <div class="panel">
             <div class="task-summary" id="taskSummaryCards"></div>
             <div class="task-toolbar">
@@ -285,7 +285,7 @@
       if (screen === 'audit') AuditModule.load(true);
       if (screen === 'accounts') AccountsModule.load(true);
     });
-    if (Auth.session()) { document.querySelector('.nav button[data-screen="tasks"]').click(); }
+    if (Auth.session()) { document.querySelector('.nav button[data-screen="dashboard"]').click(); }
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
   </script>
 </body>
