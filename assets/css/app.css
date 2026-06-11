@@ -172,8 +172,15 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 /* chip group label */
 .chip-group-wrap { grid-column: inherit; }
 .chip-group-wrap > .chip-group-label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 4px; }
-/* coming-soon attachment note */
-.attach-coming-soon { font-size: 12px; color: var(--text-muted); background: var(--bg); border: 1px dashed var(--border-mid); border-radius: 8px; padding: 8px 12px; display: flex; align-items: center; gap: 6px; }
+/* compact dropdown picker (clarification type/status) */
+.picker-wrap { position: relative; }
+.picker-btn { cursor: pointer; }
+.picker-btn span { pointer-events: none; }
+.picker-btn::after { content: ' ▾'; font-size: 10px; opacity: .7; }
+.picker-list { position: absolute; top: calc(100% + 3px); left: 0; background: #fff; border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.12); z-index: 300; min-width: 150px; padding: 4px; display: flex; flex-direction: column; gap: 2px; }
+.picker-list.hidden { display: none; }
+.picker-option { display: block; width: 100%; text-align: left; border-radius: 6px; cursor: pointer; }
+.picker-option:hover { filter: brightness(.94); }
 /* ── 12-column span classes ────────────────────────────────────────────────── */
 .span-1  { grid-column: span 1; }
 .span-2  { grid-column: span 2; }

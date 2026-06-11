@@ -33,12 +33,7 @@
   function bindModal() {
     document.getElementById('modalClose').addEventListener('click', closeModal);
     document.getElementById('modalCancel').addEventListener('click', closeModal);
-    document.getElementById('modal').addEventListener('click', function (e) {
-      if (e.target.id === 'modal') closeModal();
-    });
-    document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape') closeModal();
-    });
+    // Intentionally no backdrop-click or ESC close — users lose form data on accidental click.
     document.getElementById('modalForm').addEventListener('submit', async function (e) {
       e.preventDefault();
       var fn = document.getElementById('modal')._onSubmit;

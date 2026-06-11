@@ -93,7 +93,7 @@ async function saveClarification(request, env, ctx, actor, isUpdate) {
   if (isUpdate) await updateTechnicalClarificationSQL(env.DB, row);
   else await insertTechnicalClarificationSQL(env.DB, row);
 
-  if (shouldUpdateFinal(row, body)) {
+  if (shouldUpdateFinal(row)) {
     await updateRfqItemTechnicalFinalSQL(env.DB, {
       rfq_item_id: row.rfq_item_id,
       final_model: row.proposed_model,
@@ -158,9 +158,10 @@ function normalizeClarification(body, base) {
   };
 }
 
-function shouldUpdateFinal(row, body) {
-  const checked = body.updateFinal === true || body.updateFinal === 'on' || body.updateFinal === 'true';
-  return checked && (row.clarification_type === 'final_confirm' || row.status_after === 'final_confirmed');
+function shouldUpdateFinal(row) {
+  // Auto-trigger when user explicitly selects Final confirm type or Đã xác nhận status.
+  // No checkbox needed — selection is the intent.
+  return row.clarification_type === 'final_confirm' || row.status_after === 'final_confirmed';
 }
 
 function mappedTechnicalStatus(row) {

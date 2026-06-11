@@ -481,49 +481,69 @@
     { value: 'other',            label: 'Khác',             color: 'grey' },
   ];
 
-  function renderChipGroup(labelText, groupName, chips, selectedValue) {
-    var chipsHtml = chips.map(function (c) {
-      var sel = c.value === selectedValue ? ' chip-selected' : '';
-      return '<button type="button" class="chip chip-' + c.color + sel + '"'
-        + ' data-chip-group="' + API.esc(groupName) + '" data-value="' + API.esc(c.value) + '"'
-        + ' onclick="RfqItemsModule._selectChip(this)">' + API.esc(c.label) + '</button>';
+  function renderPickerDropdown(labelText, groupName, chips, selectedValue) {
+    var sel = chips[0];
+    for (var i = 0; i < chips.length; i++) { if (chips[i].value === selectedValue) { sel = chips[i]; break; } }
+    var optionsHtml = chips.map(function (c) {
+      return '<button type="button" class="picker-option chip chip-' + c.color + '"'
+        + ' data-value="' + API.esc(c.value) + '" data-picker="' + API.esc(groupName) + '"'
+        + ' onclick="RfqItemsModule._pickOption(this)">' + API.esc(c.label) + '</button>';
     }).join('');
-    return '<input type="hidden" name="' + API.esc(groupName) + '" value="' + API.esc(selectedValue) + '">'
+    return '<div class="picker-wrap">'
       + '<span class="chip-group-label">' + API.esc(labelText) + '</span>'
-      + '<div class="chip-group">' + chipsHtml + '</div>';
+      + '<button type="button" class="chip chip-' + sel.color + ' picker-btn"'
+      + ' data-picker="' + API.esc(groupName) + '" data-value="' + API.esc(sel.value) + '"'
+      + ' onclick="RfqItemsModule._togglePicker(this)"><span>' + API.esc(sel.label) + '</span></button>'
+      + '<div class="picker-list hidden" data-picker-list="' + API.esc(groupName) + '">' + optionsHtml + '</div>'
+      + '<input type="hidden" name="' + API.esc(groupName) + '" value="' + API.esc(sel.value) + '">'
+      + '</div>';
   }
 
-  function selectChip(btn) {
-    var group = btn.getAttribute('data-chip-group');
-    var value = btn.getAttribute('data-value');
-    var form = document.getElementById('modalForm');
-    if (!form) return;
-    form.querySelectorAll('.chip[data-chip-group="' + group + '"]').forEach(function (c) {
-      c.classList.remove('chip-selected');
+  function togglePicker(btn) {
+    var group = btn.getAttribute('data-picker');
+    var wrap = btn.closest('.picker-wrap');
+    var list = wrap.querySelector('[data-picker-list="' + group + '"]');
+    document.querySelectorAll('.picker-list:not(.hidden)').forEach(function (l) {
+      if (l !== list) l.classList.add('hidden');
     });
-    btn.classList.add('chip-selected');
-    var hidden = form.querySelector('input[name="' + group + '"]');
+    list.classList.toggle('hidden');
+  }
+
+  function pickOption(btn) {
+    var value = btn.getAttribute('data-value');
+    var group = btn.getAttribute('data-picker');
+    var wrap = btn.closest('.picker-wrap');
+    var hidden = wrap.querySelector('input[type="hidden"]');
     if (hidden) hidden.value = value;
+    var chips = group === 'clarificationType' ? TYPE_CHIPS : STATUS_CHIPS;
+    var chip = chips[0];
+    for (var i = 0; i < chips.length; i++) { if (chips[i].value === value) { chip = chips[i]; break; } }
+    var trigger = wrap.querySelector('.picker-btn');
+    if (trigger) {
+      trigger.className = 'chip chip-' + chip.color + ' picker-btn';
+      trigger.setAttribute('data-value', value);
+      var span = trigger.querySelector('span');
+      if (span) span.textContent = chip.label;
+    }
+    var list = wrap.querySelector('[data-picker-list]');
+    if (list) list.classList.add('hidden');
   }
 
   function clarificationFields(item, r) {
     var type = r.clarification_type || 'ask_supplier';
     var status = r.status_after || 'waiting_supplier';
     return ''
-      // Row 1: type chips (5) + status chips (7) = 12
-      + '<div class="span-5">' + renderChipGroup('Loại trao đổi', 'clarificationType', TYPE_CHIPS, type) + '</div>'
-      + '<div class="span-7">' + renderChipGroup('Trạng thái sau trao đổi', 'statusAfter', STATUS_CHIPS, status) + '</div>'
+      + '<div class="span-4">' + renderPickerDropdown('Loại trao đổi', 'clarificationType', TYPE_CHIPS, type) + '</div>'
+      + '<div class="span-4">' + renderPickerDropdown('Trạng thái sau trao đổi', 'statusAfter', STATUS_CHIPS, status) + '</div>'
+      + '<div class="span-4"></div>'
       + input('title', 'Tiêu đề', r.title, 'required', 'span-12')
       + textarea('content', 'Nội dung', r.content, '', 'span-12 compact-ta')
-      // Model/spec row (3+3+3+3) = 12
       + input('oldModel', 'Model cũ', r.old_model || val(item, 'required_model', 'quy_cach_model_yeu_cau'), '', 'span-3')
       + input('proposedModel', 'Model đề xuất / final', r.proposed_model || item.quy_cach_final, '', 'span-3')
       + input('proposedManufacturer', 'Hãng SX đề xuất', r.proposed_manufacturer || item.hang_final, '', 'span-3')
       + input('proposedOrigin', 'Xuất xứ đề xuất', r.proposed_origin || item.xuat_xu_final, '', 'span-3')
-      // Attachment: not yet supported for owner_type=technical_clarification
-      + '<div class="span-12"><div class="attach-coming-soon">📎 Upload minh chứng sẽ bổ sung sau. Không nhập file_id thủ công.</div></div>'
-      + textarea('rawNote', 'Ghi chú gốc', r.raw_note, '', 'span-12 compact-ta')
-      + '<label class="check" style="font-size:13px"><input type="checkbox" name="updateFinal"> Cập nhật quy cách final cho vật tư này</label>';
+      + textarea('rawNote', 'Ghi chú gốc', r.raw_note, '', 'span-12 compact-ta');
+    // updateFinal is auto-applied by backend when type=final_confirm or status=final_confirmed
   }
 
   function latestClarificationSummary(item, clarifications) {
@@ -1999,6 +2019,7 @@
     exportPriceHistory: exportPriceHistory,
     loadContractItems: loadContractItems,
     openContractFromRfqItemModal: openContractFromRfqItemModal,
-    _selectChip: selectChip,
+    _togglePicker: togglePicker,
+    _pickOption: pickOption,
   };
 })();
