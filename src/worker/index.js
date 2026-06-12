@@ -31,8 +31,8 @@ const CLIENT_BANK_ACCOUNT_ACTIONS = ['getClientBankAccounts', 'createClientBankA
 const CLIENT_LEGAL_HISTORY_ACTIONS = ['getClientLegalHistory', 'addClientLegalHistory'];
 const RFQ_CONTACT_ACTIONS         = ['getRfqContacts', 'addRfqContact', 'archiveRfqContact'];
 const SUPPLIER_ACTIONS = ['getSuppliers', 'createSupplier', 'updateSupplier', 'archiveSupplier'];
-const RFQ_ACTIONS = ['getDashboard', 'getRfqs', 'createRfq', 'updateRfq', 'archiveRfq'];
-const RFQ_ITEM_ACTIONS = ['getRfqItems', 'createRfqItem', 'updateRfqItem', 'archiveRfqItem', 'hardDeleteRfqItems', 'hardDeleteAllRfqItems', 'exportRfqItemsCsv'];
+const RFQ_ACTIONS = ['getDashboard', 'getRfqs', 'getRfq', 'createRfq', 'updateRfq', 'archiveRfq'];
+const RFQ_ITEM_ACTIONS = ['getRfqItems', 'getRfqItem', 'createRfqItem', 'updateRfqItem', 'archiveRfqItem', 'hardDeleteRfqItems', 'hardDeleteAllRfqItems', 'exportRfqItemsCsv'];
 const TECHNICAL_CLARIFICATION_ACTIONS = ['getTechnicalClarifications', 'getItemRevisions', 'createTechnicalClarification', 'updateTechnicalClarification', 'deleteTechnicalClarification'];
 const SUPPLIER_QUOTE_ACTIONS = ['getSupplierQuotes', 'searchSupplierQuotes', 'createSupplierQuote', 'updateSupplierQuote', 'archiveSupplierQuote'];
 const PRICING_DECISION_ACTIONS = ['getPricingDecisions', 'createPricingDecision'];
@@ -44,7 +44,7 @@ const PRICE_HISTORY_ACTIONS = ['searchPriceHistory', 'getPriceHistorySummary', '
 const CONTRACT_ACTIONS = ['getContracts', 'getContractDetail', 'getContractItemsForRfqItem', 'createContract', 'updateContract', 'archiveContract', 'addContractItem', 'updateContractItem', 'archiveContractItem', 'createContractFromRfqItem'];
 const DASHBOARD_V2_ACTIONS = ['getDashboardV2'];
 const OCR_ACTIONS = ['ocrImage'];
-const TASK_ACTIONS = ['getTasks', 'createTask', 'updateTask', 'deleteTask', 'quickUpdateTaskStatus', 'quickUpdateTaskPriority', 'suggestTaskCompanies'];
+const TASK_ACTIONS = ['getTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'quickUpdateTaskStatus', 'quickUpdateTaskPriority', 'suggestTaskCompanies'];
 const PUBLIC_ACTIONS = ['authLogin', 'initSetup'];
 
 export default {

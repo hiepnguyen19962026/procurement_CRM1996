@@ -165,7 +165,13 @@
   function openCreate() { openForm({}, [], []); }
 
   async function openEdit(id) {
-    var r = (state.rows || []).find(function (r) { return r.rfq_id === id; }) || { rfq_id: id };
+    var r = (state.rows || []).find(function (r) { return r.rfq_id === id; });
+    if (!r || !r.ten_goi) {
+      try {
+        var fetched = await API.get('getRfq', { rfqId: id });
+        r = fetched.row || r || { rfq_id: id };
+      } catch (_) { r = r || { rfq_id: id }; }
+    }
     try {
       var fetches = [API.get('getRfqContacts', { rfqId: id })];
       if (r.client_id) fetches.push(API.get('getClientContacts', { clientId: r.client_id }));

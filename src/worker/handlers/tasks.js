@@ -14,6 +14,7 @@ const VALID_PRIORITY = new Set(['khan', 'cao', 'trung_binh', 'thap']);
 
 export async function handleTasks(action, request, env, ctx, actor) {
   if (action === 'getTasks')               return listTasks(request, env, actor);
+  if (action === 'getTask')                return getOneTask(request, env, actor);
   if (action === 'createTask')             return saveTask(request, env, ctx, actor, false);
   if (action === 'updateTask')             return saveTask(request, env, ctx, actor, true);
   if (action === 'deleteTask')             return deleteTask(request, env, ctx, actor);
@@ -21,6 +22,17 @@ export async function handleTasks(action, request, env, ctx, actor) {
   if (action === 'quickUpdateTaskPriority') return quickUpdatePriority(request, env, ctx, actor);
   if (action === 'suggestTaskCompanies')   return suggestCompanies(request, env, actor);
   return json({ ok: false, error: 'Unknown task action' }, 400);
+}
+
+async function getOneTask(request, env, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const p = await readJson(request);
+  const taskId = p.taskId || p.task_id || '';
+  if (!taskId) return json({ ok: false, error: 'Missing taskId' }, 400);
+  const row = await getTaskSQL(env.DB, taskId);
+  if (!row) return json({ ok: false, error: 'Task not found' }, 404);
+  return json({ ok: true, row });
 }
 
 async function listTasks(request, env, actor) {

@@ -8,6 +8,7 @@ import { clampLimit, json, nextEntityId, nowIso, readJson } from '../lib/utils.j
 
 export async function handleRfqItems(action, request, env, ctx, actor) {
   if (action === 'getRfqItems') return listItems(request, env, actor);
+  if (action === 'getRfqItem') return getOneItem(request, env, actor);
   if (action === 'createRfqItem') return saveItem(request, env, ctx, actor, false);
   if (action === 'updateRfqItem') return saveItem(request, env, ctx, actor, true);
   if (action === 'archiveRfqItem') return archiveItem(request, env, ctx, actor);
@@ -16,6 +17,17 @@ export async function handleRfqItems(action, request, env, ctx, actor) {
   if (action === 'logRfqItemImportSummary') return logImportSummary(request, env, ctx, actor);
   if (action === 'exportRfqItemsCsv') return exportItems(request, env, actor);
   return json({ ok: false, error: 'Unknown RFQ item action' }, 400);
+}
+
+async function getOneItem(request, env, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const p = await readJson(request);
+  const rfqItemId = p.rfqItemId || p.rfq_item_id || '';
+  if (!rfqItemId) return json({ ok: false, error: 'Missing rfqItemId' }, 400);
+  const row = await getRfqItemSQL(env.DB, rfqItemId);
+  if (!row) return json({ ok: false, error: 'RFQ item not found' }, 404);
+  return json({ ok: true, row });
 }
 
 async function listItems(request, env, actor) {

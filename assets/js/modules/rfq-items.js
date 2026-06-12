@@ -451,7 +451,13 @@
   }
 
   async function openEdit(id) {
-    var row = (state.rows || []).find(function (r) { return r.rfq_item_id === id; }) || { rfq_item_id: id };
+    var row = (state.rows || []).find(function (r) { return r.rfq_item_id === id; });
+    if (!row || !row.ten_vat_tu) {
+      try {
+        var fetched = await API.get('getRfqItem', { rfqItemId: id });
+        row = fetched.row || row || { rfq_item_id: id };
+      } catch (_) { row = row || { rfq_item_id: id }; }
+    }
     try {
       var results = await Promise.all([
         safeGet('getTechnicalClarifications', { rfqItemId: id }, { rows: [] }),
@@ -899,7 +905,7 @@
     var escId = API.esc(rfqItemId);
     if (!clarifications || !clarifications.length) {
       return '<div class="span-3" data-latest-clarification style="font-size:12px">'
-        + '<div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Xác nhận kỹ thuật</div>'
+        + '<div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Làm rõ vật tư / Xác nhận kỹ thuật</div>'
         + '<span class="clar-summary-empty">Chưa có trao đổi kỹ thuật.</span>'
         + (rfqItemId ? '<div style="margin-top:6px"><button type="button" style="font-size:12px;min-height:28px;padding:3px 10px" onclick="RfqItemsModule.openClarificationForm(\'' + escId + '\')">+ Thêm trao đổi</button></div>' : '')
         + '</div>';
@@ -907,7 +913,7 @@
     var c = clarifications[0];
     var preview = (c.content || '').slice(0, 80) + ((c.content || '').length > 80 ? '…' : '');
     return '<div class="span-3" data-latest-clarification style="font-size:12px">'
-      + '<div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Xác nhận kỹ thuật</div>'
+      + '<div style="font-size:11px;font-weight:600;color:var(--text-muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Làm rõ vật tư / Xác nhận kỹ thuật</div>'
       + '<div class="clar-summary">'
       + '<div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:4px">'
       + '<span class="' + typeBadgeClass(c.clarification_type) + '" style="font-size:11px;padding:2px 7px">' + API.esc(typeLabel(c.clarification_type)) + '</span>'

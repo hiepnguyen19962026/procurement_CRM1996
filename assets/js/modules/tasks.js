@@ -354,7 +354,12 @@
 
   async function openEdit(taskId) {
     var row = (state.rows || []).find(function (r) { return r.task_id === taskId; });
-    if (!row) row = { task_id: taskId };
+    if (!row || !row.title) {
+      try {
+        var data = await API.get('getTask', { taskId: taskId });
+        row = data.row || { task_id: taskId };
+      } catch (_) { row = row || { task_id: taskId }; }
+    }
     openForm(row, row.start_date || new Date().toISOString().slice(0, 10));
   }
 

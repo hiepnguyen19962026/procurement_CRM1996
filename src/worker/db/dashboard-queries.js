@@ -226,13 +226,13 @@ export async function getDashboardV2SQL(db) {
       ' LIMIT 20'
     ).bind(today).all(),
 
-    // ── NEW: follow-up tasks due today or overdue (37) ────────────────────────
+    // ── NEW: follow-up tasks — deadline within next 7 days (incl. overdue) (37) ──
     db.prepare(
       'SELECT task_id, title, company_name, deadline_date, next_followup_date, status, priority, latest_note, created_by' +
       " FROM tasks WHERE deleted_at IS NULL AND status NOT IN ('hoan_thanh','huy_bo')" +
-      " AND next_followup_date IS NOT NULL AND next_followup_date != '' AND next_followup_date <= ?" +
-      ' ORDER BY next_followup_date ASC, task_id ASC LIMIT 20'
-    ).bind(tomorrow).all(),
+      " AND deadline_date IS NOT NULL AND deadline_date != '' AND deadline_date <= ?" +
+      ' ORDER BY deadline_date ASC, task_id ASC LIMIT 20'
+    ).bind(d7).all(),
   ]);
 
   const scalar = (row) => row?.n || 0;

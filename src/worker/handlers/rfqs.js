@@ -8,10 +8,22 @@ import { clampLimit, json, nextEntityId, nowIso, readJson } from '../lib/utils.j
 export async function handleRfqs(action, request, env, ctx, actor) {
   if (action === 'getDashboard') return getDashboard(env, actor);
   if (action === 'getRfqs') return listRfqs(request, env, actor);
+  if (action === 'getRfq') return getOneRfq(request, env, actor);
   if (action === 'createRfq') return saveRfq(request, env, ctx, actor, false);
   if (action === 'updateRfq') return saveRfq(request, env, ctx, actor, true);
   if (action === 'archiveRfq') return archiveRfq(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown RFQ action' }, 400);
+}
+
+async function getOneRfq(request, env, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const p = await readJson(request);
+  const rfqId = p.rfqId || p.rfq_id || '';
+  if (!rfqId) return json({ ok: false, error: 'Missing rfqId' }, 400);
+  const row = await getRfqSQL(env.DB, rfqId);
+  if (!row) return json({ ok: false, error: 'RFQ not found' }, 404);
+  return json({ ok: true, row });
 }
 
 async function getDashboard(env, actor) {

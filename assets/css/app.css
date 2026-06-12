@@ -156,13 +156,21 @@ mark { background: #fcd34d; padding: 0 2px; border-radius: 2px; font-style: norm
 .timeline-top span { color: var(--text-muted); font-size: 12px; }
 .empty-state.small { min-height: 64px; }
 .metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 20px; }
-.metric { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 18px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; justify-content: center; }
-.metric span { display: block; color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.metric { background: white; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 14px; box-shadow: var(--shadow-card); display: flex; flex-direction: column; justify-content: center; }
+.metric span { display: block; color: var(--text-muted); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
 .metric strong { font-size: 36px; line-height: 1.1; font-weight: 700; color: var(--text); }
-.metric small { display: block; color: var(--text-muted); font-size: 12px; margin-top: 4px; }
+.metric small { display: block; color: var(--text-muted); font-size: 12px; margin-top: 2px; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
 /* dashboard mini-table scroll wrapper — always horizontally scrollable */
 .dashboard-table-wrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+/* task/followup panel: fixed-layout, no horizontal scroll, text wraps */
+.dashboard-tasks-wrap { overflow-x: hidden !important; }
+.dashboard-tasks-wrap table { table-layout: fixed; width: 100%; min-width: 0 !important; }
+.dashboard-tasks-wrap th:nth-child(1), .dashboard-tasks-wrap td:nth-child(1) { width: 38%; word-break: break-word; white-space: normal; }
+.dashboard-tasks-wrap th:nth-child(2), .dashboard-tasks-wrap td:nth-child(2) { width: 20%; word-break: break-word; white-space: normal; }
+.dashboard-tasks-wrap th:nth-child(3), .dashboard-tasks-wrap td:nth-child(3) { width: 18%; white-space: normal; }
+.dashboard-tasks-wrap th:nth-child(4), .dashboard-tasks-wrap td:nth-child(4) { width: 12%; }
+.dashboard-tasks-wrap th:nth-child(5), .dashboard-tasks-wrap td:nth-child(5) { width: 12%; }
 /* quotes/history table scroll inside modal — needs overflow-x: clip on .modal-body to work */
 .quotes-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
 /* coverage 2-stat grid — overridable by media query */

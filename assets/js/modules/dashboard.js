@@ -153,35 +153,36 @@
               return '<tr style="cursor:pointer" onclick="DashboardModule._navToTask(\'' + API.esc(r.task_id) + '\')">'
                 + '<td>' + API.esc(r.title || '') + (r.latest_note ? '<br><small style="color:var(--text-muted)">' + API.esc(r.latest_note) + '</small>' : '') + '</td>'
                 + '<td>' + API.esc(r.company_name || '—') + '</td>'
-                + '<td style="white-space:nowrap">' + dlHtml + '</td>'
+                + '<td>' + dlHtml + '</td>'
                 + '<td>' + priorityBadge(r.priority) + '</td>'
                 + '<td>' + taskStatusBadge(r.status) + '</td>'
                 + '</tr>';
-            }).join('')
+            }).join(''),
+            'dashboard-tasks-wrap'
           )
         : empty('Không có task đang thực hiện.')
     );
   }
 
-  // ── "Follow-up" – grouped: Quá hạn / Hôm nay / Ngày mai ─────────────────
+  // ── "Follow-up" – tasks with deadline: Quá hạn / Hôm nay / Trong 7 ngày ──
 
   function panelFollowup(tasks) {
-    var rows     = tasks.followup || [];
-    var today    = todayVN();
-    var tomorrow = vnDateAdd(1);
+    var rows  = tasks.followup || [];
+    var today = todayVN();
+    var d7    = vnDateAdd(7);
 
-    var overdue   = rows.filter(function (r) { return (r.next_followup_date || '') < today; });
-    var todayRows = rows.filter(function (r) { return r.next_followup_date === today; });
-    var tmrRows   = rows.filter(function (r) { return r.next_followup_date === tomorrow; });
+    var overdue   = rows.filter(function (r) { return (r.deadline_date || '') < today && (r.deadline_date || '') !== ''; });
+    var todayRows = rows.filter(function (r) { return r.deadline_date === today; });
+    var next7Rows = rows.filter(function (r) { return r.deadline_date > today && r.deadline_date <= d7; });
 
-    var headers = ['Task', 'Công ty', 'Follow-up', 'Ưu tiên', 'Trạng thái'];
+    var headers = ['Task', 'Công ty', 'Deadline', 'Ưu tiên', 'Trạng thái'];
 
     function fuRows(list) {
       return list.map(function (r) {
         return '<tr style="cursor:pointer" onclick="DashboardModule._navToTask(\'' + API.esc(r.task_id) + '\')">'
           + '<td>' + API.esc(r.title || '') + (r.latest_note ? '<br><small style="color:var(--text-muted)">' + API.esc(r.latest_note) + '</small>' : '') + '</td>'
           + '<td>' + API.esc(r.company_name || '—') + '</td>'
-          + '<td style="white-space:nowrap">' + API.esc(r.next_followup_date || '') + '</td>'
+          + '<td>' + API.esc(r.deadline_date || '') + '</td>'
           + '<td>' + priorityBadge(r.priority) + '</td>'
           + '<td>' + taskStatusBadge(r.status) + '</td>'
           + '</tr>';
@@ -193,18 +194,18 @@
         + '<p style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:' + color + ';margin:0 0 4px">'
         + API.esc(title) + (list.length ? ' (' + list.length + ')' : '') + '</p>'
         + (list.length
-            ? miniTable(headers, fuRows(list))
+            ? miniTable(headers, fuRows(list), 'dashboard-tasks-wrap')
             : '<div style="color:var(--text-faint);font-size:12px;padding:4px 0">Không có.</div>')
         + '</div>';
     }
 
-    var hasAny = overdue.length || todayRows.length || tmrRows.length;
-    return panel('Follow-up',
+    var hasAny = overdue.length || todayRows.length || next7Rows.length;
+    return panel('Follow-up (deadline gần)',
       hasAny
         ? fuSection('Quá hạn', overdue,   'var(--red)')
           + fuSection('Hôm nay', todayRows, '#d97706')
-          + fuSection('Ngày mai', tmrRows,  'var(--blue)')
-        : empty('Không có follow-up quá hạn, hôm nay, hoặc ngày mai.')
+          + fuSection('Trong 7 ngày', next7Rows, 'var(--blue)')
+        : empty('Không có task nào hết hạn trong 7 ngày tới.')
     );
   }
 
@@ -280,9 +281,11 @@
             ['Thời gian', 'Vật tư', 'Tên gói', 'Loại', 'Trạng thái', 'Tóm tắt'],
             rows.map(function (r) {
               var summary = r.proposed_model || r.proposed_manufacturer || r.proposed_origin || r.title || '—';
-              var time = (r.created_at || '').slice(0, 16).replace('T', ' ');
+              var dt = (r.created_at || '').slice(0, 16).replace('T', ' ');
+              var datePart = dt.slice(0, 10);
+              var timePart = dt.slice(11, 16);
               return '<tr style="cursor:pointer" onclick="DashboardModule._navToItem(\'' + API.esc(r.rfq_item_id) + '\')">'
-                + '<td style="white-space:nowrap;color:var(--text-muted)">' + API.esc(time) + '</td>'
+                + '<td style="color:var(--text-muted);font-size:12px">' + API.esc(datePart) + '<br>' + API.esc(timePart) + '</td>'
                 + '<td>' + API.esc(r.ten_vat_tu || r.rfq_item_id)
                   + (r.ma_vat_tu ? '<br><small style="color:var(--text-faint)">' + API.esc(r.ma_vat_tu) + '</small>' : '') + '</td>'
                 + '<td>' + API.esc(r.ten_goi || r.rfq_id || '') + '</td>'
@@ -440,11 +443,11 @@
     return '<section class="panel"><h3>' + API.esc(title) + '</h3>' + bodyHtml + '</section>';
   }
 
-  function miniTable(headers, bodyRows) {
+  function miniTable(headers, bodyRows, extraClass) {
     var thead = '<thead><tr>'
       + headers.map(function (h) { return '<th>' + API.esc(h) + '</th>'; }).join('')
       + '</tr></thead>';
-    return '<div class="table-wrap dashboard-table-wrap" style="margin-top:6px">'
+    return '<div class="table-wrap dashboard-table-wrap' + (extraClass ? ' ' + extraClass : '') + '" style="margin-top:6px">'
       + '<table class="quotes-mini-table">' + thead + '<tbody>' + bodyRows + '</tbody></table>'
       + '</div>';
   }
