@@ -84,6 +84,7 @@
         + '<td style="white-space:nowrap;text-align:right">' + (API.money(r.du_toan) || '<span class="muted">—</span>') + '</td>'
         + '<td style="white-space:nowrap">' + statCell + '</td>'
         + '<td>' + noteCell(r.note) + '</td>'
+        + urlCell(r.external_url, r.rfq_id)
         + '<td data-role-only="admin,manager" style="text-align:center;padding:0 4px">'
           + '<button type="button" class="btn-x-archive" title="Lưu trữ RFQ" onclick="RfqsModule.archiveRfq(\'' + API.esc(r.rfq_id) + '\')">✕</button>'
           + '</td>'
@@ -152,6 +153,7 @@
         trangThaiGoi:         newStatus,
         sourceFileId:         r.source_file_id || '',
         note:                 r.note || '',
+        externalUrl:          r.external_url || '',
       });
       var row = (state.rows || []).find(function (x) { return x.rfq_id === rfqId; });
       if (row) row.trang_thai_goi = newStatus;
@@ -240,7 +242,8 @@
       + '<label class="span-2">Ngày hết hạn<input name="ngayHetHan" type="date" value="' + API.esc(r.ngay_het_han || '') + '"></label>'
       + '<label class="span-3">Dự toán (VNĐ)<input name="duToan" inputmode="numeric" value="' + API.esc(r.du_toan || '') + '"></label>'
       + '<label class="span-2">Trạng thái' + statSel + '</label>'
-      + '<label class="span-12 compact-ta">Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>';
+      + '<label class="span-12 compact-ta">Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>'
+      + '<label class="span-12">URL thư mục/tài liệu<input name="externalUrl" type="url" maxlength="2000" placeholder="https://drive.google.com/…" value="' + API.esc(r.external_url || '') + '"></label>';
 
     if (r.rfq_id) base += rfqContactsSection(r.rfq_id, rfqContacts, clientContacts, r.client_id || '');
     return base;
@@ -502,6 +505,17 @@
   }
   function noteCell(value) {
     return value ? '<span class="rfq-note">' + API.esc(value) + '</span>' : '<span class="muted">—</span>';
+  }
+  function urlCell(url, rfqId) {
+    if (!url || !/^https?:\/\//i.test(url)) {
+      return '<td style="text-align:center;padding:0 4px">'
+        + '<button type="button" class="btn btn-sm" onclick="RfqsModule.openEdit(\'' + API.esc(rfqId) + '\')">+ URL</button>'
+        + '</td>';
+    }
+    return '<td style="text-align:center;padding:0 4px;white-space:nowrap">'
+      + '<a class="btn btn-sm" href="' + API.esc(encodeURI(url)) + '" target="_blank" rel="noopener noreferrer" title="' + API.esc(url) + '">Mở</a>'
+      + ' <button type="button" class="btn btn-sm" onclick="RfqsModule.openEdit(\'' + API.esc(rfqId) + '\')">Sửa</button>'
+      + '</td>';
   }
   function itemCountLabel(value) {
     return '📋 ' + Number(value || 0) + ' dòng';

@@ -72,7 +72,7 @@
               <select id="rfqStatus"><option value="">Tất cả trạng thái</option><option value="dang_khao_gia">Đang khảo giá</option><option value="da_bao">Đã báo</option><option value="trung">Trúng</option><option value="khong_trung">Không trúng</option><option value="treo">Treo</option><option value="tham_khao">Tham khảo</option></select>
               <button onclick="RfqsModule.load(true)">Tìm kiếm</button>
             </div>
-            <div class="table-wrap"><table><thead><tr><th data-sort-key="rfq_id">ID</th><th data-sort-key="ma_goi">Mã gói</th><th data-sort-key="ten_goi">Tên gói</th><th data-sort-key="client_name">CĐT</th><th data-sort-key="ngay_dang_tai">Ngày đăng tải</th><th data-sort-key="han_nop">Hạn nộp</th><th>Dòng vật tư</th><th data-sort-key="du_toan">Dự toán</th><th data-sort-key="trang_thai">Trạng thái</th><th>Ghi chú</th><th data-role-only="admin,manager" style="width:28px"></th></tr></thead><tbody id="rfqRows"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th data-sort-key="rfq_id">ID</th><th data-sort-key="ma_goi">Mã gói</th><th data-sort-key="ten_goi" style="min-width:140px;max-width:220px">Tên gói</th><th data-sort-key="client_name" style="min-width:110px;max-width:180px">CĐT</th><th data-sort-key="ngay_dang_tai">Ngày đăng tải</th><th data-sort-key="han_nop">Hạn nộp</th><th>Dòng vật tư</th><th data-sort-key="du_toan">Dự toán</th><th data-sort-key="trang_thai">Trạng thái</th><th>Ghi chú</th><th style="width:80px">URL</th><th data-role-only="admin,manager" style="width:28px"></th></tr></thead><tbody id="rfqRows"></tbody></table></div>
             <p><button id="rfqMore" class="hidden" onclick="RfqsModule.load(false)">Tải thêm</button></p>
           </div>
         </section>
@@ -289,32 +289,20 @@
     if (Auth.session()) { document.querySelector('.nav button[data-screen="dashboard"]').click(); }
     window.App = {
       refreshCurrentView: async function () {
-        var activeBtn = document.querySelector('.nav button.active[data-screen]');
-        if (!activeBtn) return;
-        var screen = activeBtn.getAttribute('data-screen');
-        var mods = {
-          dashboard: function () { return DashboardModule.load(true); },
-          rfqs:      function () { return RfqsModule.load(true); },
-          items:     function () { return RfqItemsModule.load(true); },
-          tasks:     function () { return TasksModule.load(true); },
-          clients:   function () { return ClientsModule.load(true); },
-          suppliers: function () { return SuppliersModule.load(true); },
-          quotes:    function () { return SupplierQuotesModule.load(true); },
-          audit:     function () { return AuditModule.load(true); },
-          accounts:  function () { return AccountsModule.load(true); }
-        };
-        var fn = mods[screen];
-        if (!fn) return;
         var btn = document.getElementById('btnRefresh');
         if (btn) btn.disabled = true;
-        try {
-          await fn();
-          API.toast('Đã làm mới dữ liệu', 'success');
-        } catch (err) {
-          API.toast('Làm mới thất bại', 'error');
-        } finally {
-          if (btn) btn.disabled = false;
+        // Clear all SW/Cache Storage caches so the upcoming reload fetches fresh assets.
+        if ('caches' in window) {
+          try {
+            var keys = await caches.keys();
+            await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+          } catch (_) {}
         }
+        // Clear in-memory app list caches (does NOT touch sessionStorage / auth session).
+        AppState.set('lists', {});
+        // Full page reload — navigation is network-first in sw.js so fresh HTML+assets load.
+        // sessionStorage (procurement_session) survives reload; user stays logged in.
+        location.reload();
       }
     };
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});

@@ -89,6 +89,13 @@ async function quickUpdateRfqStatus(request, env, ctx, actor) {
   return json({ ok: true });
 }
 
+function cleanUrl(raw) {
+  const s = (raw || '').trim();
+  if (!s) return '';
+  if (!/^https?:\/\//i.test(s)) return '';
+  return s.slice(0, 2000);
+}
+
 async function saveRfq(request, env, ctx, actor, isUpdate) {
   const denied = requireRole(actor, WRITE_ROLES);
   if (denied) return denied;
@@ -98,6 +105,10 @@ async function saveRfq(request, env, ctx, actor, isUpdate) {
   const now = nowIso();
   const oldRow = isUpdate ? await getRfqSQL(env.DB, body.rfqId || body.rfq_id) : null;
   if (isUpdate && !oldRow) return json({ ok: false, error: 'Khong tim thay RFQ' }, 404);
+  // Preserve existing URL when payload omits the field (e.g. quick-status update)
+  const rawUrl = body.externalUrl !== undefined ? body.externalUrl
+    : body.external_url !== undefined ? body.external_url
+    : (oldRow?.external_url || '');
   const row = {
     rfq_id: isUpdate ? oldRow.rfq_id : await nextEntityId(env.DB, 'rfqs', 'rfq_id', 'RFQ'),
     client_id: cleanString(body.clientId || body.client_id, 80),
@@ -110,6 +121,7 @@ async function saveRfq(request, env, ctx, actor, isUpdate) {
     trang_thai_goi: cleanString(body.trangThaiGoi || body.trang_thai_goi || 'dang_khao_gia', 40),
     source_file_id: cleanString(body.sourceFileId || body.source_file_id, 120),
     note: cleanString(body.note, 1500),
+    external_url: cleanUrl(rawUrl),
     normalized_search: buildSearchText([title, body.maGoiTbmt, body.ma_goi_tbmt, body.nhaMayCdt, body.nha_may_cdt]),
     created_by: oldRow?.created_by || actor.id,
     created_at: oldRow?.created_at || now,
