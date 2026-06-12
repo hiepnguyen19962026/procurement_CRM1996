@@ -61,8 +61,15 @@
   }
 
   function navToItem(rfqItemId) {
-    // RfqItemsModule.openEdit works as a floating modal regardless of active screen
     if (window.RfqItemsModule) RfqItemsModule.openEdit(rfqItemId);
+  }
+
+  function navToClar(rfqItemId) {
+    if (rfqItemId && window.RfqItemsModule) RfqItemsModule.openClarificationTimeline(rfqItemId);
+  }
+
+  function navToClient(clientId) {
+    if (clientId && window.ClientsModule) ClientsModule.openEdit(clientId);
   }
 
   // ── KPI cards ─────────────────────────────────────────────────────────────
@@ -340,15 +347,18 @@
               var datePart = dt.slice(0, 10);
               var timePart = dt.slice(11, 16);
               var bestUrl = r.clar_url || r.item_url || r.rfq_url || '';
-              return '<tr style="cursor:pointer" onclick="DashboardModule._navToItem(\'' + API.esc(r.rfq_item_id) + '\')">'
+              return '<tr>'
                 + '<td style="color:var(--text-muted);font-size:12px">' + API.esc(datePart) + '<br>' + API.esc(timePart) + '</td>'
-                + '<td>' + API.esc(r.ten_vat_tu || r.rfq_item_id)
+                + '<td><span class="link-edit" onclick="DashboardModule._navToItem(\'' + API.esc(r.rfq_item_id) + '\')">'
+                  + API.esc(r.ten_vat_tu || r.rfq_item_id) + '</span>'
                   + (r.ma_vat_tu ? '<br><small style="color:var(--text-faint)">' + API.esc(r.ma_vat_tu) + '</small>' : '') + '</td>'
-                + '<td>' + API.esc(r.ten_goi || r.rfq_id || '') + '</td>'
+                + '<td><span class="link-edit" onclick="DashboardModule._navToRfq(\'' + API.esc(r.rfq_id) + '\')">'
+                  + API.esc(r.ten_goi || r.rfq_id || '') + '</span></td>'
                 + '<td>' + clarTypeSel(r.clarification_id, r.clarification_type) + '</td>'
                 + '<td>' + clarStatusSel(r.clarification_id, r.status_after) + '</td>'
                 + '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
-                  + API.esc(summary) + '</td>'
+                  + '<span class="link-edit" onclick="DashboardModule._navToClar(\'' + API.esc(r.rfq_item_id) + '\')">'
+                  + API.esc(summary) + '</span></td>'
                 + urlCell(bestUrl)
                 + '</tr>';
             }).join('')
@@ -557,23 +567,63 @@
         bodyEl.innerHTML = '<div style="grid-column:1/-1"><p style="color:var(--text-muted)">Không có vật tư nào.</p></div>';
         return;
       }
-      var statusMap = { chua_xu_ly: 'Chưa XL', dang_hoi_gia: 'Đang hỏi', du_gia: 'Đủ giá', da_final: 'Final' };
+      function rCell(v, m) {
+        var t = (v === null || v === undefined || v === '') ? '-' : String(v);
+        if (t === '-') return '<td' + (m ? ' class="muted-cell"' : '') + '>-</td>';
+        return '<td>' + API.esc(t) + '</td>';
+      }
+      var statusMap = {
+        chua_xu_ly: 'Chưa XL', dang_hoi_gia: 'Đang hỏi', du_gia: 'Đủ giá',
+        da_bao_cdt: 'Đã báo CĐT', can_xac_nhan_ky_thuat: 'Cần XN KT', da_final: 'Final',
+      };
+      var v = RfqItemsModule.val;
+      var headers = [
+        'STT', 'Mã mua sắm', 'Mã vật tư', 'Tên vật tư',
+        'Model', 'Nhãn hiệu', 'Năm SX', 'Xuất xứ', 'Hãng SX',
+        'Thông số KT', 'Vật liệu', 'Phụ tùng', 'Yêu cầu KT bổ sung',
+        'ĐVT', 'KL', 'Thuế',
+        'Đơn giá ST', 'Thành tiền ST', 'Đơn giá HĐ', 'Thành tiền HĐ',
+        'Giao hàng', 'Ghi chú', 'URL', 'Báo giá', 'XN kỹ thuật', 'Trạng thái',
+      ];
       var rowsHtml = rows.map(function (r) {
+        var escId = API.esc(r.rfq_item_id);
+        var techParam = v(r, 'technical_params', 'thong_so_ky_thuat');
         return '<tr>'
-          + '<td style="color:var(--text-muted);font-size:12px">' + API.esc(r.stt_goc || '') + '</td>'
-          + '<td>' + API.esc(r.ma_vat_tu || '') + '</td>'
-          + '<td><span class="link-edit" style="cursor:pointer" onclick="RfqItemsModule.openEdit(\'' + API.esc(r.rfq_item_id) + '\')">'
+          + rCell(r.stt_goc, true)
+          + rCell(r.ma_mua_sam, true)
+          + rCell(r.ma_vat_tu, true)
+          + '<td><span class="link-edit" onclick="RfqItemsModule.openEdit(\'' + escId + '\')">'
             + API.esc(r.ten_vat_tu || '') + '</span>'
-            + (r.required_model ? '<br><small style="color:var(--text-faint)">' + API.esc(r.required_model) + '</small>' : '')
+            + (techParam ? '<div class="muted" style="font-size:11px">' + API.esc(String(techParam).slice(0, 60)) + '</div>' : '')
             + '</td>'
-          + '<td style="color:var(--text-muted)">' + API.esc(r.unit || '') + '</td>'
-          + '<td class="num">' + (r.quantity != null ? r.quantity : '') + '</td>'
+          + rCell(v(r, 'required_model', 'quy_cach_model_yeu_cau'), true)
+          + rCell(v(r, 'brand', 'nhan_hieu'), true)
+          + rCell(v(r, 'manufacture_year', 'nam_san_xuat'), true)
+          + rCell(v(r, 'origin_country', 'xuat_xu'), true)
+          + rCell(v(r, 'manufacturer', 'hang_goc_nsx_goc'), true)
+          + rCell(techParam, true)
+          + rCell(r.vat_lieu, true)
+          + rCell(r.phu_tung_chuyen_dung, true)
+          + rCell(r.yeu_cau_ky_thuat_bo_sung, true)
+          + rCell(v(r, 'unit', 'don_vi'), true)
+          + rCell(v(r, 'quantity', 'so_luong') || 0, false)
+          + rCell(r.thue_suat != null && r.thue_suat !== 0 ? r.thue_suat + '%' : '', true)
+          + rCell(API.money(r.don_gia_truoc_thue || r.don_gia_sau_thue), true)
+          + rCell(API.money(r.thanh_tien_sau_thue), true)
+          + rCell(API.money(r.gia_hop_dong), true)
+          + rCell(r.gia_hop_dong ? API.money(r.gia_hop_dong * (parseFloat(v(r, 'quantity', 'so_luong')) || 0)) : '', true)
+          + rCell(r.delivery_time, true)
+          + rCell(r.note, true)
+          + urlCell(r.external_url)
+          + RfqItemsModule.quotesSummaryCell(r)
+          + '<td>' + RfqItemsModule.technicalSummary(r) + '</td>'
           + '<td><span class="badge">' + API.esc(statusMap[r.trang_thai_dong] || r.trang_thai_dong || '') + '</span></td>'
           + '</tr>';
       }).join('');
       bodyEl.innerHTML = '<div style="grid-column:1/-1">'
-        + miniTable(['STT', 'Mã VT', 'Tên vật tư', 'ĐVT', 'KL', 'Trạng thái'], rowsHtml)
+        + miniTable(headers, rowsHtml)
         + '</div>';
+      Auth.applyRoleUI();
     } catch (err) {
       var bodyEl2 = document.getElementById('modalBody');
       if (bodyEl2) bodyEl2.innerHTML = '<div style="grid-column:1/-1"><p style="color:var(--red)">Lỗi tải dữ liệu.</p></div>';
@@ -868,6 +918,8 @@
     _navToRfq:           navToRfq,
     _navToTask:          navToTask,
     _navToItem:          navToItem,
+    _navToClar:          navToClar,
+    _navToClient:        navToClient,
     _openItemsModal:     openItemsModal,
     _sortTracked:        sortTracked,
     _quickTaskStatus:    quickTaskStatus,

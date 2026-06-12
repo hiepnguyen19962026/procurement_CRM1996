@@ -3000,5 +3000,8 @@
     _pickOption: pickOption,
     _onSupplierInput: _onSupplierInput,
     _selectSupplier: _selectSupplier,
+    val: val,
+    quotesSummaryCell: quotesSummaryCell,
+    technicalSummary: technicalSummary,
   };
 })();
