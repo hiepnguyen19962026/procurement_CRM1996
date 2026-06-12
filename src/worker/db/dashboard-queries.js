@@ -172,7 +172,9 @@ export async function getDashboardV2SQL(db) {
     // ── NEW: tracked RFQ list – dang_khao_gia + tham_khao + da_bao, top 30 (32) ──
     db.prepare(
       'SELECT r.rfq_id, r.ma_goi_tbmt, r.ten_goi, r.ngay_het_han, r.trang_thai_goi, r.du_toan,' +
-      " COALESCE(c.client_name, r.nha_may_cdt, '') AS cdt_label" +
+      ' r.external_url, r.client_id,' +
+      " COALESCE(c.client_name, r.nha_may_cdt, '') AS cdt_label," +
+      " (SELECT COUNT(*) FROM rfq_items i WHERE i.rfq_id = r.rfq_id AND i.trang_thai_dong != 'archived') AS item_count" +
       ' FROM rfqs r LEFT JOIN clients c ON c.client_id = r.client_id' +
       " WHERE r.trang_thai_goi IN ('dang_khao_gia','tham_khao','da_bao')" +
       ' ORDER BY' +
@@ -186,6 +188,7 @@ export async function getDashboardV2SQL(db) {
     // ── NEW: won RFQ list with item count, sorted by updated_at DESC (33) ─────
     db.prepare(
       'SELECT r.rfq_id, r.ma_goi_tbmt, r.ten_goi, r.du_toan, r.updated_at,' +
+      ' r.external_url, r.client_id,' +
       ' (SELECT COUNT(*) FROM rfq_items i WHERE i.rfq_id = r.rfq_id) AS item_count' +
       " FROM rfqs r WHERE r.trang_thai_goi = 'trung'" +
       ' ORDER BY r.updated_at DESC, r.rfq_id DESC LIMIT 15'
@@ -195,7 +198,9 @@ export async function getDashboardV2SQL(db) {
     db.prepare(
       'SELECT tc.clarification_id, tc.rfq_item_id, tc.clarification_type, tc.status_after,' +
       ' tc.title, tc.proposed_model, tc.proposed_manufacturer, tc.proposed_origin, tc.created_at,' +
-      ' i.ten_vat_tu, i.ma_vat_tu, r.rfq_id, r.ten_goi, r.ma_goi_tbmt' +
+      ' tc.external_url AS clar_url,' +
+      ' i.ten_vat_tu, i.ma_vat_tu, i.external_url AS item_url,' +
+      ' r.rfq_id, r.ten_goi, r.ma_goi_tbmt, r.external_url AS rfq_url' +
       ' FROM technical_clarifications tc' +
       ' JOIN rfq_items i ON i.rfq_item_id = tc.rfq_item_id' +
       ' JOIN rfqs r ON r.rfq_id = i.rfq_id' +

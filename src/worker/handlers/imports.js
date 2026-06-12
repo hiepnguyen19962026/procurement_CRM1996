@@ -330,7 +330,7 @@ async function commitRows(request, env, ctx, actor) {
     committed_at: now,
   });
 
-  ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
+  ctx.waitUntil(invalidateKv(env, ['dashboard:v1', 'dashboard:v2']));
   const importParts = [`tạo ${summary.created}`, `cập nhật ${summary.updated}`, `bỏ qua ${summary.skipped}`];
   if (summary.errors) importParts.push(`lỗi ${summary.errors}`);
   ctx.waitUntil(writeActionLog(env, {

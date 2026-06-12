@@ -223,6 +223,9 @@
         else if (_trackedSort.by === 'du_toan') {
           va = Number(a.du_toan || 0); vb = Number(b.du_toan || 0);
           return _trackedSort.dir === 'asc' ? va - vb : vb - va;
+        } else if (_trackedSort.by === 'item_count') {
+          va = Number(a.item_count || 0); vb = Number(b.item_count || 0);
+          return _trackedSort.dir === 'asc' ? va - vb : vb - va;
         } else if (_trackedSort.by === 'deadline') {
           var da = a.ngay_het_han || '';
           var db = b.ngay_het_han || '';
@@ -256,7 +259,9 @@
       + th('Tên gói', 'ten_goi')
       + th('Trạng thái', 'status')
       + th('Hạn nộp', 'deadline')
+      + th('Số dòng VT', 'item_count')
       + th('Dự toán', 'du_toan')
+      + '<th>URL</th>'
       + '</tr></thead>';
 
     var rowsHtml = sorted.map(function (r) {
@@ -279,7 +284,9 @@
         + '<td>' + API.esc(r.ten_goi || '') + '</td>'
         + '<td>' + rfqStatusSel(r.rfq_id, r.trang_thai_goi || '') + '</td>'
         + '<td>' + dlHtml + '</td>'
+        + itemPill(r.rfq_id, r.item_count)
         + '<td class="num">' + (r.du_toan ? fmtMoney(r.du_toan) : '<span style="color:var(--text-faint)">—</span>') + '</td>'
+        + urlCell(r.external_url)
         + '</tr>';
     }).join('');
 
@@ -290,7 +297,7 @@
 
   function panelTrackedRfqs(rfq) {
     var rows = rfq.tracked_list || [];
-    return '<section class="panel" id="dash-panel-tracked-rfq"><h3>RFQ đang theo dõi (top 30)</h3>'
+    return '<section class="panel" id="dash-panel-tracked-rfq"><h3>RFQ đang theo dõi</h3>'
       + '<div id="dash-tracked-rfq-inner">' + trackedRfqTableHtml(rows) + '</div>'
       + '</section>';
   }
@@ -302,16 +309,16 @@
     return panel('RFQ vừa trúng',
       rows.length
         ? miniTable(
-            ['Mã gói', 'Tên gói', 'Giá trị dự toán', 'Số dòng VT', 'Cập nhật', 'Hợp đồng'],
+            ['Mã gói', 'Tên gói', 'Giá trị dự toán', 'Số dòng VT', 'Cập nhật', 'URL'],
             rows.map(function (r) {
               var upd = (r.updated_at || '').slice(0, 10);
               return '<tr style="cursor:pointer" onclick="DashboardModule._navToRfq(\'' + API.esc(r.rfq_id) + '\')">'
                 + '<td><strong class="link-edit">' + API.esc(r.ma_goi_tbmt || r.rfq_id) + '</strong></td>'
                 + '<td>' + API.esc(r.ten_goi) + '</td>'
                 + '<td class="num">' + (r.du_toan ? fmtMoney(r.du_toan) : '<span style="color:var(--text-faint)">—</span>') + '</td>'
-                + '<td class="num">' + (r.item_count || 0) + '</td>'
+                + itemPill(r.rfq_id, r.item_count)
                 + '<td style="color:var(--text-muted);white-space:nowrap">' + API.esc(upd) + '</td>'
-                + '<td style="color:var(--text-faint)">—</td>'
+                + urlCell(r.external_url)
                 + '</tr>';
             }).join('')
           )
@@ -323,15 +330,16 @@
 
   function panelClarifications(clar) {
     var rows = clar.latest30 || [];
-    return panel('Vật tư vừa làm rõ (30 dòng gần nhất)',
+    return panel('Vật tư vừa làm rõ',
       rows.length
         ? miniTable(
-            ['Thời gian', 'Vật tư', 'Tên gói', 'Loại', 'Trạng thái', 'Tóm tắt'],
+            ['Thời gian', 'Vật tư', 'Tên gói', 'Loại', 'Trạng thái', 'Tóm tắt', 'URL'],
             rows.map(function (r) {
               var summary = r.proposed_model || r.proposed_manufacturer || r.proposed_origin || r.title || '—';
               var dt = (r.created_at || '').slice(0, 16).replace('T', ' ');
               var datePart = dt.slice(0, 10);
               var timePart = dt.slice(11, 16);
+              var bestUrl = r.clar_url || r.item_url || r.rfq_url || '';
               return '<tr style="cursor:pointer" onclick="DashboardModule._navToItem(\'' + API.esc(r.rfq_item_id) + '\')">'
                 + '<td style="color:var(--text-muted);font-size:12px">' + API.esc(datePart) + '<br>' + API.esc(timePart) + '</td>'
                 + '<td>' + API.esc(r.ten_vat_tu || r.rfq_item_id)
@@ -341,6 +349,7 @@
                 + '<td>' + clarStatusSel(r.clarification_id, r.status_after) + '</td>'
                 + '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
                   + API.esc(summary) + '</td>'
+                + urlCell(bestUrl)
                 + '</tr>';
             }).join('')
           )
@@ -512,6 +521,64 @@
 
   function fmtMoney(value) {
     return Number(value || 0).toLocaleString('vi-VN');
+  }
+
+  function urlCell(url) {
+    if (!url || !/^https?:\/\//i.test(url)) {
+      return '<td style="text-align:center;color:var(--text-faint)">—</td>';
+    }
+    return '<td style="text-align:center"><a href="' + API.esc(url) + '" target="_blank" rel="noopener noreferrer"'
+      + ' onclick="event.stopPropagation()" style="font-size:12px;color:var(--blue,#2563eb);text-decoration:none">Mở</a></td>';
+  }
+
+  function itemPill(rfqId, count) {
+    var n = Number(count || 0);
+    return '<td style="text-align:center"><span class="badge"'
+      + ' style="background:var(--blue-lt,#eff6ff);color:var(--blue,#2563eb);cursor:pointer;white-space:nowrap"'
+      + ' onclick="event.stopPropagation();DashboardModule._openItemsModal(\'' + API.esc(rfqId) + '\')">'
+      + n + ' dòng</span></td>';
+  }
+
+  async function openItemsModal(rfqId) {
+    var rfqData = (_lastData || {}).rfq || {};
+    var found = (rfqData.tracked_list || []).find(function (r) { return r.rfq_id === rfqId; })
+             || (rfqData.won_list || []).find(function (r) { return r.rfq_id === rfqId; });
+    var rfqName = found ? (found.ten_goi || found.ma_goi_tbmt || rfqId) : rfqId;
+    Utils.openModal('Vật tư — ' + rfqName,
+      '<div style="grid-column:1/-1"><p style="margin:0;color:var(--text-muted);font-size:13px">Đang tải...</p></div>',
+      null
+    );
+    try {
+      var data = await API.get('getRfqItems', { rfqId: rfqId, limit: 500 });
+      var rows = (data.rows || []).filter(function (r) { return r.trang_thai_dong !== 'archived'; });
+      var bodyEl = document.getElementById('modalBody');
+      if (!bodyEl) return;
+      if (!rows.length) {
+        bodyEl.innerHTML = '<div style="grid-column:1/-1"><p style="color:var(--text-muted)">Không có vật tư nào.</p></div>';
+        return;
+      }
+      var statusMap = { chua_xu_ly: 'Chưa XL', dang_hoi_gia: 'Đang hỏi', du_gia: 'Đủ giá', da_final: 'Final' };
+      var rowsHtml = rows.map(function (r) {
+        return '<tr>'
+          + '<td style="color:var(--text-muted);font-size:12px">' + API.esc(r.stt_goc || '') + '</td>'
+          + '<td>' + API.esc(r.ma_vat_tu || '') + '</td>'
+          + '<td><span class="link-edit" style="cursor:pointer" onclick="RfqItemsModule.openEdit(\'' + API.esc(r.rfq_item_id) + '\')">'
+            + API.esc(r.ten_vat_tu || '') + '</span>'
+            + (r.required_model ? '<br><small style="color:var(--text-faint)">' + API.esc(r.required_model) + '</small>' : '')
+            + '</td>'
+          + '<td style="color:var(--text-muted)">' + API.esc(r.unit || '') + '</td>'
+          + '<td class="num">' + (r.quantity != null ? r.quantity : '') + '</td>'
+          + '<td><span class="badge">' + API.esc(statusMap[r.trang_thai_dong] || r.trang_thai_dong || '') + '</span></td>'
+          + '</tr>';
+      }).join('');
+      bodyEl.innerHTML = '<div style="grid-column:1/-1">'
+        + miniTable(['STT', 'Mã VT', 'Tên vật tư', 'ĐVT', 'KL', 'Trạng thái'], rowsHtml)
+        + '</div>';
+    } catch (err) {
+      var bodyEl2 = document.getElementById('modalBody');
+      if (bodyEl2) bodyEl2.innerHTML = '<div style="grid-column:1/-1"><p style="color:var(--red)">Lỗi tải dữ liệu.</p></div>';
+      API.error(err);
+    }
   }
 
   function priorityBadge(v) {
@@ -801,6 +868,7 @@
     _navToRfq:           navToRfq,
     _navToTask:          navToTask,
     _navToItem:          navToItem,
+    _openItemsModal:     openItemsModal,
     _sortTracked:        sortTracked,
     _quickTaskStatus:    quickTaskStatus,
     _quickTaskPriority:  quickTaskPriority,

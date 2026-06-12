@@ -80,7 +80,7 @@ async function archiveItem(request, env, ctx, actor) {
   if (!row) return json({ ok: false, error: 'Khong tim thay dong vat tu' }, 404);
   const now = nowIso();
   await archiveRfqItemSQL(env.DB, rfqItemId, now);
-  ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
+  ctx.waitUntil(invalidateKv(env, ['dashboard:v1', 'dashboard:v2']));
   ctx.waitUntil(writeActionLog(env, { action: 'archiveRfqItem', entityType: 'rfq_item', entityId: rfqItemId, oldJson: row, newJson: null, actor }));
   return json({ ok: true });
 }
@@ -106,7 +106,7 @@ async function saveItem(request, env, ctx, actor, isUpdate) {
   });
   if (isUpdate) await updateRfqItemSQL(env.DB, row);
   else await insertRfqItemSQL(env.DB, row);
-  ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
+  ctx.waitUntil(invalidateKv(env, ['dashboard:v1', 'dashboard:v2']));
   // silent=true is passed by the simple CSV import loop to avoid per-row audit spam;
   // batch imports use commitImportRows which logs its own summary entry.
   if (!body.silent) {
@@ -234,7 +234,7 @@ async function hardDelete(request, env, ctx, actor) {
     env.DB.prepare(`UPDATE import_job_rows SET rfq_item_id = NULL WHERE rfq_item_id IN (${ph})`).bind(...ids),
     env.DB.prepare(`DELETE FROM rfq_items WHERE rfq_item_id IN (${ph})`).bind(...ids),
   ]);
-  ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
+  ctx.waitUntil(invalidateKv(env, ['dashboard:v1', 'dashboard:v2']));
   ctx.waitUntil(writeActionLog(env, { action: 'hardDeleteRfqItems', entityType: 'rfq_item', entityId: ids.join(','), actor }));
   return json({ ok: true, deleted: ids.length });
 }
@@ -331,7 +331,7 @@ async function hardDeleteAll(request, env, ctx, actor) {
     env.DB.prepare(`UPDATE import_job_rows SET rfq_item_id = NULL WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
     env.DB.prepare(`DELETE FROM rfq_items WHERE rfq_id = ?`).bind(rfqId),
   ]);
-  ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
+  ctx.waitUntil(invalidateKv(env, ['dashboard:v1', 'dashboard:v2']));
   ctx.waitUntil(writeActionLog(env, { action: 'hardDeleteAllRfqItems', entityType: 'rfq', entityId: rfqId, actor }));
   return json({ ok: true, deleted: totalCount });
 }
