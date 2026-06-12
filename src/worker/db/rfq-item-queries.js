@@ -7,6 +7,7 @@ function parseCursor(cursor) {
 const ITEM_SORT = {
   stt:                      { col: 'i.stt_goc',                    rowKey: 'stt_goc',                    type: 'text' },
   ten_goi:                  { col: 'r.ten_goi',                    rowKey: 'ten_goi',                    type: 'text' },
+  ma_goi_tbmt:              { col: 'r.ma_goi_tbmt',                rowKey: 'ma_goi_tbmt',                type: 'text' },
   ma_mua_sam:               { col: 'i.ma_mua_sam',                 rowKey: 'ma_mua_sam',                 type: 'text' },
   ma_vat_tu:                { col: 'i.ma_vat_tu',                  rowKey: 'ma_vat_tu',                  type: 'text' },
   ten_vat_tu:               { col: 'i.ten_vat_tu',                 rowKey: 'ten_vat_tu',                 type: 'text' },

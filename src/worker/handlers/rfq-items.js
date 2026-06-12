@@ -246,7 +246,7 @@ const EXPORT_COL_HEADERS = [
   'Tên vật tư / Danh mục hàng hóa', 'Ký mã hiệu / Model', 'Nhãn hiệu',
   'Năm sản xuất', 'Xuất xứ', 'Hãng sản xuất', 'Quy cách / thông số kỹ thuật',
   'Vật liệu', 'Phụ tùng chuyên dụng', 'Yêu cầu kỹ thuật bổ sung',
-  'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền', 'Giá hợp đồng',
+  'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền', 'Đơn giá HĐ', 'Thành tiền HĐ',
   'Thời gian giao hàng', 'Ghi chú', 'rfqItemId (Không sửa)',
 ];
 
@@ -267,6 +267,7 @@ function rowToExportCsv(r) {
     r.don_gia_truoc_thue || r.don_gia_sau_thue || '',
     r.thanh_tien_sau_thue || '',
     r.gia_hop_dong || '',
+    r.gia_hop_dong ? r.gia_hop_dong * (parseFloat(r.quantity ?? r.so_luong ?? 0) || 0) : '',
     r.delivery_time || '', r.note || '',
     r.rfq_item_id,
   ];

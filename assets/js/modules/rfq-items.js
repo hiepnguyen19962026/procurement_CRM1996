@@ -49,6 +49,7 @@
       if (!th.getAttribute('data-label')) th.setAttribute('data-label', th.textContent.trim());
       var label = th.getAttribute('data-label');
       var active = sort.by === key;
+      th.classList.toggle('sort-active', active);
       var arrow = active ? (sort.dir === 'asc' ? '↑' : '↓') : '↕';
       th.innerHTML = '<span class="rfqi-th-label">' + label + '</span><span class="rfqi-sort-mark">' + arrow + '</span>';
       th.onclick = function () {
@@ -197,6 +198,7 @@
         + renderCell(API.money(r.don_gia_truoc_thue || r.don_gia_sau_thue), true)
         + renderCell(API.money(r.thanh_tien_sau_thue), true)
         + renderCell(API.money(r.gia_hop_dong), true)
+        + renderCell(r.gia_hop_dong ? API.money(r.gia_hop_dong * (parseFloat(val(r, 'quantity', 'so_luong')) || 0)) : '', true)
         + renderCell(r.delivery_time, true)
         + renderCell(r.note, true)
         + urlCell(r.external_url, r.rfq_item_id)
@@ -1906,7 +1908,7 @@
     'Tên vật tư / Danh mục hàng hóa', 'Ký mã hiệu / Model', 'Nhãn hiệu',
     'Năm sản xuất', 'Xuất xứ', 'Hãng sản xuất', 'Quy cách / thông số kỹ thuật',
     'Vật liệu', 'Phụ tùng chuyên dụng', 'Yêu cầu kỹ thuật bổ sung',
-    'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền', 'Giá hợp đồng',
+    'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền', 'Đơn giá HĐ',
     'Thời gian giao hàng', 'Ghi chú',
   ];
 
@@ -1932,6 +1934,7 @@
     'Đơn giá': 'donGiaTruocThue',
     'Thành tiền': 'thanhTienSauThue',
     'Giá hợp đồng': 'giaHopDong',
+    'Đơn giá HĐ': 'giaHopDong',
     'Thời gian giao hàng': 'deliveryTime',
     'Ghi chú': 'note',
     'Cột tổng hợp gốc để đối chiếu/export': 'originFullText',
@@ -1968,7 +1971,7 @@
     ['don_gia_truoc_thue', 'Đơn giá (trước thuế)'],
     ['don_gia_sau_thue', 'Đơn giá (sau thuế)'],
     ['thanh_tien_sau_thue', 'Thành tiền'],
-    ['gia_hop_dong', 'Giá hợp đồng'],
+    ['gia_hop_dong', 'Đơn giá HĐ'],
     ['note', 'Ghi chú'],
     ['delivery_time', 'Thời gian giao hàng'],
     ['origin_full_text', 'Cột tổng hợp gốc'],
@@ -1978,8 +1981,13 @@
     ['ghi_chu_final', 'Ghi chú cuối (Final)'],
   ];
 
-  // Export: all business columns + rfqItemId at far right for round-trip bulk update
-  var EXPORT_HEADERS = TEMPLATE_HEADERS.concat(['rfqItemId (Không sửa)']);
+  // Export: template columns + Thành tiền HĐ (computed, export-only) + rfqItemId
+  var EXPORT_HEADERS = (function () {
+    var h = TEMPLATE_HEADERS.slice();
+    h.splice(h.indexOf('Đơn giá HĐ') + 1, 0, 'Thành tiền HĐ');
+    h.push('rfqItemId (Không sửa)');
+    return h;
+  }());
 
   function rowToExportValues(r) {
     return [
@@ -1998,6 +2006,7 @@
       r.don_gia_truoc_thue || r.don_gia_sau_thue,
       r.thanh_tien_sau_thue,
       r.gia_hop_dong,
+      r.gia_hop_dong ? r.gia_hop_dong * (parseFloat(val(r, 'quantity', 'so_luong')) || 0) : '',
       r.delivery_time,
       r.note,
       r.rfq_item_id,

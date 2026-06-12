@@ -119,8 +119,9 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 #screen-items thead th { vertical-align: middle; text-align: center; white-space: normal; word-break: keep-all; overflow-wrap: normal; line-height: 1.15; padding: 8px 6px; }
 #screen-items thead th[data-sort-key] { cursor: pointer; }
 #screen-items .rfqi-th-label { display: block; max-width: 100%; white-space: normal; word-break: keep-all; overflow-wrap: normal; }
-#screen-items .rfqi-sort-mark { display: block; margin-top: 2px; font-size: 10px; line-height: 1; color: var(--text-faint, #bbb); }
-#screen-items .table-top-scroll > div { height: 1px; min-width: 2200px; }
+#screen-items .rfqi-sort-mark { display: inline; margin-left: 2px; font-size: 8px; line-height: 1; opacity: 0.35; }
+#screen-items th.sort-active .rfqi-sort-mark { opacity: 1; color: var(--accent, #2563eb); }
+#screen-items .table-top-scroll > div { height: 1px; min-width: 2300px; }
 #screen-items input[type="checkbox"] { width: 16px; height: 16px; min-height: 16px; padding: 0; border-radius: 3px; border: 1px solid var(--border-mid); cursor: pointer; display: block; margin: auto; }
 #screen-items .table-top-scroll { overflow-x: auto; overflow-y: hidden; height: 14px; margin-bottom: 6px; }
 .tech-summary { display: grid; gap: 5px; min-width: 130px; }
