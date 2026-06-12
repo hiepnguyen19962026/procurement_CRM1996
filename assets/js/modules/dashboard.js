@@ -52,15 +52,11 @@
   // ── Navigation helpers ────────────────────────────────────────────────────
 
   function navToRfq(rfqId) {
-    var btn = document.querySelector('.nav button[data-screen="rfqs"]');
-    if (btn) btn.click();
-    if (rfqId) setTimeout(function () { if (window.RfqsModule) RfqsModule.openEdit(rfqId); }, 150);
+    if (rfqId && window.RfqsModule) RfqsModule.openEdit(rfqId);
   }
 
   function navToTask(taskId) {
-    var btn = document.querySelector('.nav button[data-screen="tasks"]');
-    if (btn) btn.click();
-    if (taskId) setTimeout(function () { if (window.TasksModule) TasksModule.openEdit(taskId); }, 150);
+    if (taskId && window.TasksModule) TasksModule.openEdit(taskId);
   }
 
   function navToItem(rfqItemId) {

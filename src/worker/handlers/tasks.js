@@ -6,8 +6,11 @@ import {
 } from '../db/task-queries.js';
 import { ALL_ROLES, WRITE_ROLES, MANAGE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
+import { invalidateKv } from '../lib/cache.js';
 import { normalizeText, cleanString } from '../lib/normalize.js';
 import { clampLimit, json, nextEntityId, nowIso, readJson } from '../lib/utils.js';
+
+const DASHBOARD_CACHE_KEY = 'dashboard:v2';
 
 const VALID_STATUS   = new Set(['dang_lam', 'cho_phan_hoi', 'tam_dung', 'hoan_thanh', 'huy_bo']);
 const VALID_PRIORITY = new Set(['khan', 'cao', 'trung_binh', 'thap']);
@@ -106,6 +109,8 @@ async function saveTask(request, env, ctx, actor, isUpdate) {
   if (isUpdate) await updateTaskSQL(env.DB, row);
   else          await insertTaskSQL(env.DB, row);
 
+  await invalidateKv(env, [DASHBOARD_CACHE_KEY]);
+
   const taskLabel = row.company_name ? `"${row.title}" — ${row.company_name}` : `"${row.title}"`;
   ctx.waitUntil(writeActionLog(env, {
     action:     isUpdate ? 'updateTask' : 'createTask',
@@ -157,6 +162,7 @@ async function quickUpdateStatus(request, env, ctx, actor) {
   if (status === 'hoan_thanh' && !completedAt) completedAt = now;
   if (status !== 'hoan_thanh') completedAt = null;
   await quickUpdateTaskStatusSQL(env.DB, taskId, status, completedAt, now);
+  await invalidateKv(env, [DASHBOARD_CACHE_KEY]);
   ctx.waitUntil(writeActionLog(env, {
     action:     'quickUpdateTaskStatus',
     entityType: 'task',
