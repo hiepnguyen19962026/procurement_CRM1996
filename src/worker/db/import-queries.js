@@ -119,6 +119,10 @@ export async function findDuplicateRfqItemSQL(db, { rfqId, maVatTu, sttGoc }) {
 export async function checkRfqImportSafetySQL(db, rfqId) {
   const row = await db.prepare(`
     SELECT
+      r.trang_thai_goi AS rfqStatus,
+      r.ma_goi_tbmt    AS rfqCode,
+      r.ten_goi        AS rfqName,
+      (SELECT COUNT(*) FROM rfq_items WHERE rfq_id = ?) AS totalItemCount,
       (SELECT COUNT(DISTINCT tc.rfq_item_id) FROM technical_clarifications tc
        INNER JOIN rfq_items i ON i.rfq_item_id = tc.rfq_item_id
        WHERE i.rfq_id = ? AND tc.deleted_at IS NULL) AS clarificationCount,
@@ -131,8 +135,9 @@ export async function checkRfqImportSafetySQL(db, rfqId) {
       (SELECT COUNT(DISTINCT ci.rfq_item_id) FROM contract_items ci
        INNER JOIN rfq_items i ON i.rfq_item_id = ci.rfq_item_id
        WHERE i.rfq_id = ?) AS contractCount
-  `).bind(rfqId, rfqId, rfqId, rfqId).first();
-  return row || { clarificationCount: 0, quoteCount: 0, pricingCount: 0, contractCount: 0 };
+    FROM rfqs r WHERE r.rfq_id = ?
+  `).bind(rfqId, rfqId, rfqId, rfqId, rfqId, rfqId).first();
+  return row || { rfqStatus: '', rfqCode: '', rfqName: '', totalItemCount: 0, clarificationCount: 0, quoteCount: 0, pricingCount: 0, contractCount: 0 };
 }
 
 export async function listRfqItemsByRfqIdSQL(db, rfqId) {

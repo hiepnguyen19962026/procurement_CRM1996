@@ -1293,16 +1293,58 @@
 
   async function deleteAll() {
     var rfqId = (document.getElementById('itemRfqId').value || '').trim();
-    if (!rfqId) { API.toast('Lọc theo RFQ ID trước khi xóa toàn bộ', 'warn'); return; }
-    var ok = await Utils.confirmTyping(
-      'Xóa toàn bộ dòng vật tư của ' + rfqId,
-      'Nhập mã RFQ để xác nhận. Thao tác này xóa vĩnh viễn TẤT CẢ dòng vật tư và dữ liệu liên quan của gói này. Không thể hoàn tác.',
-      rfqId
-    );
-    if (!ok) return;
+    if (!rfqId) { API.toast('Lọc theo RFQ ID trước khi xóa', 'warn'); return; }
+
+    var safeData;
+    try {
+      safeData = await API.call('checkRfqImportSafety', { rfqId: rfqId });
+    } catch (e) {
+      API.toast('Không thể kiểm tra dữ liệu liên quan: ' + (e.message || e), 'error');
+      return;
+    }
+
+    var counts = safeData.counts || {};
+    var totalItemCount = Number(counts.totalItemCount || 0);
+    if (!totalItemCount) { API.toast('Không có dòng vật tư nào để xóa', 'warn'); return; }
+
+    var hasContracts = Number(counts.contractCount || 0) > 0;
+    var rfqWon = counts.rfqStatus === 'trung' || counts.rfqStatus === 'archived';
+    var hasClarOrQuotes = Number(counts.clarificationCount || 0) > 0
+      || Number(counts.quoteCount || 0) > 0
+      || Number(counts.pricingCount || 0) > 0;
+
+    var confirmed = false;
+
+    if (hasContracts || rfqWon) {
+      confirmed = await Utils.confirmTyping(
+        'Cảnh báo nghiêm trọng: RFQ đã có dữ liệu kết quả',
+        'RFQ này đã có dữ liệu hợp đồng hoặc trạng thái kết quả thầu. Việc xóa toàn bộ DS vật tư có thể làm mất khả năng truy vết giữa dòng vật tư, báo giá, cân giá và kết quả/hợp đồng. Chỉ tiếp tục nếu bạn chắc chắn muốn xóa và tự chịu trách nhiệm về dữ liệu liên quan.',
+        'XOA_TOAN_BO_RFQ_ITEMS'
+      ) === true;
+    } else if (hasClarOrQuotes) {
+      var parts = [];
+      if (Number(counts.clarificationCount || 0) > 0) parts.push(counts.clarificationCount + ' clarification kỹ thuật');
+      if (Number(counts.quoteCount || 0) > 0) parts.push(counts.quoteCount + ' báo giá NCC');
+      if (Number(counts.pricingCount || 0) > 0) parts.push(counts.pricingCount + ' quyết định cân giá');
+      confirmed = await Utils.confirmDanger(
+        'Cảnh báo: RFQ đã có dữ liệu liên quan',
+        'RFQ này hiện có ' + totalItemCount + ' dòng vật tư và đã phát sinh dữ liệu liên quan: ' + parts.join(', ') + '. Nếu tiếp tục, toàn bộ DS vật tư và các dữ liệu liên quan này sẽ bị xóa. Chỉ thực hiện nếu bạn chắc chắn muốn làm lại danh sách vật tư từ đầu.',
+        'Tôi hiểu, tiếp tục xóa',
+        'Quay lại'
+      );
+    } else {
+      confirmed = await Utils.confirmDanger(
+        'Xác nhận xóa toàn bộ DS vật tư',
+        'RFQ này hiện có ' + totalItemCount + ' dòng vật tư và chưa phát sinh dữ liệu liên kết như clarification kỹ thuật, báo giá NCC, cân giá hoặc hợp đồng. Nếu tiếp tục, hệ thống sẽ xóa toàn bộ DS vật tư của RFQ này. Thao tác này không thể hoàn tác.',
+        'Xóa toàn bộ DS vật tư',
+        'Hủy'
+      );
+    }
+
+    if (!confirmed) return;
     try {
       var result = await API.call('hardDeleteAllRfqItems', { rfqId: rfqId });
-      API.toast('Đã xóa ' + (result.deleted || 0) + ' dòng', 'success');
+      API.toast('Đã xóa ' + (result.deleted || 0) + ' dòng vật tư', 'success');
       load(true);
     } catch (err) { API.error(err); }
   }
@@ -2057,8 +2099,10 @@
     return payload;
   }
 
-  function openImportMapping() {
-    importMapState = { headers: null, rows: null, fileName: '', sheetName: 'csv', workbook: null, templates: [] };
+  function openImportMapping(opts) {
+    var defaultMode = (opts && opts.defaultMode) || 'update_changed';
+    var modalTitle = defaultMode === 'selective_update' ? 'Cập nhật danh sách vật tư' : 'Upload danh sách vật tư';
+    importMapState = { headers: null, rows: null, fileName: '', sheetName: 'csv', workbook: null, templates: [], _defaultMode: defaultMode };
     var rfqId = (document.getElementById('itemRfqId').value || '').trim();
     var html = ''
       + '<div class="modal-section" style="border-top:0;margin-top:0;padding-top:0">'
@@ -2076,7 +2120,7 @@
       + '</div>'
       + '<div id="importMapArea" style="color:var(--text-muted);font-size:13px">Chọn file CSV hoặc XLSX để xem preview và map cột.</div>'
       + '</div>';
-    Utils.openModal('Import CSV/XLSX nâng cao', html, null);
+    Utils.openModal(modalTitle, html, null);
     var _iwModal = document.querySelector('#modal .modal');
     if (_iwModal) _iwModal.classList.add('modal--import-wide');
   }
@@ -2442,11 +2486,12 @@
         + '</div></div>'
       : '';
 
+    var defMode = importMapState._defaultMode || 'update_changed';
     var modeHtml = '<fieldset style="border:1px solid var(--border-mid);border-radius:6px;padding:8px 12px;margin-bottom:6px">'
       + '<legend style="font-size:12px;padding:0 4px">Chọn chế độ import</legend>'
-      + '<label style="display:block;margin:4px 0"><input type="radio" name="importMode" value="update_changed" checked onchange="RfqItemsModule._onImportModeChange(this)"> <strong>Import mới</strong> — thêm dòng mới, cập nhật dòng đã có (tất cả trường được map)</label>'
-      + '<label style="display:block;margin:4px 0"><input type="radio" name="importMode" value="selective_update" onchange="RfqItemsModule._onImportModeChange(this)"> <strong>Cập nhật có chọn lọc</strong> — chỉ cập nhật trường được chọn bên dưới</label>'
-      + '<label style="display:block;margin:4px 0"><input type="radio" name="importMode" value="clear_and_reimport" onchange="RfqItemsModule._onImportModeChange(this)"> <strong>Xóa toàn bộ &amp; Import lại</strong> — xóa hết dòng vật tư của RFQ rồi nhập lại từ đầu</label>'
+      + '<label style="display:block;margin:4px 0"><input type="radio" name="importMode" value="update_changed"' + (defMode === 'update_changed' ? ' checked' : '') + ' onchange="RfqItemsModule._onImportModeChange(this)"> <strong>Upload DS vật tư</strong> — thêm dòng mới, cập nhật dòng đã có (tất cả trường được map)</label>'
+      + '<label style="display:block;margin:4px 0"><input type="radio" name="importMode" value="selective_update"' + (defMode === 'selective_update' ? ' checked' : '') + ' onchange="RfqItemsModule._onImportModeChange(this)"> <strong>Cập nhật có chọn lọc</strong> — chỉ cập nhật trường được chọn bên dưới</label>'
+      + '<label style="display:block;margin:4px 0"><input type="radio" name="importMode" value="clear_and_reimport"' + (defMode === 'clear_and_reimport' ? ' checked' : '') + ' onchange="RfqItemsModule._onImportModeChange(this)"> <strong>Xóa toàn bộ &amp; Import lại</strong> — xóa hết dòng vật tư của RFQ rồi nhập lại từ đầu</label>'
       + '</fieldset>'
       + overwriteCheckboxHtml;
 
@@ -2487,6 +2532,10 @@
     wrapper.innerHTML = '<p style="margin:0 0 6px;font-weight:600">Xem trước import — ' + API.esc(importMapState.fileName || '') + '</p>'
       + warnHtml + summaryHtml + modeHtml + rowsHtml + btnHtml;
     area.insertBefore(wrapper, area.firstChild);
+    if (defMode !== 'update_changed') {
+      var preSelectedRadio = wrapper.querySelector('input[name="importMode"][value="' + defMode + '"]');
+      if (preSelectedRadio) _onImportModeChange(preSelectedRadio);
+    }
   }
 
   function _onImportModeChange(radio) {

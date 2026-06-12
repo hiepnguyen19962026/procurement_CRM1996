@@ -87,7 +87,7 @@
               <select id="itemPageSize" onchange="RfqItemsModule.load(true)"><option value="500" selected>500 dòng</option><option value="1000">1.000 dòng</option><option value="2000">2.000 dòng</option><option value="all">Tất cả</option></select>
               <button onclick="RfqItemsModule.load(true)">Tìm kiếm</button>
               <button id="itemDeleteSelected" class="hidden" style="color:#dc2626;border-color:#dc2626" data-role-only="admin,manager" onclick="RfqItemsModule.deleteSelected()">Xóa đã chọn (<span id="itemDeleteCount">0</span>)</button>
-              <button id="itemDeleteAll" class="hidden" style="color:#dc2626;border-color:#dc2626" data-role-only="admin,manager" onclick="RfqItemsModule.deleteAll()">Xóa toàn bộ RFQ này</button>
+              <button id="itemDeleteAll" class="hidden" style="color:#dc2626;border-color:#dc2626" data-role-only="admin,manager" onclick="RfqItemsModule.deleteAll()">Xóa toàn bộ DS vật tư</button>
             </div>
             <p id="itemCountInfo" style="margin:0 0 8px;font-size:12px;color:var(--text-muted)"></p>
             <div id="itemsTopScroll" class="table-top-scroll"><div></div></div>
@@ -246,7 +246,7 @@
     var SCREEN_ACTIONS = {
       dashboard: '<button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button><button onclick="DashboardModule.openNsxStats()">Thống kê NSX</button>',
       rfqs:      '<button data-write onclick="OcrModule.openRfqOcr()">OCR từ thư viện</button><button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button>',
-      items:     '<button onclick="RfqItemsModule.downloadTemplate()">Tải template CSV</button><button onclick="RfqItemsModule.exportCsv()">Xuất CSV</button><button data-write onclick="RfqItemsModule.importCsv()">Upload CSV</button><button data-write onclick="RfqItemsModule.openImportMapping()">Import CSV nâng cao</button><button data-write onclick="OcrModule.openItemOcr()">OCR từ thư viện</button><button class="primary" data-write onclick="RfqItemsModule.openCreate()">+ Thêm dòng</button>',
+      items:     '<button onclick="RfqItemsModule.downloadTemplate()">Tải template CSV</button><button onclick="RfqItemsModule.exportCsv()">Xuất CSV</button><button data-write onclick="RfqItemsModule.openImportMapping({defaultMode:\'update_changed\'})">Upload DS vật tư</button><button data-write onclick="RfqItemsModule.openImportMapping({defaultMode:\'selective_update\'})">Cập nhật DS vật tư</button><button data-write onclick="OcrModule.openItemOcr()">OCR từ thư viện</button><button class="primary" data-write onclick="RfqItemsModule.openCreate()">+ Thêm dòng</button>',
       tasks:     '<button class="primary" data-write onclick="TasksModule.openCreate()">+ Thêm task</button>',
       clients:   '<button onclick="ClientsModule.downloadClientTemplate()">Tải template CSV</button><button data-write onclick="ClientsModule.importClientsCsv()">Import CSV/XLSX</button><button onclick="ClientsModule.exportClientsCsv()">Xuất CSV</button><button class="primary" data-write onclick="ClientsModule.openCreate()">+ Thêm khách hàng</button>',
       suppliers: '<button data-write onclick="OcrModule.openSupplierOcr()">OCR danh thiếp</button><button class="primary" data-write onclick="SuppliersModule.openCreate()">+ Thêm NCC</button>',
