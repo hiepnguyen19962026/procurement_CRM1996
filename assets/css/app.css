@@ -70,6 +70,8 @@ textarea { min-height: 86px; resize: vertical; }
 .screen-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .screen-actions button { min-height: 30px; padding: 5px 11px; font-size: 12px; }
 .topbar strong { font-size: 18px; font-weight: 600; }
+#btnRefresh { background: #166534; color: #fff; border-color: #166534; }
+#btnRefresh:hover, #btnRefresh:active { background: #14532d; border-color: #14532d; color: #fff; }
 .hamburger { width: 36px; height: 36px; padding: 0; display: inline-grid; place-items: center; box-shadow: none; }
 .quick-search { width: min(320px, 30vw); min-width: 210px; height: 40px; display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 11px; padding: 0 10px; background: var(--white); color: var(--text-muted); box-shadow: var(--shadow-sm); }
 .quick-search input { min-height: 0; border: 0; padding: 0; border-radius: 0; }
