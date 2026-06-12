@@ -2323,9 +2323,7 @@
       if (!targetField || targetField === 'rfq_item_id') {
         return '<th style="text-align:center;padding:3px 6px;background:var(--bg);border-bottom:1px solid var(--border)"><span style="color:var(--text-faint);font-size:11px">—</span></th>';
       }
-      var isSensitive = IMPORT_SENSITIVE_FIELDS.has(targetField);
-      var isFinal = IMPORT_FINAL_FIELDS.has(targetField);
-      var defaultChecked = !isSensitive && !isFinal;
+      var defaultChecked = false;
       var fieldLabel = (IMPORT_TARGET_FIELDS.find(function (p) { return p[0] === targetField; }) || ['', targetField])[1];
       return '<th style="text-align:center;padding:3px 6px;background:var(--bg);border-bottom:1px solid var(--border)">'
         + '<input type="checkbox" name="overwriteColField" value="' + API.esc(targetField) + '"'
@@ -2368,7 +2366,7 @@
     document.querySelectorAll('#importMapArea input[name="overwriteColField"]:checked').forEach(function (cb) {
       if (cb.value) overwriteFields.push(cb.value);
     });
-    if (!overwriteFields.length) { API.toast('Chọn ít nhất 1 cột cần cập nhật', 'warn'); return; }
+    if (!overwriteFields.length) { API.toast('Vui lòng chọn ít nhất một cột cần cập nhật.', 'warn'); return; }
     var btn = document.querySelector('#importMapArea button.primary');
     if (btn) btn.disabled = true;
     var area = document.getElementById('importMapArea');

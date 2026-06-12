@@ -222,6 +222,7 @@ mark { background: #fcd34d; padding: 0 2px; border-radius: 2px; font-style: norm
 /* Import modal — full viewport width/height for many-column preview */
 .modal.modal--import-wide { width: 90vw; max-width: none; height: 90vh; max-height: none; }
 .modal.modal--import-wide .modal-body { overflow-x: auto; }
+#importMapArea input[type="checkbox"][name="overwriteColField"] { width: 13px; height: 13px; transform: scale(0.75); cursor: pointer; }
 /* form must be a flex column to let modal-body scroll and modal-actions stick to bottom */
 #modalForm { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; overflow: hidden; }
 .modal-head, .modal-actions { display: flex; justify-content: space-between; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
