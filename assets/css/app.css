@@ -471,10 +471,11 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 #screen-tasks .task-table-wrap th:nth-child(6) { width: 10%; }
 #screen-tasks .task-table-wrap th:nth-child(7) { width: 7%; }
 #screen-tasks .task-table-wrap th:nth-child(8) { width: 4%; }
+#screen-tasks .task-table-wrap td { font-size: 16px; }
 
 /* task table cell helpers */
 .task-preview {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
   max-width: 100%;
   overflow: hidden;
@@ -489,7 +490,7 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 }
 .task-col-co { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .task-tbl-sel {
-  font-size: 11px;
+  font-size: 13px;
   padding: 2px 4px;
   border-radius: 4px;
   border: 1px solid #d1d5db;
@@ -546,16 +547,16 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 }
 .task-card-title {
   font-weight: 600;
-  font-size: 14px;
+  font-size: 17px;
   line-height: 1.4;
   flex: 1;
   cursor: pointer;
   color: var(--text);
 }
 .task-card-title:hover { color: var(--primary); text-decoration: underline; }
-.task-card-meta  { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+.task-card-meta  { font-size: 14px; color: var(--text-muted); margin-bottom: 4px; }
 .task-card-preview {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-muted);
   margin-bottom: 6px;
   display: -webkit-box;
@@ -568,7 +569,7 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  font-size: 12px;
+  font-size: 14px;
   margin-bottom: 6px;
 }
 .task-card-prog {

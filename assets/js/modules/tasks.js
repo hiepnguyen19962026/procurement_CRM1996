@@ -172,14 +172,14 @@
         + '<td>' + priSel + '</td>'
         + '<td>' + statusSel + '</td>'
         + '<td>'
-          + '<div style="font-size:12px;font-weight:500;color:var(--text-muted);margin-bottom:3px">' + prog + '%</div>'
+          + '<div style="font-size:14px;font-weight:500;color:var(--text-muted);margin-bottom:3px">' + prog + '%</div>'
           + '<div style="height:4px;background:#e5e7eb;border-radius:2px"><div style="height:4px;background:#1d4ed8;border-radius:2px;width:' + prog + '%"></div></div>'
           + '</td>'
-        + '<td style="font-size:12px">'
+        + '<td style="font-size:14px">'
           + (r.deadline_date ? remainCell(r.deadline_date) : '<span style="color:var(--text-faint)">—</span>')
           + (r.next_followup_date ? '<div style="color:var(--text-muted);margin-top:2px">↻ ' + esc(r.next_followup_date) + '</div>' : '')
           + '</td>'
-        + '<td style="font-size:11px;color:var(--text-muted)">' + esc(formatDate(r.last_activity_at || r.updated_at)) + '</td>'
+        + '<td style="font-size:13px;color:var(--text-muted)">' + esc(formatDate(r.last_activity_at || r.updated_at)) + '</td>'
         + '<td style="white-space:nowrap;text-align:right">'
           + (canWrite ? '<button type="button" class="btn-link" onclick="TasksModule.openEdit(\'' + esc(r.task_id) + '\')" style="font-size:12px;padding:2px 6px;margin-right:2px">Sửa</button>' : '')
           + (canDelete ? '<button type="button" class="btn-x-archive" title="Xóa" onclick="TasksModule.deleteTask(\'' + esc(r.task_id) + '\')">✕</button>' : '')
