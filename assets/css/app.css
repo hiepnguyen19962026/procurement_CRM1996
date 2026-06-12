@@ -172,7 +172,41 @@ mark { background: #fcd34d; padding: 0 2px; border-radius: 2px; font-style: norm
 .dashboard-tasks-wrap th:nth-child(4), .dashboard-tasks-wrap td:nth-child(4) { width: 12%; }
 .dashboard-tasks-wrap th:nth-child(5), .dashboard-tasks-wrap td:nth-child(5) { width: 12%; }
 /* inline quick-edit selects and sortable headers in dashboard */
-.dash-sel { font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; max-width: 100%; }
+.dash-sel { font-size: 11px; padding: 2px 6px; border-radius: 999px; border: 1px solid #d1d5db; background: #f9fafb; color: #374151; cursor: pointer; max-width: 100%; font-weight: 500; white-space: nowrap; }
+/* task priority colors */
+.dash-sel[data-val="khan"]       { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
+.dash-sel[data-val="cao"]        { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
+.dash-sel[data-val="trung_binh"] { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+.dash-sel[data-val="thap"]       { background: #f9fafb; color: #6b7280; border-color: #d1d5db; }
+/* task status colors */
+.dash-sel[data-val="dang_lam"]     { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
+.dash-sel[data-val="cho_phan_hoi"] { background: #f9fafb; color: #6b7280; border-color: #d1d5db; }
+.dash-sel[data-val="tam_dung"]     { background: #f9fafb; color: #6b7280; border-color: #d1d5db; }
+.dash-sel[data-val="hoan_thanh"]   { background: #f0fdf4; color: #15803d; border-color: #86efac; }
+.dash-sel[data-val="huy_bo"]       { background: #f9fafb; color: #9ca3af; border-color: #d1d5db; }
+/* rfq status colors */
+.dash-sel[data-val="dang_khao_gia"] { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
+.dash-sel[data-val="da_bao"]        { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+.dash-sel[data-val="tham_khao"]     { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+.dash-sel[data-val="trung"]         { background: #dcfce7; color: #166534; border-color: #4ade80; }
+.dash-sel[data-val="khong_trung"]   { background: #f9fafb; color: #6b7280; border-color: #d1d5db; }
+.dash-sel[data-val="treo"]          { background: #fffbeb; color: #b45309; border-color: #fcd34d; }
+/* clarification type colors */
+.dash-sel[data-val="ask_supplier"]         { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
+.dash-sel[data-val="supplier_opinion"]     { background: #fffbeb; color: #b45309; border-color: #fcd34d; }
+.dash-sel[data-val="supplier_reply"]       { background: #fffbeb; color: #b45309; border-color: #fcd34d; }
+.dash-sel[data-val="ask_client"]           { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+.dash-sel[data-val="client_reply"]         { background: #eff6ff; color: #1d4ed8; border-color: #93c5fd; }
+.dash-sel[data-val="replacement_proposal"] { background: #f5f3ff; color: #6d28d9; border-color: #c4b5fd; }
+.dash-sel[data-val="final_confirm"]        { background: #dcfce7; color: #166534; border-color: #4ade80; }
+.dash-sel[data-val="rejected"]             { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
+.dash-sel[data-val="other"]                { background: #f9fafb; color: #6b7280; border-color: #d1d5db; }
+/* clarification status colors */
+.dash-sel[data-val="processing"]       { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
+.dash-sel[data-val="waiting_supplier"] { background: #fff7ed; color: #c2410c; border-color: #fdba74; }
+.dash-sel[data-val="waiting_client"]   { background: #fffbeb; color: #b45309; border-color: #fcd34d; }
+.dash-sel[data-val="need_more_info"]   { background: #fef2f2; color: #b91c1c; border-color: #fca5a5; }
+.dash-sel[data-val="final_confirmed"]  { background: #dcfce7; color: #166534; border-color: #4ade80; }
 .dash-th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
 .dash-th-sort:hover { color: var(--blue); }
 /* quotes/history table scroll inside modal — needs overflow-x: clip on .modal-body to work */

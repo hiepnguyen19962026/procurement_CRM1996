@@ -582,7 +582,7 @@
       ['hoan_thanh',   'Hoàn thành'],
       ['huy_bo',       'Huỷ bỏ'],
     ];
-    return '<select class="dash-sel" data-prev="' + API.esc(status || '') + '"'
+    return '<select class="dash-sel" data-prev="' + API.esc(status || '') + '" data-val="' + API.esc(status || '') + '"'
       + ' onclick="event.stopPropagation()"'
       + ' onchange="DashboardModule._quickTaskStatus(\'' + API.esc(taskId) + '\',this.value,this)">'
       + opts.map(function (o) {
@@ -598,7 +598,7 @@
       ['trung_binh', 'TB'],
       ['thap',       'Thấp'],
     ];
-    return '<select class="dash-sel" data-prev="' + API.esc(priority || '') + '"'
+    return '<select class="dash-sel" data-prev="' + API.esc(priority || '') + '" data-val="' + API.esc(priority || '') + '"'
       + ' onclick="event.stopPropagation()"'
       + ' onchange="DashboardModule._quickTaskPriority(\'' + API.esc(taskId) + '\',this.value,this)">'
       + opts.map(function (o) {
@@ -616,7 +616,7 @@
       ['khong_trung',   'Không trúng'],
       ['treo',          'Treo'],
     ];
-    return '<select class="dash-sel" data-prev="' + API.esc(status || '') + '"'
+    return '<select class="dash-sel" data-prev="' + API.esc(status || '') + '" data-val="' + API.esc(status || '') + '"'
       + ' onclick="event.stopPropagation()"'
       + ' onchange="DashboardModule._quickRfqStatus(\'' + API.esc(rfqId) + '\',this.value,this)">'
       + opts.map(function (o) {
@@ -637,7 +637,7 @@
       ['rejected',             'Từ chối'],
       ['other',                'Khác'],
     ];
-    return '<select class="dash-sel" data-prev="' + API.esc(type || '') + '"'
+    return '<select class="dash-sel" data-prev="' + API.esc(type || '') + '" data-val="' + API.esc(type || '') + '"'
       + ' onclick="event.stopPropagation()"'
       + ' onchange="DashboardModule._quickClarType(\'' + API.esc(clarId) + '\',this.value,this)">'
       + opts.map(function (o) {
@@ -656,7 +656,7 @@
       ['rejected',         'Từ chối'],
       ['other',            'Khác'],
     ];
-    return '<select class="dash-sel" data-prev="' + API.esc(status || '') + '"'
+    return '<select class="dash-sel" data-prev="' + API.esc(status || '') + '" data-val="' + API.esc(status || '') + '"'
       + ' onclick="event.stopPropagation()"'
       + ' onchange="DashboardModule._quickClarStatus(\'' + API.esc(clarId) + '\',this.value,this)">'
       + opts.map(function (o) {
@@ -685,6 +685,7 @@
   async function quickTaskStatus(taskId, newStatus, sel) {
     var prev = sel.getAttribute('data-prev') || sel.value;
     sel.setAttribute('data-prev', newStatus);
+    sel.setAttribute('data-val', newStatus);
     try {
       await API.call('quickUpdateTaskStatus', { taskId: taskId, status: newStatus });
       var tasks = (_lastData || {}).tasks || {};
@@ -702,6 +703,7 @@
     } catch (err) {
       sel.value = prev;
       sel.setAttribute('data-prev', prev);
+      sel.setAttribute('data-val', prev);
       API.error(err);
     }
   }
@@ -709,6 +711,7 @@
   async function quickTaskPriority(taskId, newPriority, sel) {
     var prev = sel.getAttribute('data-prev') || sel.value;
     sel.setAttribute('data-prev', newPriority);
+    sel.setAttribute('data-val', newPriority);
     try {
       await API.call('quickUpdateTaskPriority', { taskId: taskId, priority: newPriority });
       var tasks = (_lastData || {}).tasks || {};
@@ -722,6 +725,7 @@
     } catch (err) {
       sel.value = prev;
       sel.setAttribute('data-prev', prev);
+      sel.setAttribute('data-val', prev);
       API.error(err);
     }
   }
@@ -729,6 +733,7 @@
   async function quickRfqStatus(rfqId, newStatus, sel) {
     var prev = sel.getAttribute('data-prev') || sel.value;
     sel.setAttribute('data-prev', newStatus);
+    sel.setAttribute('data-val', newStatus);
     try {
       await API.call('quickUpdateRfqStatus', { rfqId: rfqId, status: newStatus });
       var rfqData = (_lastData || {}).rfq || {};
@@ -745,6 +750,7 @@
     } catch (err) {
       sel.value = prev;
       sel.setAttribute('data-prev', prev);
+      sel.setAttribute('data-val', prev);
       API.error(err);
     }
   }
@@ -752,6 +758,7 @@
   async function quickClarType(clarId, newType, sel) {
     var prev = sel.getAttribute('data-prev') || sel.value;
     sel.setAttribute('data-prev', newType);
+    sel.setAttribute('data-val', newType);
     try {
       var latest30 = ((_lastData || {}).clarifications || {}).latest30 || [];
       var row = latest30.find(function (r) { return r.clarification_id === clarId; });
@@ -763,6 +770,7 @@
     } catch (err) {
       sel.value = prev;
       sel.setAttribute('data-prev', prev);
+      sel.setAttribute('data-val', prev);
       API.error(err);
     }
   }
@@ -770,6 +778,7 @@
   async function quickClarStatus(clarId, newStatus, sel) {
     var prev = sel.getAttribute('data-prev') || sel.value;
     sel.setAttribute('data-prev', newStatus);
+    sel.setAttribute('data-val', newStatus);
     try {
       var latest30 = ((_lastData || {}).clarifications || {}).latest30 || [];
       var row = latest30.find(function (r) { return r.clarification_id === clarId; });
@@ -781,6 +790,7 @@
     } catch (err) {
       sel.value = prev;
       sel.setAttribute('data-prev', prev);
+      sel.setAttribute('data-val', prev);
       API.error(err);
     }
   }
