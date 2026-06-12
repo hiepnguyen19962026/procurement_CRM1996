@@ -12,6 +12,7 @@
   async function login(username, password) {
     var data = await API.call('authLogin', { username: username, password: password });
     save(data.user);
+    AppState.set('lists', {});
     applyRoleUI();
     showApp();
     document.querySelector('.nav button[data-screen="dashboard"]').click();
@@ -81,6 +82,7 @@
     }
     if (data && data.ok && data.user) {
       save(data.user);
+      AppState.set('lists', {});
       applyRoleUI();
       showApp();
       document.querySelector('.nav button[data-screen="dashboard"]').click();

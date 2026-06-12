@@ -53,6 +53,7 @@
         <div class="topbar-left"><button class="hamburger" type="button" onclick="if(window.innerWidth<=860){document.body.classList.toggle('mobile-nav-open')}else{document.body.classList.toggle('sidebar-collapsed')}">☰</button><strong id="screenTitle">Tổng quan</strong><div id="screenActions" class="screen-actions"></div></div>
         <div class="topbar-right">
           <div class="userbar" id="currentUser"></div>
+          <button id="btnRefresh" onclick="App.refreshCurrentView()">Làm mới</button>
           <button onclick="Auth.logout()">Đăng xuất</button>
         </div>
       </header>
@@ -286,6 +287,36 @@
       if (screen === 'accounts') AccountsModule.load(true);
     });
     if (Auth.session()) { document.querySelector('.nav button[data-screen="dashboard"]').click(); }
+    window.App = {
+      refreshCurrentView: async function () {
+        var activeBtn = document.querySelector('.nav button.active[data-screen]');
+        if (!activeBtn) return;
+        var screen = activeBtn.getAttribute('data-screen');
+        var mods = {
+          dashboard: function () { return DashboardModule.load(true); },
+          rfqs:      function () { return RfqsModule.load(true); },
+          items:     function () { return RfqItemsModule.load(true); },
+          tasks:     function () { return TasksModule.load(true); },
+          clients:   function () { return ClientsModule.load(true); },
+          suppliers: function () { return SuppliersModule.load(true); },
+          quotes:    function () { return SupplierQuotesModule.load(true); },
+          audit:     function () { return AuditModule.load(true); },
+          accounts:  function () { return AccountsModule.load(true); }
+        };
+        var fn = mods[screen];
+        if (!fn) return;
+        var btn = document.getElementById('btnRefresh');
+        if (btn) btn.disabled = true;
+        try {
+          await fn();
+          API.toast('Đã làm mới dữ liệu', 'success');
+        } catch (err) {
+          API.toast('Làm mới thất bại', 'error');
+        } finally {
+          if (btn) btn.disabled = false;
+        }
+      }
+    };
     if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(function () {});
   </script>
 </body>

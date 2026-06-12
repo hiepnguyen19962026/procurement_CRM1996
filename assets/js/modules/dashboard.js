@@ -12,9 +12,9 @@
     return d.toISOString().slice(0, 10);
   }
 
-  async function load() {
+  async function load(force) {
     try {
-      var data = await API.get('getDashboardV2', {});
+      var data = await API.get('getDashboardV2', force ? { force: '1' } : {});
       _lastData = data.data || {};
       renderStats(_lastData);
       renderPanels(_lastData);
