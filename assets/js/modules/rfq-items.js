@@ -124,6 +124,11 @@
     return '<td>' + hlEsc(String(text), state.q) + '</td>';
   }
 
+  function urlCell(url) {
+    if (!url || !/^https?:\/\//i.test(url)) return '<td class="muted-cell" style="text-align:center">-</td>';
+    return '<td style="text-align:center"><a class="btn btn-sm" href="' + API.esc(encodeURI(url)) + '" target="_blank" rel="noopener noreferrer" title="' + API.esc(url) + '">Mở link</a></td>';
+  }
+
   function render() {
     syncSort();
     var rows = state.rows || [];
@@ -137,7 +142,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="28" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="30" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -163,7 +168,8 @@
         : '<td>' + nameInner + mediaBadges(r) + '</td>';
       return '<tr>'
         + '<td style="padding:0 4px;text-align:center;width:28px"><input type="checkbox" class="item-check" value="' + API.esc(r.rfq_item_id) + '" onchange="RfqItemsModule.onCheckChange()"></td>'
-        + renderCell(r.ten_goi || r.ma_goi_tbmt || '', true)
+        + renderCell(r.ma_goi_tbmt, true)
+        + renderCell(r.ten_goi || '', true)
         + renderCell(r.stt_goc, true)
         + renderCell(r.ma_mua_sam, true)
         + renderCell(r.ma_vat_tu, true)
@@ -185,6 +191,7 @@
         + renderCell(API.money(r.gia_hop_dong), true)
         + renderCell(r.delivery_time, true)
         + renderCell(r.note, true)
+        + urlCell(r.external_url)
         + quotesSummaryCell(r)
         + '<td>' + technicalSummary(r) + '</td>'
         + '<td><span class="badge">' + API.esc(statusLabel(r.trang_thai_dong)) + '</span></td>'
@@ -618,6 +625,7 @@
       + textarea('yeuCauKyThuatBoSung', 'Yêu cầu kỹ thuật bổ sung', r.yeu_cau_ky_thuat_bo_sung, '', 'span-12 compact-ta')
       + textarea('note', 'Ghi chú', r.note, '', 'span-12 compact-ta')
       + textarea('originFullText', 'Cột tổng hợp gốc để đối chiếu/export', r.origin_full_text, '', 'span-12 compact-ta')
+      + input('externalUrl', 'URL thư mục/tài liệu', r.external_url || '', 'placeholder="https://drive.google.com/…" maxlength="2000" type="url"', 'span-12')
       + masterItemSection(r, state.currentMaster || {})
       + itemAttachmentSection(r, (state.currentMedia && state.currentMedia.itemFiles) || [])
       + technicalSection(r, clarifications)
@@ -809,6 +817,7 @@
       + (r.content ? '<div style="font-size:12px;margin-top:3px;white-space:pre-wrap">' + API.esc(r.content) + '</div>' : '')
       + modelChange + propSpec
       + (r.attachment_file_id ? '<div style="font-size:12px;color:var(--text-muted);margin-top:2px">📎 ' + API.esc(r.attachment_file_name || r.attachment_file_id) + '</div>' : '')
+      + (r.external_url && /^https?:\/\//i.test(r.external_url) ? '<div style="margin-top:3px"><a class="btn btn-sm" href="' + API.esc(encodeURI(r.external_url)) + '" target="_blank" rel="noopener noreferrer">Mở link</a></div>' : '')
       + '</div>'
       + '<div><button type="button" data-role-only="admin,manager" style="font-size:12px;min-height:28px;padding:3px 8px" onclick="RfqItemsModule.openClarificationForm(\'' + itemId + '\', \'' + clid + '\')">Sửa</button></div>'
       + '</article>';
@@ -896,7 +905,8 @@
       + input('proposedModel', 'Model đề xuất / final', r.proposed_model || item.quy_cach_final, '', 'span-3')
       + input('proposedManufacturer', 'Hãng SX đề xuất', r.proposed_manufacturer || item.hang_final, '', 'span-3')
       + input('proposedOrigin', 'Xuất xứ đề xuất', r.proposed_origin || item.xuat_xu_final, '', 'span-3')
-      + textarea('rawNote', 'Ghi chú gốc', r.raw_note, '', 'span-12 compact-ta');
+      + textarea('rawNote', 'Ghi chú gốc', r.raw_note, '', 'span-12 compact-ta')
+      + input('externalUrl', 'URL tài liệu', r.external_url || '', 'placeholder="Link Google Drive / file phương án / công văn…" maxlength="2000" type="url"', 'span-12');
     // updateFinal is auto-applied by backend when type=final_confirm or status=final_confirmed
   }
 

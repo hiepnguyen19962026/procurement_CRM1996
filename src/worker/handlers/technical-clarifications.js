@@ -255,6 +255,13 @@ async function applyRevisionBatch(db, { item, clarificationRow, now, actorId }) 
   await db.batch(stmts);
 }
 
+function cleanUrl(raw) {
+  const s = (raw || '').trim();
+  if (!s) return '';
+  if (!/^https?:\/\//i.test(s)) return '';
+  return s.slice(0, 2000);
+}
+
 function normalizeClarification(body, base) {
   const clarificationType = cleanString(body.clarificationType || body.clarification_type, 40);
   const statusAfter = cleanString(body.statusAfter || body.status_after, 40);
@@ -274,6 +281,7 @@ function normalizeClarification(body, base) {
     status_after: statusAfter,
     attachment_file_id: cleanString(body.attachmentFileId || body.attachment_file_id, 120),
     raw_note: cleanString(body.rawNote || body.raw_note, 2000),
+    external_url: cleanUrl(body.externalUrl || body.external_url),
   };
 }
 

@@ -29,12 +29,13 @@ export async function insertTechnicalClarificationSQL(db, row) {
     `INSERT INTO technical_clarifications (
       clarification_id, rfq_item_id, sequence_no, clarification_type, title, content,
       old_model, proposed_model, proposed_manufacturer, proposed_origin, status_after,
-      attachment_file_id, created_by, created_at, updated_at, deleted_at, raw_note
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      attachment_file_id, created_by, created_at, updated_at, deleted_at, raw_note, external_url
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     row.clarification_id, row.rfq_item_id, row.sequence_no, row.clarification_type, row.title, row.content,
     row.old_model, row.proposed_model, row.proposed_manufacturer, row.proposed_origin, row.status_after,
-    row.attachment_file_id, row.created_by, row.created_at, row.updated_at, row.deleted_at, row.raw_note
+    row.attachment_file_id, row.created_by, row.created_at, row.updated_at, row.deleted_at, row.raw_note,
+    row.external_url || null
   ).run();
 }
 
@@ -43,12 +44,12 @@ export async function updateTechnicalClarificationSQL(db, row) {
     `UPDATE technical_clarifications SET
       clarification_type = ?, title = ?, content = ?, old_model = ?, proposed_model = ?,
       proposed_manufacturer = ?, proposed_origin = ?, status_after = ?, attachment_file_id = ?,
-      updated_at = ?, raw_note = ?
+      updated_at = ?, raw_note = ?, external_url = ?
      WHERE clarification_id = ? AND deleted_at IS NULL`
   ).bind(
     row.clarification_type, row.title, row.content, row.old_model, row.proposed_model,
     row.proposed_manufacturer, row.proposed_origin, row.status_after, row.attachment_file_id,
-    row.updated_at, row.raw_note, row.clarification_id
+    row.updated_at, row.raw_note, row.external_url || null, row.clarification_id
   ).run();
 }
 

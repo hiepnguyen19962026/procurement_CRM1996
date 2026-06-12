@@ -129,6 +129,13 @@ function v(body, camel, snake, max = 500) {
   return cleanString(body[camel] ?? body[snake], max);
 }
 
+function cleanUrl(raw) {
+  const s = (raw || '').trim();
+  if (!s) return '';
+  if (!/^https?:\/\//i.test(s)) return '';
+  return s.slice(0, 2000);
+}
+
 function firstText(body, keys, max = 500) {
   for (const key of keys) {
     if (body[key] !== undefined && body[key] !== null) return cleanString(body[key], max);
@@ -198,6 +205,7 @@ function normalizeItemRow(body, base) {
     source_file_id: v(body, 'sourceFileId', 'source_file_id', 120),
     source_sheet_name: v(body, 'sourceSheetName', 'source_sheet_name', 120),
     source_row_number: Math.trunc(cleanNumber(body.sourceRowNumber ?? body.source_row_number)),
+    external_url: cleanUrl(body.externalUrl ?? body.external_url),
   };
   row.normalized_search = buildSearchText([
     row.ma_mua_sam, row.ma_vat_tu, row.ten_vat_tu, row.required_model,
