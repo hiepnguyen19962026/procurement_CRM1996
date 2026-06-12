@@ -1,4 +1,5 @@
 import {
+  checkRfqImportSafetySQL,
   findDuplicateRfqItemSQL,
   getImportJobSQL,
   getImportTemplateSQL,
@@ -43,6 +44,11 @@ const TARGET_FIELDS = new Set([
   'note',
   'delivery_time',
   'origin_full_text',
+  // Final clarification fields — importable when user explicitly ticks the overwrite checkbox
+  'quy_cach_final',
+  'hang_final',
+  'xuat_xu_final',
+  'ghi_chu_final',
 ]);
 
 const TEXT_FIELDS = [
@@ -63,6 +69,10 @@ const TEXT_FIELDS = [
   'note',
   'delivery_time',
   'origin_full_text',
+  'quy_cach_final',
+  'hang_final',
+  'xuat_xu_final',
+  'ghi_chu_final',
 ];
 
 // --- Import identity key & content-change helpers ---
@@ -74,10 +84,11 @@ function normKeyNum(v) {
   const n = parseFloat(String(v == null ? '' : v).replace(/[,\s]/g, ''));
   return isNaN(n) ? '0' : String(n);
 }
-// Composite key: rfq_id + stt + maMuaSam + maVatTu + tenVatTu + requiredModel + qty
+// Composite key: rfq_id + stt + maMuaSam + maVatTu + qty
+// Excludes ten_vat_tu and required_model so rows remain identifiable when description/spec text changes.
 // Null-byte separator avoids collisions with values containing "||"
-function buildImportKey(rfqId, sttGoc, maMuaSam, maVatTu, tenVatTu, requiredModel, quantity) {
-  return [String(rfqId || ''), normKey(sttGoc), normKey(maMuaSam), normKey(maVatTu), normKey(tenVatTu), normKey(requiredModel), normKeyNum(quantity)].join('\x00');
+function buildImportKey(rfqId, sttGoc, maMuaSam, maVatTu, quantity) {
+  return [String(rfqId || ''), normKey(sttGoc), normKey(maMuaSam), normKey(maVatTu), normKeyNum(quantity)].join('\x00');
 }
 
 const COMPARE_FIELDS = [
@@ -111,7 +122,7 @@ function buildExistingKeyMap(rfqId, items) {
   const map = new Map();
   for (const item of items) {
     const stt = item.stt_goc || String(item.source_row_number || '0');
-    const key = buildImportKey(rfqId, stt, item.ma_mua_sam, item.ma_vat_tu, item.ten_vat_tu, item.required_model, item.quantity);
+    const key = buildImportKey(rfqId, stt, item.ma_mua_sam, item.ma_vat_tu, item.quantity);
     if (!map.has(key)) map.set(key, item);
   }
   return map;
@@ -120,11 +131,22 @@ function buildExistingKeyMap(rfqId, items) {
 export async function handleImports(action, request, env, ctx, actor) {
   if (action === 'getImportTemplates') return getTemplates(request, env, actor);
   if (action === 'saveImportTemplate') return saveTemplate(request, env, actor);
+  if (action === 'checkRfqImportSafety') return checkSafety(request, env, actor);
   if (action === 'previewImportRows') return previewRows(request, env, actor);
   if (action === 'commitImportRows') return commitRows(request, env, ctx, actor);
   if (action === 'getImportJob') return getJob(request, env, actor);
   if (action === 'getImportJobRows') return getJobRows(request, env, actor);
   return json({ ok: false, error: 'Unknown import action' }, 400);
+}
+
+async function checkSafety(request, env, actor) {
+  const denied = requireRole(actor, WRITE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const rfqId = cleanString(body.rfqId || body.rfq_id, 80);
+  if (!rfqId) return json({ ok: false, error: 'Thieu rfqId' }, 400);
+  const counts = await checkRfqImportSafetySQL(env.DB, rfqId);
+  return json({ ok: true, counts });
 }
 
 async function getTemplates(request, env, actor) {
@@ -176,24 +198,45 @@ async function commitRows(request, env, ctx, actor) {
   const rows = Array.isArray(body.rows) ? body.rows.slice(0, 500) : [];
   if (!rows.length) return json({ ok: false, error: 'Khong co dong import' }, 400);
 
-  // importMode: 'update_changed' (default) | 'skip_all_existing' | 'force_insert'
-  const importMode = ['update_changed', 'skip_all_existing', 'force_insert'].includes(body.importMode)
+  // importMode: 'update_changed' (default) | 'skip_all_existing' | 'force_insert' | 'selective_update' | 'clear_and_reimport'
+  const importMode = ['update_changed', 'skip_all_existing', 'force_insert', 'selective_update', 'clear_and_reimport'].includes(body.importMode)
     ? body.importMode : 'update_changed';
+
+  // overwriteFields: field-level overwrite list for selective_update mode
+  const rawOverwriteFields = Array.isArray(body.overwriteFields) ? body.overwriteFields : [];
+  const overwriteFields = rawOverwriteFields.map(f => cleanString(f, 80)).filter(f => TARGET_FIELDS.has(f));
+
+  // clearBeforeImport: true only on first chunk of clear_and_reimport to avoid re-deleting on subsequent chunks
+  const clearBeforeImport = !!body.clearBeforeImport && importMode === 'clear_and_reimport';
 
   const sourceSheetName = cleanString(body.sourceSheetName || body.source_sheet_name, 80) || 'csv';
   const now = nowIso();
   const jobId = makeId('IMPJOB');
   const summary = { jobId, totalRows: rows.length, created: 0, updated: 0, skipped: 0, errors: 0, rowErrors: [] };
 
-  // Preload all existing items for composite key lookup (skip for force_insert)
+  // Preload all existing items for composite key lookup
+  // Skipped for force_insert and clear_and_reimport (existingByKey stays empty → all rows insert as new)
   const existingByKey = new Map();
-  if (importMode !== 'force_insert') {
+  if (importMode !== 'force_insert' && importMode !== 'clear_and_reimport') {
     const existing = await listRfqItemsByRfqIdSQL(env.DB, rfqId);
     for (const item of existing) {
       const stt = item.stt_goc || String(item.source_row_number || '0');
-      const key = buildImportKey(rfqId, stt, item.ma_mua_sam, item.ma_vat_tu, item.ten_vat_tu, item.required_model, item.quantity);
+      const key = buildImportKey(rfqId, stt, item.ma_mua_sam, item.ma_vat_tu, item.quantity);
       if (!existingByKey.has(key)) existingByKey.set(key, item);
     }
+  }
+
+  // clear_and_reimport: hard delete all items (and linked data) before inserting fresh
+  if (clearBeforeImport) {
+    await env.DB.batch([
+      env.DB.prepare(`DELETE FROM technical_clarifications WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+      env.DB.prepare(`DELETE FROM supplier_quotes WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+      env.DB.prepare(`DELETE FROM pricing_decisions WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+      env.DB.prepare(`DELETE FROM contract_items WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+      env.DB.prepare(`DELETE FROM rfq_item_revisions WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+      env.DB.prepare(`UPDATE import_job_rows SET rfq_item_id = NULL WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+      env.DB.prepare(`DELETE FROM rfq_items WHERE rfq_id = ?`).bind(rfqId),
+    ]);
   }
 
   for (let i = 0; i < rows.length; i++) {
@@ -218,9 +261,9 @@ async function commitRows(request, env, ctx, actor) {
           oldRow = await getRfqItemSQL(env.DB, explicitId);
           if (!oldRow) throw new Error(`Khong tim thay rfq_item_id ${explicitId}`);
           if (oldRow.rfq_id !== rfqId) throw new Error(`rfq_item_id ${explicitId} khong thuoc RFQ dang import`);
-        } else if (importMode !== 'force_insert') {
+        } else if (importMode !== 'force_insert' && importMode !== 'clear_and_reimport') {
           const stt = cleanString(mapped.stt_goc, 40) || String(sourceRowNumber - 1);
-          const key = buildImportKey(rfqId, stt, mapped.ma_mua_sam, mapped.ma_vat_tu, mapped.ten_vat_tu, mapped.required_model, mapped.quantity);
+          const key = buildImportKey(rfqId, stt, mapped.ma_mua_sam, mapped.ma_vat_tu, mapped.quantity);
           oldRow = existingByKey.get(key) ?? null;
         }
 
@@ -232,13 +275,15 @@ async function commitRows(request, env, ctx, actor) {
           status = 'skipped';
           rfqItemId = oldRow.rfq_item_id;
         } else if (oldRow) {
-          const itemRow = await buildImportItemRow(env.DB, { rfqId, mapped, oldRow, rawRow, sourceRowNumber, sourceSheetName, now });
+          // update_changed (with changes), selective_update — write only overwriteFields for existing rows
+          const itemRow = await buildImportItemRow(env.DB, { rfqId, mapped, oldRow, rawRow, sourceRowNumber, sourceSheetName, now, overwriteFields: importMode === 'selective_update' ? overwriteFields : [] });
           await updateRfqItemSQL(env.DB, itemRow);
           status = 'updated';
           summary.updated++;
           rfqItemId = itemRow.rfq_item_id;
         } else {
-          const itemRow = await buildImportItemRow(env.DB, { rfqId, mapped, oldRow: null, rawRow, sourceRowNumber, sourceSheetName, now });
+          // new row: always write all fields regardless of overwriteFields
+          const itemRow = await buildImportItemRow(env.DB, { rfqId, mapped, oldRow: null, rawRow, sourceRowNumber, sourceSheetName, now, overwriteFields: [] });
           await insertRfqItemSQL(env.DB, itemRow);
           status = 'created';
           summary.created++;
@@ -329,7 +374,7 @@ async function previewRows(request, env, actor) {
       continue;
     }
 
-    const key = buildImportKey(rfqId, stt, mapped.ma_mua_sam, mapped.ma_vat_tu, mapped.ten_vat_tu, mapped.required_model, mapped.quantity);
+    const key = buildImportKey(rfqId, stt, mapped.ma_mua_sam, mapped.ma_vat_tu, mapped.quantity);
     const existingItem = existingByKey.get(key) ?? null;
 
     if (!existingItem) {
@@ -420,7 +465,11 @@ async function resolveExistingItem(db, rfqId, mapped) {
   });
 }
 
-async function buildImportItemRow(db, { rfqId, mapped, oldRow, rawRow, sourceRowNumber, sourceSheetName, now }) {
+async function buildImportItemRow(db, { rfqId, mapped, oldRow, rawRow, sourceRowNumber, sourceSheetName, now, overwriteFields }) {
+  // ow(field): true when the field may be written.
+  // New rows: always write. Existing rows: write only if overwriteFields is empty (= no filter) or field is listed.
+  const ow = (field) => !oldRow || !overwriteFields || !overwriteFields.length || overwriteFields.includes(field);
+
   const row = oldRow ? { ...oldRow } : emptyItemRow();
   row.rfq_item_id = oldRow ? oldRow.rfq_item_id : await nextEntityId(db, 'rfq_items', 'rfq_item_id', 'RFQI');
   row.rfq_id = rfqId;
@@ -430,30 +479,35 @@ async function buildImportItemRow(db, { rfqId, mapped, oldRow, rawRow, sourceRow
   row.source_row_number = sourceRowNumber;
   row.raw_row_json = JSON.stringify(rawRow);
 
-  setText(row, mapped, 'stt_goc', 'stt_goc');
+  if (ow('stt_goc')) setText(row, mapped, 'stt_goc', 'stt_goc');
   if (!row.stt_goc) row.stt_goc = String(sourceRowNumber - 1);
-  setText(row, mapped, 'ma_mua_sam', 'ma_mua_sam');
-  setText(row, mapped, 'ma_vat_tu', 'ma_vat_tu');
-  setText(row, mapped, 'ten_vat_tu', 'ten_vat_tu');
-  setText(row, mapped, 'required_model', 'required_model');
-  setText(row, mapped, 'manufacturer', 'manufacturer');
-  setText(row, mapped, 'brand', 'brand');
-  setText(row, mapped, 'origin_country', 'origin_country');
-  setText(row, mapped, 'unit', 'unit');
-  setText(row, mapped, 'manufacture_year', 'manufacture_year');
-  setText(row, mapped, 'technical_params', 'technical_params');
-  setText(row, mapped, 'vat_lieu', 'vat_lieu');
-  setText(row, mapped, 'phu_tung_chuyen_dung', 'phu_tung_chuyen_dung');
-  setText(row, mapped, 'yeu_cau_ky_thuat_bo_sung', 'yeu_cau_ky_thuat_bo_sung');
-  setText(row, mapped, 'note', 'note');
-  setText(row, mapped, 'delivery_time', 'delivery_time');
-  setText(row, mapped, 'origin_full_text', 'origin_full_text');
-  setNumber(row, mapped, 'quantity', 'quantity');
-  setNumber(row, mapped, 'thue_suat', 'thue_suat');
-  setMoney(row, mapped, 'don_gia_truoc_thue', 'don_gia_truoc_thue');
-  setMoney(row, mapped, 'don_gia_sau_thue', 'don_gia_sau_thue');
-  setMoney(row, mapped, 'thanh_tien_sau_thue', 'thanh_tien_sau_thue');
-  setMoney(row, mapped, 'gia_hop_dong', 'gia_hop_dong');
+  if (ow('ma_mua_sam')) setText(row, mapped, 'ma_mua_sam', 'ma_mua_sam');
+  if (ow('ma_vat_tu')) setText(row, mapped, 'ma_vat_tu', 'ma_vat_tu');
+  if (ow('ten_vat_tu')) setText(row, mapped, 'ten_vat_tu', 'ten_vat_tu');
+  if (ow('required_model')) setText(row, mapped, 'required_model', 'required_model');
+  if (ow('manufacturer')) setText(row, mapped, 'manufacturer', 'manufacturer');
+  if (ow('brand')) setText(row, mapped, 'brand', 'brand');
+  if (ow('origin_country')) setText(row, mapped, 'origin_country', 'origin_country');
+  if (ow('unit')) setText(row, mapped, 'unit', 'unit');
+  if (ow('manufacture_year')) setText(row, mapped, 'manufacture_year', 'manufacture_year');
+  if (ow('technical_params')) setText(row, mapped, 'technical_params', 'technical_params');
+  if (ow('vat_lieu')) setText(row, mapped, 'vat_lieu', 'vat_lieu');
+  if (ow('phu_tung_chuyen_dung')) setText(row, mapped, 'phu_tung_chuyen_dung', 'phu_tung_chuyen_dung');
+  if (ow('yeu_cau_ky_thuat_bo_sung')) setText(row, mapped, 'yeu_cau_ky_thuat_bo_sung', 'yeu_cau_ky_thuat_bo_sung');
+  if (ow('note')) setText(row, mapped, 'note', 'note');
+  if (ow('delivery_time')) setText(row, mapped, 'delivery_time', 'delivery_time');
+  if (ow('origin_full_text')) setText(row, mapped, 'origin_full_text', 'origin_full_text');
+  if (ow('quantity')) setNumber(row, mapped, 'quantity', 'quantity');
+  if (ow('thue_suat')) setNumber(row, mapped, 'thue_suat', 'thue_suat');
+  if (ow('don_gia_truoc_thue')) setMoney(row, mapped, 'don_gia_truoc_thue', 'don_gia_truoc_thue');
+  if (ow('don_gia_sau_thue')) setMoney(row, mapped, 'don_gia_sau_thue', 'don_gia_sau_thue');
+  if (ow('thanh_tien_sau_thue')) setMoney(row, mapped, 'thanh_tien_sau_thue', 'thanh_tien_sau_thue');
+  if (ow('gia_hop_dong')) setMoney(row, mapped, 'gia_hop_dong', 'gia_hop_dong');
+  // Final clarification fields — only written when user explicitly ticks overwrite checkbox
+  if (ow('quy_cach_final')) setText(row, mapped, 'quy_cach_final', 'quy_cach_final');
+  if (ow('hang_final')) setText(row, mapped, 'hang_final', 'hang_final');
+  if (ow('xuat_xu_final')) setText(row, mapped, 'xuat_xu_final', 'xuat_xu_final');
+  if (ow('ghi_chu_final')) setText(row, mapped, 'ghi_chu_final', 'ghi_chu_final');
 
   row.quy_cach_model_yeu_cau = row.required_model;
   row.hang_goc_nsx_goc = row.manufacturer;
@@ -467,6 +521,7 @@ async function buildImportItemRow(db, { rfqId, mapped, oldRow, rawRow, sourceRow
     row.ma_mua_sam, row.ma_vat_tu, row.ten_vat_tu, row.required_model,
     row.brand, row.manufacturer, row.origin_country, row.manufacture_year,
     row.technical_params, row.vat_lieu, row.yeu_cau_ky_thuat_bo_sung,
+    row.quy_cach_final, row.hang_final, row.xuat_xu_final, row.ghi_chu_final,
   ]);
   return row;
 }

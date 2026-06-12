@@ -219,6 +219,9 @@ mark { background: #fcd34d; padding: 0 2px; border-radius: 2px; font-style: norm
 
 .modal-backdrop { position: fixed; inset: 0; background: rgba(17,24,39,.48); display: grid; place-items: center; padding: 18px; z-index: 20; }
 .modal { width: min(90vw, 1200px); max-height: 90vh; background: white; border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow-md); display: flex; flex-direction: column; overflow: hidden; }
+/* Import modal — full viewport width/height for many-column preview */
+.modal.modal--import-wide { width: 90vw; max-width: none; height: 90vh; max-height: none; }
+.modal.modal--import-wide .modal-body { overflow-x: auto; }
 /* form must be a flex column to let modal-body scroll and modal-actions stick to bottom */
 #modalForm { display: flex; flex-direction: column; flex: 0 1 auto; min-height: 0; overflow: hidden; }
 .modal-head, .modal-actions { display: flex; justify-content: space-between; align-items: center; padding: 13px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0; }

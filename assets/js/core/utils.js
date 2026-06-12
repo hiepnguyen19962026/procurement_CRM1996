@@ -9,6 +9,9 @@
 
   function openModal(title, bodyHtml, onSubmit) {
     var modal = document.getElementById('modal');
+    // remove import-wide modifier so it does not leak to other modals
+    var _innerModal = document.querySelector('#modal .modal');
+    if (_innerModal) _innerModal.classList.remove('modal--import-wide');
     document.getElementById('modalTitle').textContent = title;
     var _mb = document.getElementById('modalBody');
     _mb.className = 'modal-body form-grid-12';
