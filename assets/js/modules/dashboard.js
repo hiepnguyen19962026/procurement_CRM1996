@@ -1,5 +1,6 @@
 (function () {
   var _lastData = null;
+  var _trackedSort = { by: null, dir: 'asc' };
 
   // VN timezone date helpers (UTC+7)
   function todayVN() {
@@ -119,7 +120,7 @@
     document.getElementById('dashboardPanels').innerHTML =
       panelTasks(d.tasks || {})
       + panelFollowup(d.tasks || {})
-      + panelDeadlines(d.rfq || {})
+      + panelTrackedRfqs(d.rfq || {})
       + panelWonRfqs(d.rfq || {})
       + panelClarifications(d.clarifications || {});
   }
@@ -150,13 +151,14 @@
                 + '<td>' + API.esc(r.title || '') + (r.latest_note ? '<br><small style="color:var(--text-muted)">' + API.esc(r.latest_note) + '</small>' : '') + '</td>'
                 + '<td>' + API.esc(r.company_name || '—') + '</td>'
                 + '<td>' + dlHtml + '</td>'
-                + '<td>' + priorityBadge(r.priority) + '</td>'
-                + '<td>' + taskStatusBadge(r.status) + '</td>'
+                + '<td>' + taskPrioritySel(r.task_id, r.priority) + '</td>'
+                + '<td>' + taskStatusSel(r.task_id, r.status) + '</td>'
                 + '</tr>';
             }).join(''),
             'dashboard-tasks-wrap'
           )
-        : empty('Không có task đang thực hiện.')
+        : empty('Không có task đang thực hiện.'),
+      'dash-panel-tasks'
     );
   }
 
@@ -179,8 +181,8 @@
           + '<td>' + API.esc(r.title || '') + (r.latest_note ? '<br><small style="color:var(--text-muted)">' + API.esc(r.latest_note) + '</small>' : '') + '</td>'
           + '<td>' + API.esc(r.company_name || '—') + '</td>'
           + '<td>' + API.esc(r.deadline_date || '') + '</td>'
-          + '<td>' + priorityBadge(r.priority) + '</td>'
-          + '<td>' + taskStatusBadge(r.status) + '</td>'
+          + '<td>' + taskPrioritySel(r.task_id, r.priority) + '</td>'
+          + '<td>' + taskStatusSel(r.task_id, r.status) + '</td>'
           + '</tr>';
       }).join('');
     }
@@ -201,46 +203,96 @@
         ? fuSection('Quá hạn', overdue,   'var(--red)')
           + fuSection('Hôm nay', todayRows, '#d97706')
           + fuSection('Trong 7 ngày', next7Rows, 'var(--blue)')
-        : empty('Không có task nào hết hạn trong 7 ngày tới.')
+        : empty('Không có task nào hết hạn trong 7 ngày tới.'),
+      'dash-panel-followup'
     );
   }
 
-  // ── "RFQ sắp hết hạn" – dang_khao_gia only, sorted by deadline ───────────
+  // ── "RFQ đang theo dõi" – dang_khao_gia + tham_khao + da_bao, top 30, sortable ──
 
-  function panelDeadlines(rfq) {
-    var rows = rfq.deadline_list || [];
+  function trackedRfqTableHtml(rows) {
     var today = todayVN();
-    return panel('RFQ sắp hết hạn (đang khảo giá)',
-      rows.length
-        ? miniTable(
-            ['Mã gói', 'Tên gói', 'CĐT', 'Hạn nộp', 'Còn lại'],
-            rows.map(function (r) {
-              var dl = r.ngay_het_han || '';
-              var daysLeft = dl ? Math.round((new Date(dl).getTime() - new Date(today).getTime()) / 86400000) : null;
-              var rowBg = '', badge = '';
-              if (dl < today) {
-                rowBg = 'background:var(--red-lt);';
-                badge = '<span class="badge" style="background:var(--red);color:#fff">Đã hết hạn</span>';
-              } else if (dl === today) {
-                rowBg = 'background:#fff7ed;';
-                badge = '<span class="badge" style="background:#d97706;color:#fff">Hôm nay</span>';
-              } else if (daysLeft !== null && daysLeft <= 3) {
-                rowBg = 'background:#fffbeb;';
-                badge = '<span class="badge" style="background:#f59e0b;color:#fff">Còn ' + daysLeft + ' ngày</span>';
-              } else {
-                badge = '<span style="color:var(--text-muted)">Còn ' + (daysLeft !== null ? daysLeft : '?') + ' ngày</span>';
-              }
-              return '<tr style="' + rowBg + 'cursor:pointer" onclick="DashboardModule._navToRfq(\'' + API.esc(r.rfq_id) + '\')">'
-                + '<td><strong class="link-edit">' + API.esc(r.ma_goi_tbmt || r.rfq_id) + '</strong></td>'
-                + '<td>' + API.esc(r.ten_goi) + '</td>'
-                + '<td style="color:var(--text-muted)">' + API.esc(r.cdt_label || '') + '</td>'
-                + '<td style="white-space:nowrap">' + API.esc(dl) + '</td>'
-                + '<td style="white-space:nowrap">' + badge + '</td>'
-                + '</tr>';
-            }).join('')
-          )
-        : empty('Không có RFQ đang khảo giá nào hết hạn trong 3 ngày tới.')
-    );
+
+    var sorted = rows.slice();
+    if (_trackedSort.by) {
+      sorted.sort(function (a, b) {
+        var va, vb;
+        if (_trackedSort.by === 'ma_goi') { va = a.ma_goi_tbmt || ''; vb = b.ma_goi_tbmt || ''; }
+        else if (_trackedSort.by === 'ten_goi') { va = a.ten_goi || ''; vb = b.ten_goi || ''; }
+        else if (_trackedSort.by === 'status') { va = a.trang_thai_goi || ''; vb = b.trang_thai_goi || ''; }
+        else if (_trackedSort.by === 'du_toan') {
+          va = Number(a.du_toan || 0); vb = Number(b.du_toan || 0);
+          return _trackedSort.dir === 'asc' ? va - vb : vb - va;
+        } else if (_trackedSort.by === 'deadline') {
+          var da = a.ngay_het_han || '';
+          var db = b.ngay_het_han || '';
+          var ga = !da ? 2 : da >= today ? 0 : 1;
+          var gb = !db ? 2 : db >= today ? 0 : 1;
+          if (ga !== gb) return _trackedSort.dir === 'asc' ? ga - gb : gb - ga;
+          if (ga === 0) return _trackedSort.dir === 'asc' ? da.localeCompare(db) : db.localeCompare(da);
+          if (ga === 1) return _trackedSort.dir === 'asc' ? db.localeCompare(da) : da.localeCompare(db);
+          return 0;
+        }
+        if (va === undefined) return 0;
+        return _trackedSort.dir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      });
+    }
+
+    function arrow(key) {
+      if (_trackedSort.by !== key) return ' <span style="opacity:.35">↕</span>';
+      return _trackedSort.dir === 'asc' ? ' ▲' : ' ▼';
+    }
+    function th(label, key) {
+      return '<th class="dash-th-sort" onclick="DashboardModule._sortTracked(\'' + key + '\')">'
+        + API.esc(label) + arrow(key) + '</th>';
+    }
+
+    if (!sorted.length) {
+      return '<div class="empty-state small">Không có RFQ đang theo dõi.</div>';
+    }
+
+    var thead = '<thead><tr>'
+      + th('Mã gói', 'ma_goi')
+      + th('Tên gói', 'ten_goi')
+      + th('Trạng thái', 'status')
+      + th('Hạn nộp', 'deadline')
+      + th('Dự toán', 'du_toan')
+      + '</tr></thead>';
+
+    var rowsHtml = sorted.map(function (r) {
+      var dl = r.ngay_het_han || '';
+      var daysLeft = dl ? Math.round((new Date(dl).getTime() - new Date(today).getTime()) / 86400000) : null;
+      var dlHtml;
+      if (!dl) {
+        dlHtml = '<span style="color:var(--text-faint)">—</span>';
+      } else if (dl < today) {
+        dlHtml = '<span class="badge" style="background:var(--red);color:#fff">Quá hạn: ' + API.esc(dl) + '</span>';
+      } else if (dl === today) {
+        dlHtml = '<span class="badge" style="background:#d97706;color:#fff">Hôm nay</span>';
+      } else if (daysLeft !== null && daysLeft <= 3) {
+        dlHtml = '<span class="badge" style="background:#f59e0b;color:#fff">Còn ' + daysLeft + ' ngày</span>';
+      } else {
+        dlHtml = API.esc(dl);
+      }
+      return '<tr style="cursor:pointer" onclick="DashboardModule._navToRfq(\'' + API.esc(r.rfq_id) + '\')">'
+        + '<td><strong class="link-edit">' + API.esc(r.ma_goi_tbmt || r.rfq_id) + '</strong></td>'
+        + '<td>' + API.esc(r.ten_goi || '') + '</td>'
+        + '<td>' + rfqStatusSel(r.rfq_id, r.trang_thai_goi || '') + '</td>'
+        + '<td>' + dlHtml + '</td>'
+        + '<td class="num">' + (r.du_toan ? fmtMoney(r.du_toan) : '<span style="color:var(--text-faint)">—</span>') + '</td>'
+        + '</tr>';
+    }).join('');
+
+    return '<div class="table-wrap dashboard-table-wrap" style="margin-top:6px">'
+      + '<table class="quotes-mini-table">' + thead + '<tbody>' + rowsHtml + '</tbody></table>'
+      + '</div>';
+  }
+
+  function panelTrackedRfqs(rfq) {
+    var rows = rfq.tracked_list || [];
+    return '<section class="panel" id="dash-panel-tracked-rfq"><h3>RFQ đang theo dõi (top 30)</h3>'
+      + '<div id="dash-tracked-rfq-inner">' + trackedRfqTableHtml(rows) + '</div>'
+      + '</section>';
   }
 
   // ── "RFQ vừa trúng" ───────────────────────────────────────────────────────
@@ -285,14 +337,15 @@
                 + '<td>' + API.esc(r.ten_vat_tu || r.rfq_item_id)
                   + (r.ma_vat_tu ? '<br><small style="color:var(--text-faint)">' + API.esc(r.ma_vat_tu) + '</small>' : '') + '</td>'
                 + '<td>' + API.esc(r.ten_goi || r.rfq_id || '') + '</td>'
-                + '<td><span class="badge">' + API.esc(clarTypeLabel(r.clarification_type)) + '</span></td>'
-                + '<td><span class="badge">' + API.esc(clarStatusLabel(r.status_after)) + '</span></td>'
+                + '<td>' + clarTypeSel(r.clarification_id, r.clarification_type) + '</td>'
+                + '<td>' + clarStatusSel(r.clarification_id, r.status_after) + '</td>'
                 + '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
                   + API.esc(summary) + '</td>'
                 + '</tr>';
             }).join('')
           )
-        : empty('Chưa có clarification nào.')
+        : empty('Chưa có clarification nào.'),
+      'dash-panel-clars'
     );
   }
 
@@ -435,8 +488,13 @@
 
   // ── Shared helpers ────────────────────────────────────────────────────────
 
-  function panel(title, bodyHtml) {
-    return '<section class="panel"><h3>' + API.esc(title) + '</h3>' + bodyHtml + '</section>';
+  function panel(title, bodyHtml, id) {
+    return '<section class="panel"' + (id ? ' id="' + id + '"' : '') + '><h3>' + API.esc(title) + '</h3>' + bodyHtml + '</section>';
+  }
+
+  function rePanelById(id, html) {
+    var el = document.getElementById(id);
+    if (el) el.outerHTML = html;
   }
 
   function miniTable(headers, bodyRows, extraClass) {
@@ -514,11 +572,230 @@
     }[value] || value || 'Không rõ';
   }
 
+  // ── Inline select builders ─────────────────────────────────────────────────
+
+  function taskStatusSel(taskId, status) {
+    var opts = [
+      ['dang_lam',     'Đang làm'],
+      ['cho_phan_hoi', 'Chờ PH'],
+      ['tam_dung',     'Tạm dừng'],
+      ['hoan_thanh',   'Hoàn thành'],
+      ['huy_bo',       'Huỷ bỏ'],
+    ];
+    return '<select class="dash-sel" data-prev="' + API.esc(status || '') + '"'
+      + ' onclick="event.stopPropagation()"'
+      + ' onchange="DashboardModule._quickTaskStatus(\'' + API.esc(taskId) + '\',this.value,this)">'
+      + opts.map(function (o) {
+          return '<option value="' + o[0] + '"' + (status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('')
+      + '</select>';
+  }
+
+  function taskPrioritySel(taskId, priority) {
+    var opts = [
+      ['khan',       'Khẩn'],
+      ['cao',        'Cao'],
+      ['trung_binh', 'TB'],
+      ['thap',       'Thấp'],
+    ];
+    return '<select class="dash-sel" data-prev="' + API.esc(priority || '') + '"'
+      + ' onclick="event.stopPropagation()"'
+      + ' onchange="DashboardModule._quickTaskPriority(\'' + API.esc(taskId) + '\',this.value,this)">'
+      + opts.map(function (o) {
+          return '<option value="' + o[0] + '"' + (priority === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('')
+      + '</select>';
+  }
+
+  function rfqStatusSel(rfqId, status) {
+    var opts = [
+      ['dang_khao_gia', 'Đang KG'],
+      ['da_bao',        'Đã báo'],
+      ['tham_khao',     'Tham khảo'],
+      ['trung',         'Trúng'],
+      ['khong_trung',   'Không trúng'],
+      ['treo',          'Treo'],
+    ];
+    return '<select class="dash-sel" data-prev="' + API.esc(status || '') + '"'
+      + ' onclick="event.stopPropagation()"'
+      + ' onchange="DashboardModule._quickRfqStatus(\'' + API.esc(rfqId) + '\',this.value,this)">'
+      + opts.map(function (o) {
+          return '<option value="' + o[0] + '"' + (status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('')
+      + '</select>';
+  }
+
+  function clarTypeSel(clarId, type) {
+    var opts = [
+      ['ask_supplier',         'Hỏi NCC'],
+      ['supplier_opinion',     'NCC ý kiến'],
+      ['supplier_reply',       'NCC PH'],
+      ['ask_client',           'Hỏi CĐT'],
+      ['client_reply',         'CĐT PH'],
+      ['replacement_proposal', 'Đề xuất TT'],
+      ['final_confirm',        'Final'],
+      ['rejected',             'Từ chối'],
+      ['other',                'Khác'],
+    ];
+    return '<select class="dash-sel" data-prev="' + API.esc(type || '') + '"'
+      + ' onclick="event.stopPropagation()"'
+      + ' onchange="DashboardModule._quickClarType(\'' + API.esc(clarId) + '\',this.value,this)">'
+      + opts.map(function (o) {
+          return '<option value="' + o[0] + '"' + (type === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('')
+      + '</select>';
+  }
+
+  function clarStatusSel(clarId, status) {
+    var opts = [
+      ['processing',       'Đang XL'],
+      ['waiting_supplier', 'Chờ NCC'],
+      ['waiting_client',   'Chờ CĐT'],
+      ['need_more_info',   'Cần bổ sung'],
+      ['final_confirmed',  'Đã XN'],
+      ['rejected',         'Từ chối'],
+      ['other',            'Khác'],
+    ];
+    return '<select class="dash-sel" data-prev="' + API.esc(status || '') + '"'
+      + ' onclick="event.stopPropagation()"'
+      + ' onchange="DashboardModule._quickClarStatus(\'' + API.esc(clarId) + '\',this.value,this)">'
+      + opts.map(function (o) {
+          return '<option value="' + o[0] + '"' + (status === o[0] ? ' selected' : '') + '>' + o[1] + '</option>';
+        }).join('')
+      + '</select>';
+  }
+
+  // ── Sort handler for tracked RFQ panel ───────────────────────────────────
+
+  function sortTracked(key) {
+    if (_trackedSort.by === key) {
+      _trackedSort.dir = _trackedSort.dir === 'asc' ? 'desc' : 'asc';
+    } else {
+      _trackedSort.by = key;
+      _trackedSort.dir = 'asc';
+    }
+    var el = document.getElementById('dash-tracked-rfq-inner');
+    if (el && _lastData) {
+      el.innerHTML = trackedRfqTableHtml((_lastData.rfq || {}).tracked_list || []);
+    }
+  }
+
+  // ── Quick-update handlers ─────────────────────────────────────────────────
+
+  async function quickTaskStatus(taskId, newStatus, sel) {
+    var prev = sel.getAttribute('data-prev') || sel.value;
+    sel.setAttribute('data-prev', newStatus);
+    try {
+      await API.call('quickUpdateTaskStatus', { taskId: taskId, status: newStatus });
+      var tasks = (_lastData || {}).tasks || {};
+      var row = (tasks.top20 || []).find(function (r) { return r.task_id === taskId; });
+      if (row) row.status = newStatus;
+      var fRow = (tasks.followup || []).find(function (r) { return r.task_id === taskId; });
+      if (fRow) fRow.status = newStatus;
+      if (newStatus === 'hoan_thanh' || newStatus === 'huy_bo') {
+        if (tasks.top20)   tasks.top20   = tasks.top20.filter(function (r) { return r.task_id !== taskId; });
+        if (tasks.followup) tasks.followup = tasks.followup.filter(function (r) { return r.task_id !== taskId; });
+      }
+      rePanelById('dash-panel-tasks',   panelTasks(tasks));
+      rePanelById('dash-panel-followup', panelFollowup(tasks));
+      API.toast('Đã cập nhật trạng thái', 'success');
+    } catch (err) {
+      sel.value = prev;
+      sel.setAttribute('data-prev', prev);
+      API.error(err);
+    }
+  }
+
+  async function quickTaskPriority(taskId, newPriority, sel) {
+    var prev = sel.getAttribute('data-prev') || sel.value;
+    sel.setAttribute('data-prev', newPriority);
+    try {
+      await API.call('quickUpdateTaskPriority', { taskId: taskId, priority: newPriority });
+      var tasks = (_lastData || {}).tasks || {};
+      var row = (tasks.top20 || []).find(function (r) { return r.task_id === taskId; });
+      if (row) row.priority = newPriority;
+      var fRow = (tasks.followup || []).find(function (r) { return r.task_id === taskId; });
+      if (fRow) fRow.priority = newPriority;
+      rePanelById('dash-panel-tasks',   panelTasks(tasks));
+      rePanelById('dash-panel-followup', panelFollowup(tasks));
+      API.toast('Đã cập nhật ưu tiên', 'success');
+    } catch (err) {
+      sel.value = prev;
+      sel.setAttribute('data-prev', prev);
+      API.error(err);
+    }
+  }
+
+  async function quickRfqStatus(rfqId, newStatus, sel) {
+    var prev = sel.getAttribute('data-prev') || sel.value;
+    sel.setAttribute('data-prev', newStatus);
+    try {
+      await API.call('quickUpdateRfqStatus', { rfqId: rfqId, status: newStatus });
+      var rfqData = (_lastData || {}).rfq || {};
+      var tracked = rfqData.tracked_list || [];
+      var row = tracked.find(function (r) { return r.rfq_id === rfqId; });
+      if (row) row.trang_thai_goi = newStatus;
+      var trackedSet = ['dang_khao_gia', 'tham_khao', 'da_bao'];
+      if (trackedSet.indexOf(newStatus) === -1) {
+        rfqData.tracked_list = tracked.filter(function (r) { return r.rfq_id !== rfqId; });
+      }
+      var el = document.getElementById('dash-tracked-rfq-inner');
+      if (el) el.innerHTML = trackedRfqTableHtml(rfqData.tracked_list || []);
+      API.toast('Đã cập nhật trạng thái RFQ', 'success');
+    } catch (err) {
+      sel.value = prev;
+      sel.setAttribute('data-prev', prev);
+      API.error(err);
+    }
+  }
+
+  async function quickClarType(clarId, newType, sel) {
+    var prev = sel.getAttribute('data-prev') || sel.value;
+    sel.setAttribute('data-prev', newType);
+    try {
+      var latest30 = ((_lastData || {}).clarifications || {}).latest30 || [];
+      var row = latest30.find(function (r) { return r.clarification_id === clarId; });
+      var curStatus = row ? (row.status_after || '') : '';
+      await API.call('quickUpdateClarification', { clarificationId: clarId, clarificationType: newType, statusAfter: curStatus });
+      if (row) row.clarification_type = newType;
+      rePanelById('dash-panel-clars', panelClarifications((_lastData || {}).clarifications || {}));
+      API.toast('Đã cập nhật loại làm rõ', 'success');
+    } catch (err) {
+      sel.value = prev;
+      sel.setAttribute('data-prev', prev);
+      API.error(err);
+    }
+  }
+
+  async function quickClarStatus(clarId, newStatus, sel) {
+    var prev = sel.getAttribute('data-prev') || sel.value;
+    sel.setAttribute('data-prev', newStatus);
+    try {
+      var latest30 = ((_lastData || {}).clarifications || {}).latest30 || [];
+      var row = latest30.find(function (r) { return r.clarification_id === clarId; });
+      var curType = row ? (row.clarification_type || '') : '';
+      await API.call('quickUpdateClarification', { clarificationId: clarId, clarificationType: curType, statusAfter: newStatus });
+      if (row) row.status_after = newStatus;
+      rePanelById('dash-panel-clars', panelClarifications((_lastData || {}).clarifications || {}));
+      API.toast('Đã cập nhật trạng thái làm rõ', 'success');
+    } catch (err) {
+      sel.value = prev;
+      sel.setAttribute('data-prev', prev);
+      API.error(err);
+    }
+  }
+
   window.DashboardModule = {
-    load:          load,
-    openNsxStats:  openNsxStats,
-    _navToRfq:     navToRfq,
-    _navToTask:    navToTask,
-    _navToItem:    navToItem,
+    load:                load,
+    openNsxStats:        openNsxStats,
+    _navToRfq:           navToRfq,
+    _navToTask:          navToTask,
+    _navToItem:          navToItem,
+    _sortTracked:        sortTracked,
+    _quickTaskStatus:    quickTaskStatus,
+    _quickTaskPriority:  quickTaskPriority,
+    _quickRfqStatus:     quickRfqStatus,
+    _quickClarType:      quickClarType,
+    _quickClarStatus:    quickClarStatus,
   };
 })();

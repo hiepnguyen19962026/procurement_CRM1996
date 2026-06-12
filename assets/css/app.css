@@ -171,6 +171,10 @@ mark { background: #fcd34d; padding: 0 2px; border-radius: 2px; font-style: norm
 .dashboard-tasks-wrap th:nth-child(3), .dashboard-tasks-wrap td:nth-child(3) { width: 18%; white-space: normal; }
 .dashboard-tasks-wrap th:nth-child(4), .dashboard-tasks-wrap td:nth-child(4) { width: 12%; }
 .dashboard-tasks-wrap th:nth-child(5), .dashboard-tasks-wrap td:nth-child(5) { width: 12%; }
+/* inline quick-edit selects and sortable headers in dashboard */
+.dash-sel { font-size: 11px; padding: 2px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); cursor: pointer; max-width: 100%; }
+.dash-th-sort { cursor: pointer; user-select: none; white-space: nowrap; }
+.dash-th-sort:hover { color: var(--blue); }
 /* quotes/history table scroll inside modal — needs overflow-x: clip on .modal-body to work */
 .quotes-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
 /* coverage 2-stat grid — overridable by media query */

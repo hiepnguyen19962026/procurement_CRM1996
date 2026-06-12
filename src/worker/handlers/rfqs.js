@@ -1,9 +1,13 @@
-import { archiveRfqSQL, getDashboardSQL, getRfqSQL, insertRfqSQL, listRfqsSQL, updateRfqSQL } from '../db/rfq-queries.js';
+import { archiveRfqSQL, getDashboardSQL, getRfqSQL, insertRfqSQL, listRfqsSQL, quickUpdateRfqStatusSQL, updateRfqSQL } from '../db/rfq-queries.js';
 import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { getKv, setKv, invalidateKv } from '../lib/cache.js';
 import { writeActionLog } from '../lib/action-log.js';
 import { buildSearchText, cleanMoney, cleanString, normalizeText } from '../lib/normalize.js';
 import { clampLimit, json, nextEntityId, nowIso, readJson } from '../lib/utils.js';
+
+const DASHBOARD_V2_KEY = 'dashboard:v2';
+
+const VALID_RFQ_STATUS = new Set(['dang_khao_gia', 'da_bao', 'trung', 'khong_trung', 'treo', 'tham_khao', 'archived']);
 
 export async function handleRfqs(action, request, env, ctx, actor) {
   if (action === 'getDashboard') return getDashboard(env, actor);
@@ -12,6 +16,7 @@ export async function handleRfqs(action, request, env, ctx, actor) {
   if (action === 'createRfq') return saveRfq(request, env, ctx, actor, false);
   if (action === 'updateRfq') return saveRfq(request, env, ctx, actor, true);
   if (action === 'archiveRfq') return archiveRfq(request, env, ctx, actor);
+  if (action === 'quickUpdateRfqStatus') return quickUpdateRfqStatus(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown RFQ action' }, 400);
 }
 
@@ -54,8 +59,33 @@ async function archiveRfq(request, env, ctx, actor) {
   if (!row) return json({ ok: false, error: 'Khong tim thay RFQ' }, 404);
   const now = nowIso();
   await archiveRfqSQL(env.DB, rfqId, now);
-  ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
+  ctx.waitUntil(invalidateKv(env, ['dashboard:v1', DASHBOARD_V2_KEY]));
   ctx.waitUntil(writeActionLog(env, { action: 'archiveRfq', entityType: 'rfq', entityId: rfqId, message: `Lưu trữ gói thầu: "${row.ten_goi}" (${rfqId})`, oldJson: row, newJson: null, actor }));
+  return json({ ok: true });
+}
+
+async function quickUpdateRfqStatus(request, env, ctx, actor) {
+  const denied = requireRole(actor, WRITE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const rfqId = cleanString(body.rfqId || body.rfq_id, 80);
+  const status = body.status;
+  if (!rfqId) return json({ ok: false, error: 'Thiếu rfq_id' }, 400);
+  if (!VALID_RFQ_STATUS.has(status)) return json({ ok: false, error: 'Trạng thái không hợp lệ' }, 400);
+  const row = await getRfqSQL(env.DB, rfqId);
+  if (!row) return json({ ok: false, error: 'Không tìm thấy RFQ' }, 404);
+  const now = nowIso();
+  await quickUpdateRfqStatusSQL(env.DB, rfqId, status, now);
+  await invalidateKv(env, [DASHBOARD_V2_KEY]);
+  ctx.waitUntil(writeActionLog(env, {
+    action:     'quickUpdateRfqStatus',
+    entityType: 'rfq',
+    entityId:   rfqId,
+    message:    `Đổi trạng thái RFQ "${row.ten_goi}" (${rfqId}): ${row.trang_thai_goi} → ${status}`,
+    oldJson:    { trang_thai_goi: row.trang_thai_goi },
+    newJson:    { trang_thai_goi: status },
+    actor,
+  }));
   return json({ ok: true });
 }
 
@@ -87,7 +117,7 @@ async function saveRfq(request, env, ctx, actor, isUpdate) {
   };
   if (isUpdate) await updateRfqSQL(env.DB, row);
   else await insertRfqSQL(env.DB, row);
-  ctx.waitUntil(invalidateKv(env, ['dashboard:v1']));
+  ctx.waitUntil(invalidateKv(env, ['dashboard:v1', DASHBOARD_V2_KEY]));
   ctx.waitUntil(writeActionLog(env, { action: isUpdate ? 'updateRfq' : 'createRfq', entityType: 'rfq', entityId: row.rfq_id, message: isUpdate ? `Cập nhật gói thầu: "${row.ten_goi}" (${row.rfq_id})` : `Tạo gói thầu mới: "${row.ten_goi}" (${row.rfq_id})`, oldJson: oldRow, newJson: row, actor }));
   return json({ ok: true, rfq: row });
 }

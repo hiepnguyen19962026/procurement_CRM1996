@@ -88,6 +88,12 @@ export async function archiveRfqSQL(db, rfqId, now) {
     .bind(now, rfqId).run();
 }
 
+export async function quickUpdateRfqStatusSQL(db, rfqId, status, now) {
+  return db.prepare(
+    'UPDATE rfqs SET trang_thai_goi = ?, updated_at = ? WHERE rfq_id = ?'
+  ).bind(status, now, rfqId).run();
+}
+
 export async function getDashboardSQL(db) {
   const rfqs = await db.prepare('SELECT COUNT(*) AS total FROM rfqs').bind().first();
   const items = await db.prepare('SELECT COUNT(*) AS total FROM rfq_items').bind().first();

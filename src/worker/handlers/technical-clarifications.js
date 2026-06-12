@@ -3,6 +3,7 @@ import {
   insertTechnicalClarificationSQL,
   listTechnicalClarificationsSQL,
   nextClarificationSequenceSQL,
+  quickUpdateClarificationSQL,
   softDeleteTechnicalClarificationSQL,
   updateTechnicalClarificationSQL,
 } from '../db/technical-clarification-queries.js';
@@ -50,6 +51,7 @@ export async function handleTechnicalClarifications(action, request, env, ctx, a
   if (action === 'createTechnicalClarification') return saveClarification(request, env, ctx, actor, false);
   if (action === 'updateTechnicalClarification') return saveClarification(request, env, ctx, actor, true);
   if (action === 'deleteTechnicalClarification') return deleteClarification(request, env, ctx, actor);
+  if (action === 'quickUpdateClarification')    return quickUpdateClar(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown technical clarification action' }, 400);
 }
 
@@ -132,6 +134,35 @@ async function saveClarification(request, env, ctx, actor, isUpdate) {
     actor,
   }));
   return json({ ok: true, clarification: row });
+}
+
+async function quickUpdateClar(request, env, ctx, actor) {
+  const denied = requireRole(actor, WRITE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const clarId = cleanString(body.clarificationId || body.clarification_id, 80);
+  if (!clarId) return json({ ok: false, error: 'Thiếu clarification_id' }, 400);
+  const newType   = cleanString(body.clarificationType || body.clarification_type, 50) || null;
+  const newStatus = cleanString(body.statusAfter || body.status_after, 50) || null;
+  if (newType   && !CLARIFICATION_TYPES.has(newType))   return json({ ok: false, error: 'Loại làm rõ không hợp lệ' }, 400);
+  if (newStatus && !STATUS_AFTER.has(newStatus))         return json({ ok: false, error: 'Trạng thái không hợp lệ' }, 400);
+  const existing = await getTechnicalClarificationSQL(env.DB, clarId);
+  if (!existing || existing.deleted_at) return json({ ok: false, error: 'Không tìm thấy trao đổi kỹ thuật' }, 404);
+  const finalType   = newType   || existing.clarification_type;
+  const finalStatus = newStatus || existing.status_after;
+  const now = nowIso();
+  await quickUpdateClarificationSQL(env.DB, clarId, finalType, finalStatus, now);
+  await invalidateKv(env, ['dashboard:v2']);
+  ctx.waitUntil(writeActionLog(env, {
+    action:     'quickUpdateClarification',
+    entityType: 'technical_clarification',
+    entityId:   clarId,
+    message:    `Cập nhật nhanh trao đổi [${finalType}/${finalStatus}] — ${clarId}`,
+    oldJson:    { clarification_type: existing.clarification_type, status_after: existing.status_after },
+    newJson:    { clarification_type: finalType, status_after: finalStatus },
+    actor,
+  }));
+  return json({ ok: true });
 }
 
 async function deleteClarification(request, env, ctx, actor) {

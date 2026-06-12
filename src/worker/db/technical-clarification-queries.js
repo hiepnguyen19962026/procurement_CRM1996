@@ -52,6 +52,13 @@ export async function updateTechnicalClarificationSQL(db, row) {
   ).run();
 }
 
+export async function quickUpdateClarificationSQL(db, clarificationId, clarificationType, statusAfter, now) {
+  return db.prepare(
+    'UPDATE technical_clarifications SET clarification_type = ?, status_after = ?, updated_at = ?' +
+    ' WHERE clarification_id = ? AND deleted_at IS NULL'
+  ).bind(clarificationType, statusAfter, now, clarificationId).run();
+}
+
 export async function softDeleteTechnicalClarificationSQL(db, { clarificationId, deletedAt }) {
   return db.prepare(
     `UPDATE technical_clarifications SET deleted_at = ?, updated_at = ?

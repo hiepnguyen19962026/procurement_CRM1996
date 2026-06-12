@@ -33,7 +33,7 @@ export async function getDashboardV2SQL(db) {
     rfqTrungCount, rfqTrungValue, rfqTrungItemCount,
     rfqThamKhaoCount, rfqThamKhaoValue,
     clarByStatus,
-    deadlineList, wonList, clarLatest30,
+    trackedList, wonList, clarLatest30,
     taskSummaryRow, topTasks, followupList,
   ] = await Promise.all([
 
@@ -169,16 +169,19 @@ export async function getDashboardV2SQL(db) {
       " AND status_after IN ('waiting_supplier','waiting_client','need_more_info','processing')"
     ).first(),
 
-    // ── NEW: deadline warning list – dang_khao_gia only, overdue or ≤3 days (32) ──
+    // ── NEW: tracked RFQ list – dang_khao_gia + tham_khao + da_bao, top 30 (32) ──
     db.prepare(
-      'SELECT r.rfq_id, r.ma_goi_tbmt, r.ten_goi, r.ngay_het_han, r.nha_may_cdt,' +
+      'SELECT r.rfq_id, r.ma_goi_tbmt, r.ten_goi, r.ngay_het_han, r.trang_thai_goi, r.du_toan,' +
       " COALESCE(c.client_name, r.nha_may_cdt, '') AS cdt_label" +
       ' FROM rfqs r LEFT JOIN clients c ON c.client_id = r.client_id' +
-      " WHERE r.trang_thai_goi = 'dang_khao_gia'" +
-      " AND r.ngay_het_han IS NOT NULL AND r.ngay_het_han != ''" +
-      ' AND r.ngay_het_han <= ?' +
-      ' ORDER BY r.ngay_het_han ASC LIMIT 20'
-    ).bind(d3).all(),
+      " WHERE r.trang_thai_goi IN ('dang_khao_gia','tham_khao','da_bao')" +
+      ' ORDER BY' +
+      " CASE WHEN r.ngay_het_han IS NULL OR r.ngay_het_han = '' THEN 2" +
+      '      WHEN r.ngay_het_han >= ? THEN 0 ELSE 1 END ASC,' +
+      " CASE WHEN r.ngay_het_han >= ? THEN r.ngay_het_han ELSE '0' END ASC," +
+      " CASE WHEN r.ngay_het_han < ? AND r.ngay_het_han IS NOT NULL AND r.ngay_het_han != '' THEN r.ngay_het_han ELSE '9' END DESC" +
+      ' LIMIT 30'
+    ).bind(today, today, today).all(),
 
     // ── NEW: won RFQ list with item count, sorted by updated_at DESC (33) ─────
     db.prepare(
@@ -259,7 +262,7 @@ export async function getDashboardV2SQL(db) {
       trung_item_count: scalar(rfqTrungItemCount),
       tham_khao_count:  scalar(rfqThamKhaoCount),
       tham_khao_value:  scalar(rfqThamKhaoValue),
-      deadline_list:    list(deadlineList),
+      tracked_list:     list(trackedList),
       won_list:         list(wonList),
     },
     items: {
