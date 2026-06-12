@@ -124,9 +124,17 @@
     return '<td>' + hlEsc(String(text), state.q) + '</td>';
   }
 
-  function urlCell(url) {
-    if (!url || !/^https?:\/\//i.test(url)) return '<td class="muted-cell" style="text-align:center">-</td>';
-    return '<td style="text-align:center"><a class="btn btn-sm" href="' + API.esc(encodeURI(url)) + '" target="_blank" rel="noopener noreferrer" title="' + API.esc(url) + '">Mở link</a></td>';
+  function urlCell(url, rfqItemId) {
+    var escId = API.esc(rfqItemId || '');
+    if (!url || !/^https?:\/\//i.test(url)) {
+      return '<td style="text-align:center;padding:0 4px">'
+        + (escId ? '<button type="button" class="btn btn-sm" onclick="RfqItemsModule.openEdit(\'' + escId + '\')">+ URL</button>' : '-')
+        + '</td>';
+    }
+    return '<td style="text-align:center;padding:0 4px;white-space:nowrap">'
+      + '<a class="btn btn-sm" href="' + API.esc(encodeURI(url)) + '" target="_blank" rel="noopener noreferrer" title="' + API.esc(url) + '">Mở</a>'
+      + (escId ? ' <button type="button" class="btn btn-sm" onclick="RfqItemsModule.openEdit(\'' + escId + '\')">Sửa</button>' : '')
+      + '</td>';
   }
 
   function render() {
@@ -191,7 +199,7 @@
         + renderCell(API.money(r.gia_hop_dong), true)
         + renderCell(r.delivery_time, true)
         + renderCell(r.note, true)
-        + urlCell(r.external_url)
+        + urlCell(r.external_url, r.rfq_item_id)
         + quotesSummaryCell(r)
         + '<td>' + technicalSummary(r) + '</td>'
         + '<td><span class="badge">' + API.esc(statusLabel(r.trang_thai_dong)) + '</span></td>'
@@ -817,9 +825,13 @@
       + (r.content ? '<div style="font-size:12px;margin-top:3px;white-space:pre-wrap">' + API.esc(r.content) + '</div>' : '')
       + modelChange + propSpec
       + (r.attachment_file_id ? '<div style="font-size:12px;color:var(--text-muted);margin-top:2px">📎 ' + API.esc(r.attachment_file_name || r.attachment_file_id) + '</div>' : '')
-      + (r.external_url && /^https?:\/\//i.test(r.external_url) ? '<div style="margin-top:3px"><a class="btn btn-sm" href="' + API.esc(encodeURI(r.external_url)) + '" target="_blank" rel="noopener noreferrer">Mở link</a></div>' : '')
       + '</div>'
-      + '<div><button type="button" data-role-only="admin,manager" style="font-size:12px;min-height:28px;padding:3px 8px" onclick="RfqItemsModule.openClarificationForm(\'' + itemId + '\', \'' + clid + '\')">Sửa</button></div>'
+      + '<div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end">'
+      + (r.external_url && /^https?:\/\//i.test(r.external_url)
+          ? '<a class="btn btn-sm" href="' + API.esc(encodeURI(r.external_url)) + '" target="_blank" rel="noopener noreferrer" title="' + API.esc(r.external_url) + '">Mở</a>'
+          : '<button type="button" class="btn btn-sm" data-role-only="admin,manager" onclick="RfqItemsModule.openClarificationForm(\'' + itemId + '\', \'' + clid + '\')">+ URL</button>')
+      + '<button type="button" data-role-only="admin,manager" style="font-size:12px;min-height:28px;padding:3px 8px" onclick="RfqItemsModule.openClarificationForm(\'' + itemId + '\', \'' + clid + '\')">Sửa</button>'
+      + '</div>'
       + '</article>';
   }
 
