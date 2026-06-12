@@ -2325,10 +2325,11 @@
       }
       var defaultChecked = false;
       var fieldLabel = (IMPORT_TARGET_FIELDS.find(function (p) { return p[0] === targetField; }) || ['', targetField])[1];
-      return '<th style="text-align:center;padding:3px 6px;background:var(--bg);border-bottom:1px solid var(--border)">'
-        + '<input type="checkbox" name="overwriteColField" value="' + API.esc(targetField) + '"'
+      return '<th style="text-align:center;padding:0 6px;background:var(--bg);border-bottom:1px solid var(--border)">'
+        + '<div class="rfq-update-preview-cb-wrap">'
+        + '<input type="checkbox" class="rfq-update-preview-checkbox" name="overwriteColField" value="' + API.esc(targetField) + '"'
         + (defaultChecked ? ' checked' : '') + ' title="' + API.esc(fieldLabel) + '">'
-        + '</th>';
+        + '</div></th>';
     }).join('');
     var headerRow = headers.map(function (h) {
       var targetField = mapping[h] || '';
