@@ -2104,22 +2104,32 @@
     var modalTitle = defaultMode === 'selective_update' ? 'Cập nhật danh sách vật tư' : 'Upload danh sách vật tư';
     importMapState = { headers: null, rows: null, fileName: '', sheetName: 'csv', workbook: null, templates: [], _defaultMode: defaultMode };
     var rfqId = (document.getElementById('itemRfqId').value || '').trim();
-    var html = ''
-      + '<div class="modal-section" style="border-top:0;margin-top:0;padding-top:0">'
-      + '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">'
-      + '<label>RFQ ID<input id="importMapRfqId" value="' + API.esc(rfqId) + '" placeholder="RFQ ID"></label>'
-      + '<label>Owner key<input id="importOwnerKey" placeholder="VD: nha_may_a" onblur="RfqItemsModule.loadImportTemplates()"></label>'
-      + '<label>Template<select id="importTemplateSelect" onchange="RfqItemsModule.applyImportTemplate()"><option value="">Chưa chọn template</option></select></label>'
-      + '<label>Tên template<input id="importTemplateName" placeholder="VD: Owner A - danh sách vật tư"></label>'
-      + '</div>'
-      + '<label>CSV / XLSX file<input type="file" id="importMapCsvFile" accept=".csv,.xlsx" onchange="RfqItemsModule._onImportMapFileChange(this)"></label>'
-      + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px">'
-      + '<button type="button" onclick="RfqItemsModule.loadImportTemplates()">Load template</button>'
-      + '<button type="button" onclick="RfqItemsModule.saveImportTemplate()">Lưu template</button>'
-      + '<button type="button" class="primary" onclick="RfqItemsModule.commitImportMapping()">Validate / Commit</button>'
-      + '</div>'
-      + '<div id="importMapArea" style="color:var(--text-muted);font-size:13px">Chọn file CSV hoặc XLSX để xem preview và map cột.</div>'
-      + '</div>';
+    var html;
+    if (defaultMode === 'selective_update') {
+      html = ''
+        + '<div class="modal-section" style="border-top:0;margin-top:0;padding-top:0">'
+        + '<label>RFQ ID<input id="importMapRfqId" value="' + API.esc(rfqId) + '" placeholder="RFQ ID"></label>'
+        + '<label style="display:block;margin-top:10px">CSV / XLSX file<input type="file" id="importMapCsvFile" accept=".csv,.xlsx" onchange="RfqItemsModule._onImportMapFileChange(this)"></label>'
+        + '<div id="importMapArea" style="color:var(--text-muted);font-size:13px;margin-top:10px">Chọn file CSV hoặc XLSX để xem preview.</div>'
+        + '</div>';
+    } else {
+      html = ''
+        + '<div class="modal-section" style="border-top:0;margin-top:0;padding-top:0">'
+        + '<div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px">'
+        + '<label>RFQ ID<input id="importMapRfqId" value="' + API.esc(rfqId) + '" placeholder="RFQ ID"></label>'
+        + '<label>Owner key<input id="importOwnerKey" placeholder="VD: nha_may_a" onblur="RfqItemsModule.loadImportTemplates()"></label>'
+        + '<label>Template<select id="importTemplateSelect" onchange="RfqItemsModule.applyImportTemplate()"><option value="">Chưa chọn template</option></select></label>'
+        + '<label>Tên template<input id="importTemplateName" placeholder="VD: Owner A - danh sách vật tư"></label>'
+        + '</div>'
+        + '<label>CSV / XLSX file<input type="file" id="importMapCsvFile" accept=".csv,.xlsx" onchange="RfqItemsModule._onImportMapFileChange(this)"></label>'
+        + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 12px">'
+        + '<button type="button" onclick="RfqItemsModule.loadImportTemplates()">Load template</button>'
+        + '<button type="button" onclick="RfqItemsModule.saveImportTemplate()">Lưu template</button>'
+        + '<button type="button" class="primary" onclick="RfqItemsModule.commitImportMapping()">Validate / Commit</button>'
+        + '</div>'
+        + '<div id="importMapArea" style="color:var(--text-muted);font-size:13px">Chọn file CSV hoặc XLSX để xem preview và map cột.</div>'
+        + '</div>';
+    }
     Utils.openModal(modalTitle, html, null);
     var _iwModal = document.querySelector('#modal .modal');
     if (_iwModal) _iwModal.classList.add('modal--import-wide');
@@ -2238,6 +2248,7 @@
   function renderImportMapping() {
     var area = document.getElementById('importMapArea');
     if (!area || !importMapState.headers) return;
+    if (importMapState._defaultMode === 'selective_update') { _renderSimpleUpdatePreview(area); return; }
     var headers = importMapState.headers;
     var rows = importMapState.rows || [];
     var mappingRows = headers.map(function (h, i) {
@@ -2285,6 +2296,100 @@
     wrap.onscroll = function () { if (_lock) return; _lock = true; topBar.scrollLeft = wrap.scrollLeft; _lock = false; };
   }
 
+  function _renderSimpleUpdatePreview(area) {
+    var headers = importMapState.headers;
+    var rows = importMapState.rows || [];
+    var rfqId = (document.getElementById('importMapRfqId') || {}).value || '';
+    var mapping = {};
+    headers.forEach(function (h) {
+      var t = guessTargetField(h);
+      if (t) mapping[h] = t;
+    });
+    if (Object.values(mapping).indexOf('ten_vat_tu') < 0) {
+      area.innerHTML = '<p style="color:var(--red);font-weight:600">Không nhận ra cột Tên vật tư. Vui lòng dùng template chuẩn (Tải template CSV).</p>';
+      return;
+    }
+    importMapState._autoMapping = mapping;
+    importMapState._pendingRfqId = rfqId;
+    var sheetSelectorHtml = '';
+    if (importMapState.workbook && importMapState.workbook.SheetNames.length > 1) {
+      var sheetOptions = importMapState.workbook.SheetNames.map(function (s) {
+        return '<option value="' + API.esc(s) + '"' + (s === importMapState.sheetName ? ' selected' : '') + '>' + API.esc(s) + '</option>';
+      }).join('');
+      sheetSelectorHtml = '<div style="margin-bottom:8px"><label style="font-size:13px;font-weight:600">Sheet: <select id="importMapSheetSelect" onchange="RfqItemsModule._onImportMapSheetChange(this)" style="margin-left:4px;font-size:13px">' + sheetOptions + '</select></label></div>';
+    }
+    var checkboxRow = headers.map(function (h) {
+      var targetField = mapping[h] || '';
+      if (!targetField || targetField === 'rfq_item_id') {
+        return '<th style="text-align:center;padding:3px 6px;background:var(--bg);border-bottom:1px solid var(--border)"><span style="color:var(--text-faint);font-size:11px">—</span></th>';
+      }
+      var isSensitive = IMPORT_SENSITIVE_FIELDS.has(targetField);
+      var isFinal = IMPORT_FINAL_FIELDS.has(targetField);
+      var defaultChecked = !isSensitive && !isFinal;
+      var fieldLabel = (IMPORT_TARGET_FIELDS.find(function (p) { return p[0] === targetField; }) || ['', targetField])[1];
+      return '<th style="text-align:center;padding:3px 6px;background:var(--bg);border-bottom:1px solid var(--border)">'
+        + '<input type="checkbox" name="overwriteColField" value="' + API.esc(targetField) + '"'
+        + (defaultChecked ? ' checked' : '') + ' title="' + API.esc(fieldLabel) + '">'
+        + '</th>';
+    }).join('');
+    var headerRow = headers.map(function (h) {
+      var targetField = mapping[h] || '';
+      return '<th style="white-space:nowrap;padding:4px 8px' + (targetField ? '' : ';color:var(--text-faint)') + '">' + API.esc(h) + '</th>';
+    }).join('');
+    var dataRows = rows.slice(0, 20).map(function (r) {
+      return '<tr>' + headers.map(function (h, i) {
+        return '<td style="padding:3px 8px;white-space:nowrap">' + API.esc(r[i] || '') + '</td>';
+      }).join('') + '</tr>';
+    }).join('');
+    var sheetLabel = importMapState.sheetName && importMapState.sheetName !== 'csv'
+      ? ' · Sheet: <strong>' + API.esc(importMapState.sheetName) + '</strong>' : '';
+    area.innerHTML = sheetSelectorHtml
+      + '<p style="margin:0 0 4px;color:var(--text-muted);font-size:13px">File: <strong>' + API.esc(importMapState.fileName || '-') + '</strong>' + sheetLabel + ' — ' + rows.length + ' dòng.</p>'
+      + '<p style="margin:0 0 8px;font-size:12px;color:var(--text-muted)">Chọn cột cần cập nhật. Cột không chọn sẽ giữ nguyên dữ liệu cũ.</p>'
+      + '<div id="importPreviewTopScroll" style="overflow-x:auto;overflow-y:hidden;height:17px;margin-bottom:1px"><div style="height:1px"></div></div>'
+      + '<div id="importPreviewTableWrap" style="overflow-x:auto;overflow-y:auto;max-height:min(420px,45vh)">'
+      + '<table class="quotes-mini-table" style="min-width:max-content"><thead>'
+      + '<tr>' + checkboxRow + '</tr>'
+      + '<tr>' + headerRow + '</tr>'
+      + '</thead><tbody>' + dataRows + '</tbody></table></div>'
+      + '<div style="display:flex;gap:8px;margin-top:10px">'
+      + '<button type="button" class="primary" onclick="RfqItemsModule._commitSimpleUpdate()">Xác nhận cập nhật</button>'
+      + '<button type="button" onclick="Utils.closeModal()">Hủy</button>'
+      + '</div>';
+    setTimeout(_syncImportPreviewScroll, 50);
+  }
+
+  async function _commitSimpleUpdate() {
+    var rfqId = importMapState._pendingRfqId || (document.getElementById('importMapRfqId') || {}).value || '';
+    var mapping = importMapState._autoMapping;
+    if (!rfqId) { API.toast('Thiếu RFQ ID', 'warn'); return; }
+    if (!mapping || !importMapState.rows || !importMapState.rows.length) { API.toast('Chưa có dữ liệu file', 'warn'); return; }
+    var overwriteFields = [];
+    document.querySelectorAll('#importMapArea input[name="overwriteColField"]:checked').forEach(function (cb) {
+      if (cb.value) overwriteFields.push(cb.value);
+    });
+    if (!overwriteFields.length) { API.toast('Chọn ít nhất 1 cột cần cập nhật', 'warn'); return; }
+    var btn = document.querySelector('#importMapArea button.primary');
+    if (btn) btn.disabled = true;
+    var area = document.getElementById('importMapArea');
+    if (area) area.insertAdjacentHTML('afterbegin', '<p style="color:var(--text-muted)">Đang cập nhật...</p>');
+    try {
+      var allRows = mappedRowsForCommit(mapping);
+      var data = await commitInChunks(
+        rfqId, '', '', importMapState.fileName, importMapState.sheetName || 'csv',
+        allRows, 'selective_update', overwriteFields
+      );
+      var s = data.summary || {};
+      Utils.closeModal();
+      API.toast('Cập nhật xong: tạo mới ' + (s.created || 0) + ', cập nhật ' + (s.updated || 0) + ', bỏ qua ' + (s.skipped || 0) + ' dòng', 'success');
+      await load(true);
+      if (typeof RfqsModule !== 'undefined') await RfqsModule.load(true);
+    } catch (err) {
+      API.error(err);
+      if (btn) btn.disabled = false;
+    }
+  }
+
   function importTargetOptions(current) {
     return IMPORT_TARGET_FIELDS.map(function (pair) {
       return '<option value="' + API.esc(pair[0]) + '"' + (pair[0] === current ? ' selected' : '') + '>' + API.esc(pair[1]) + '</option>';
@@ -2308,17 +2413,17 @@
 
   function guessTargetField(header) {
     var h = normalizeHeader(header);
-    if (h === 'rfqitemid' || h === 'rfq_item_id') return 'rfq_item_id';
+    if (h === 'rfqitemid' || h === 'rfq_item_id' || h.startsWith('rfqitemid')) return 'rfq_item_id';
     if (h === 'stt' || h === 'sttgoc') return 'stt_goc';
     if (h.indexOf('mamuasam') >= 0) return 'ma_mua_sam';
     if (h.indexOf('mavattu') >= 0 || h.indexOf('mahang') >= 0) return 'ma_vat_tu';
     if (h.indexOf('tenvattu') >= 0 || h.indexOf('danhmuchanghoa') >= 0 || h === 'tenhang') return 'ten_vat_tu';
+    if (h.indexOf('thongso') >= 0 && h.indexOf('kythuat') >= 0) return 'technical_params';
     if (h.indexOf('quycach') >= 0 || h.indexOf('model') >= 0 || h.indexOf('kymahieu') >= 0) return 'required_model';
     if (h === 'hsx' || h.indexOf('hangsanxuat') >= 0) return 'manufacturer';
     if (h.indexOf('nhanhieu') >= 0) return 'brand';
     if (h.indexOf('namsanxuat') >= 0 || h.indexOf('namsxuat') >= 0) return 'manufacture_year';
     if (h.indexOf('xuatxu') >= 0) return 'origin_country';
-    if (h.indexOf('thongso') >= 0 && h.indexOf('kythuat') >= 0) return 'technical_params';
     if (h.indexOf('vatlieu') >= 0) return 'vat_lieu';
     if (h.indexOf('phutung') >= 0) return 'phu_tung_chuyen_dung';
     if (h.indexOf('donvi') >= 0 || h === 'dvt') return 'unit';
@@ -2870,6 +2975,7 @@
     _cancelImport: _cancelImport,
     _onImportModeChange: _onImportModeChange,
     _checkAndConfirmModeC: _checkAndConfirmModeC,
+    _commitSimpleUpdate: _commitSimpleUpdate,
     filterByRfq: filterByRfq,
     loadPriceHistory: loadPriceHistory,
     exportPriceHistory: exportPriceHistory,
