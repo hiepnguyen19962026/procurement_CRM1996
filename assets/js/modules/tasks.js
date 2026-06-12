@@ -52,12 +52,15 @@
     return '<span>' + API.esc(deadline) + '</span>';
   }
 
-  function remainCell(deadline) {
+  function remainCell(deadline, status) {
     if (!deadline) return '<span style="color:var(--text-faint)">—</span>';
     var today = new Date(); today.setHours(0,0,0,0);
     var d = new Date(deadline + 'T00:00:00');
     var diff = Math.round((d - today) / 86400000);
-    if (diff < 0)  return '<span style="color:var(--red);font-weight:600">Quá hạn ' + Math.abs(diff) + ' ngày</span>';
+    var done = status === 'hoan_thanh' || status === 'huy_bo';
+    if (diff < 0)  return done
+      ? '<span style="color:var(--text-muted)">' + API.esc(deadline) + '</span>'
+      : '<span style="color:var(--red);font-weight:600">Quá hạn ' + Math.abs(diff) + ' ngày</span>';
     if (diff === 0) return '<span style="color:var(--primary);font-weight:600">Hôm nay</span>';
     if (diff <= 7)  return '<span style="color:#ea7600;font-weight:600">Còn ' + diff + ' ngày</span>';
     return '<span style="color:var(--text-muted)">Còn ' + diff + ' ngày</span>';
@@ -176,7 +179,7 @@
           + '<div style="height:4px;background:#e5e7eb;border-radius:2px"><div style="height:4px;background:#1d4ed8;border-radius:2px;width:' + prog + '%"></div></div>'
           + '</td>'
         + '<td style="font-size:14px">'
-          + (r.deadline_date ? remainCell(r.deadline_date) : '<span style="color:var(--text-faint)">—</span>')
+          + (r.deadline_date ? remainCell(r.deadline_date, r.status) : '<span style="color:var(--text-faint)">—</span>')
           + (r.next_followup_date ? '<div style="color:var(--text-muted);margin-top:2px">↻ ' + esc(r.next_followup_date) + '</div>' : '')
           + '</td>'
         + '<td style="font-size:13px;color:var(--text-muted)">' + esc(formatDate(r.last_activity_at || r.updated_at)) + '</td>'
@@ -209,7 +212,7 @@
         + (preview ? '<div class="task-card-preview">' + esc(preview) + '</div>' : '')
         + ((r.deadline_date || r.next_followup_date)
           ? '<div class="task-card-dates">'
-              + (r.deadline_date ? remainCell(r.deadline_date) : '')
+              + (r.deadline_date ? remainCell(r.deadline_date, r.status) : '')
               + (r.next_followup_date ? '<span style="color:var(--text-muted)">↻ ' + esc(r.next_followup_date) + '</span>' : '')
               + '</div>'
           : '')
