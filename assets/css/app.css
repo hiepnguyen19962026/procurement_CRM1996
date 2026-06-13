@@ -398,6 +398,82 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
   .span-2, .span-3, .span-4, .span-5, .span-6, .span-7, .span-8, .span-9, .span-10, .span-11 { grid-column: 1 / -1; }
 }
 
+/* ── mobile-only improvements (≤ 640 px) ──────────────────────────────────── */
+@media (max-width: 640px) {
+
+  /* topbar: compact 2-row layout
+     Row 1 — hamburger + title (topbar-left, flex:1) + topbar-right (user/refresh/logout)
+     Row 2 — screen-actions as full-width horizontal-scroll strip                        */
+  .topbar {
+    padding: 4px 10px 0;
+    min-height: auto;
+    align-items: flex-start;
+    row-gap: 0;
+    column-gap: 0;
+  }
+  .topbar-left {
+    flex-wrap: wrap;
+    row-gap: 0;
+    column-gap: 6px;
+    align-items: center;
+  }
+  .topbar strong { font-size: 14px; }
+  #screenTitle {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /* screen-actions: full-width row 2, single-line horizontal scroll */
+  .screen-actions {
+    flex-basis: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-inline: contain;
+    gap: 5px;
+    padding: 4px 0 5px;
+    scrollbar-width: none;
+  }
+  .screen-actions::-webkit-scrollbar { display: none; }
+  .screen-actions:empty { padding: 0; }
+  .screen-actions button {
+    flex-shrink: 0;
+    white-space: nowrap;
+    min-height: 28px;
+    padding: 4px 9px;
+    font-size: 12px;
+  }
+  /* topbar-right: compact, top-aligned so it sits on row 1 */
+  .topbar-right {
+    flex-shrink: 0;
+    align-self: flex-start;
+    gap: 5px;
+    padding-top: 2px;
+  }
+  .topbar-right > button {
+    min-height: 28px;
+    padding: 4px 8px;
+    font-size: 12px;
+  }
+  /* userbar: hide masked username to free horizontal space */
+  .user-text span { display: none; }
+  .user-text strong { font-size: 12px; }
+
+  /* dashboard: 3 metric cards in one horizontal row
+     Overrides the 1-column stack set by the ≤860px rule above               */
+  .metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 12px;
+  }
+  .metric { padding: 6px; }
+  .metric span { font-size: 10px; letter-spacing: 0; }
+  .metric strong { font-size: 22px; line-height: 1; }
+  .metric small { font-size: 10px; margin-top: 1px; }
+}
+
 /* ── custom datepicker ─────────────────────────────────────────────────────── */
 .dp-wrap { position: relative; }
 .dp-trigger { width: 100%; text-align: left; font-size: 13px; min-height: 36px; border: 1px solid var(--border); border-radius: 9px; padding: 8px 11px; background: white; color: var(--text); box-shadow: var(--shadow-sm); font-weight: 400; box-sizing: border-box; cursor: text; }
