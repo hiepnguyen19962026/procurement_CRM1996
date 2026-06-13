@@ -35,7 +35,7 @@ const ITEM_SORT = {
   trang_thai:               { col: 'i.trang_thai_dong',            rowKey: 'trang_thai_dong',            type: 'text' },
 };
 
-export async function listRfqItemsSQL(db, { q, rfqId, status, techFilter, cursor, sortBy, sortDir, limit }) {
+export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter, cursor, sortBy, sortDir, limit }) {
   const sort = ITEM_SORT[sortBy] || null;
   const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
   const op  = dir === 'ASC' ? '>' : '<';
@@ -46,6 +46,8 @@ export async function listRfqItemsSQL(db, { q, rfqId, status, techFilter, cursor
     where.push('(i.normalized_search LIKE ? OR EXISTS (SELECT 1 FROM rfqs r2 WHERE r2.rfq_id = i.rfq_id AND (r2.ten_goi LIKE ? OR r2.ma_goi_tbmt LIKE ?)))');
     binds.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
+  if (q2) { where.push('i.normalized_search LIKE ?'); binds.push(`%${q2}%`); }
+  if (q3) { where.push('i.normalized_search LIKE ?'); binds.push(`%${q3}%`); }
   if (rfqId) { where.push('i.rfq_id = ?'); binds.push(rfqId); }
   if (status) {
     where.push('i.trang_thai_dong = ?'); binds.push(status);
@@ -188,7 +190,7 @@ export async function updateRfqItemSQL(db, row) {
   ).run();
 }
 
-export async function exportRfqItemsSQL(db, { q, rfqId, status, techFilter, sortBy, sortDir }) {
+export async function exportRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter, sortBy, sortDir }) {
   const sort = ITEM_SORT[sortBy] || null;
   const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
 
@@ -198,6 +200,8 @@ export async function exportRfqItemsSQL(db, { q, rfqId, status, techFilter, sort
     where.push('(i.normalized_search LIKE ? OR EXISTS (SELECT 1 FROM rfqs r2 WHERE r2.rfq_id = i.rfq_id AND (r2.ten_goi LIKE ? OR r2.ma_goi_tbmt LIKE ?)))');
     binds.push(`%${q}%`, `%${q}%`, `%${q}%`);
   }
+  if (q2) { where.push('i.normalized_search LIKE ?'); binds.push(`%${q2}%`); }
+  if (q3) { where.push('i.normalized_search LIKE ?'); binds.push(`%${q3}%`); }
   if (rfqId) { where.push('i.rfq_id = ?'); binds.push(rfqId); }
   if (status) {
     where.push('i.trang_thai_dong = ?'); binds.push(status);

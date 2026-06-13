@@ -37,6 +37,8 @@ async function listItems(request, env, actor) {
   const VALID_TECH_FILTERS = new Set(['has_clarification','no_clarification','khong_can','dang_hoi','da_xac_nhan','bi_tu_choi']);
   const data = await listRfqItemsSQL(env.DB, {
     q: normalizeText(p.q),
+    q2: normalizeText(p.q2),
+    q3: normalizeText(p.q3),
     rfqId: p.rfqId || p.rfq_id || '',
     status: p.status || '',
     techFilter: VALID_TECH_FILTERS.has(p.techFilter) ? p.techFilter : '',
@@ -294,6 +296,8 @@ async function exportItems(request, env, actor) {
   const VALID_TECH_FILTERS = new Set(['has_clarification','no_clarification','khong_can','dang_hoi','da_xac_nhan','bi_tu_choi']);
   const rows = await exportRfqItemsSQL(env.DB, {
     q: normalizeText(p.q),
+    q2: normalizeText(p.q2),
+    q3: normalizeText(p.q3),
     rfqId: p.rfqId || p.rfq_id || '',
     status: p.status || '',
     techFilter: VALID_TECH_FILTERS.has(p.techFilter) ? p.techFilter : '',

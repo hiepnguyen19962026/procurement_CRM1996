@@ -6,41 +6,97 @@
   var _lightboxEl = null;
   var _supDebounce = null;
   var _pendingRfqFilter = '';
+  var _selectedRfqId = '';
+  var _rfqListCache = [];
+  var _rfqAutocompleteInit = false;
 
   function setupOnce() {
     if (_setupDone) return;
     _setupDone = true;
-    var searchEl = document.getElementById('itemSearch');
-    if (searchEl) searchEl.addEventListener('keydown', function (e) { if (e.key === 'Enter') load(true); });
+    ['itemSearch', 'itemSearch2', 'itemSearch3'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.addEventListener('keydown', function (e) { if (e.key === 'Enter') load(true); });
+    });
+    document.addEventListener('click', function (e) {
+      var wrap = document.querySelector('.rfq-autocomplete-wrap');
+      if (wrap && !wrap.contains(e.target)) _hideRfqSuggestions();
+    });
     window.addEventListener('resize', syncTopScroll);
   }
 
-  async function populateRfqSelect() {
-    var sel = document.getElementById('itemRfqId');
-    if (!sel || sel.tagName !== 'SELECT') return;
-    var rfqs = AppState.list('rfqs').rows || [];
-    if (!rfqs.length) {
-      try {
-        var data = await API.get('getRfqs', { limit: 500 });
-        AppState.list('rfqs').rows = data.rows || [];
-        rfqs = AppState.list('rfqs').rows;
-      } catch (e) { /* ignore — filter just stays as "Tất cả" */ }
+  async function initRfqAutocomplete() {
+    if (!_rfqAutocompleteInit) {
+      _rfqAutocompleteInit = true;
+      var rfqs = AppState.list('rfqs').rows || [];
+      if (!rfqs.length) {
+        try {
+          var data = await API.get('getRfqs', { limit: 2000 });
+          AppState.list('rfqs').rows = data.rows || [];
+        } catch (e) { /* ignore — combobox stays empty */ }
+      }
+      _rfqListCache = AppState.list('rfqs').rows || [];
     }
     var pending = _pendingRfqFilter;
-    _pendingRfqFilter = '';
-    // Only rebuild DOM when count changes (avoids resetting value on every load)
-    if (sel.options.length - 1 !== rfqs.length) {
-      sel.innerHTML = '<option value="">Tất cả gói thầu</option>'
-        + rfqs.map(function (r) {
-            var label = r.ten_goi ? r.ten_goi + (r.ma_goi_tbmt ? ' — ' + r.ma_goi_tbmt : '') : r.rfq_id;
-            return '<option value="' + API.esc(r.rfq_id) + '">' + API.esc(label) + '</option>';
-          }).join('');
+    if (pending) {
+      _pendingRfqFilter = '';
+      var rfqRow = _rfqListCache.find(function (r) { return r.rfq_id === pending; });
+      _selectedRfqId = pending;
+      var inp = document.getElementById('itemRfqInput');
+      if (inp) inp.value = rfqRow ? (rfqRow.ten_goi || rfqRow.rfq_id) : pending;
     }
-    if (pending) sel.value = pending;
   }
 
   function filterByRfq(rfqId) {
     _pendingRfqFilter = rfqId;
+  }
+
+  function _rfqLabel(r) {
+    return r.ten_goi ? r.ten_goi + (r.ma_goi_tbmt ? ' — ' + r.ma_goi_tbmt : '') : r.rfq_id;
+  }
+
+  function _hideRfqSuggestions() {
+    var sug = document.getElementById('itemRfqSuggestions');
+    if (sug) { sug.innerHTML = ''; sug.classList.add('hidden'); }
+  }
+
+  function _onRfqInput(el) {
+    _selectedRfqId = '';
+    var q = (el.value || '').toLowerCase().trim();
+    var sug = document.getElementById('itemRfqSuggestions');
+    if (!sug) return;
+    if (!q) { _hideRfqSuggestions(); return; }
+    var matches = _rfqListCache.filter(function (r) {
+      return (_rfqLabel(r) + ' ' + r.rfq_id).toLowerCase().indexOf(q) >= 0;
+    }).slice(0, 40);
+    if (!matches.length) {
+      sug.innerHTML = '<div class="rfq-sug-item" style="color:var(--text-muted)">Không tìm thấy</div>';
+    } else {
+      sug.innerHTML = matches.map(function (r) {
+        var lbl = _rfqLabel(r);
+        return '<div class="rfq-sug-item" onmousedown="RfqItemsModule._selectRfq(\'' + r.rfq_id.replace(/'/g, "\\'") + '\',\'' + lbl.replace(/'/g, "\\'") + '\')">' + API.esc(lbl) + '</div>';
+      }).join('');
+    }
+    sug.classList.remove('hidden');
+  }
+
+  function _onRfqKeydown(e) {
+    if (e.key === 'Escape') {
+      _selectedRfqId = '';
+      var inp = document.getElementById('itemRfqInput');
+      if (inp) inp.value = '';
+      _hideRfqSuggestions();
+    } else if (e.key === 'Enter') {
+      _hideRfqSuggestions();
+      load(true);
+    }
+  }
+
+  function _selectRfq(rfqId, label) {
+    _selectedRfqId = rfqId;
+    var inp = document.getElementById('itemRfqInput');
+    if (inp) inp.value = label;
+    _hideRfqSuggestions();
+    load(true);
   }
 
   function syncSort() {
@@ -62,9 +118,11 @@
 
   async function load(reset) {
     setupOnce();
-    await populateRfqSelect();
+    await initRfqAutocomplete();
     if (reset) state.cursor = '';
     state.q = document.getElementById('itemSearch').value || '';
+    state.q2 = (document.getElementById('itemSearch2') || {}).value || '';
+    state.q3 = (document.getElementById('itemSearch3') || {}).value || '';
     try {
       var pageSizeEl = document.getElementById('itemPageSize');
       var pageSizeVal = pageSizeEl ? pageSizeEl.value : '500';
@@ -86,7 +144,9 @@
       }
       var params = {
         q: state.q,
-        rfqId: document.getElementById('itemRfqId').value,
+        q2: state.q2,
+        q3: state.q3,
+        rfqId: _selectedRfqId,
         status: document.getElementById('itemStatus').value,
         techFilter: (document.getElementById('itemTechFilter') || {}).value || '',
         cursor: state.cursor,
@@ -154,7 +214,7 @@
   function render() {
     syncSort();
     var rows = state.rows || [];
-    var rfqFilter = (document.getElementById('itemRfqId').value || '').trim();
+    var rfqFilter = _selectedRfqId;
     if (!rows.length && rfqFilter) {
       var rfqMeta = (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === rfqFilter; }) || null;
       var rfqInfo = rfqMeta
@@ -228,7 +288,7 @@
     Auth.applyRoleUI();
     var selectAll = document.getElementById('itemSelectAll');
     if (selectAll) selectAll.checked = false;
-    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
+    var rfqId = _selectedRfqId;
     var delAllBtn = document.getElementById('itemDeleteAll');
     if (delAllBtn) delAllBtn.classList.toggle('hidden', !rfqId);
     var delSelBtn = document.getElementById('itemDeleteSelected');
@@ -244,7 +304,7 @@
     if (!el) return;
     var rows = state.rows || [];
     if (!rows.length) { el.textContent = ''; return; }
-    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
+    var rfqId = _selectedRfqId;
     var total = state.totalCount || rows.length;
     var formatted = total.toLocaleString('vi-VN');
     if (rfqId) {
@@ -1305,7 +1365,7 @@
   }
 
   async function deleteAll() {
-    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
+    var rfqId = _selectedRfqId;
     if (!rfqId) { API.toast('Lọc theo RFQ ID trước khi xóa', 'warn'); return; }
 
     var safeData;
@@ -2025,12 +2085,13 @@
   }
 
   async function exportCsv() {
-    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
     var statusEl = document.getElementById('itemStatus');
     var techEl = document.getElementById('itemTechFilter');
     var params = {
-      rfqId: rfqId,
+      rfqId: _selectedRfqId,
       q: state.q || '',
+      q2: state.q2 || '',
+      q3: state.q3 || '',
       status: statusEl ? statusEl.value : '',
       techFilter: techEl ? techEl.value : '',
       sortBy: sort.by || '',
@@ -2123,7 +2184,7 @@
     var defaultMode = (opts && opts.defaultMode) || 'update_changed';
     var modalTitle = defaultMode === 'selective_update' ? 'Cập nhật danh sách vật tư' : 'Upload danh sách vật tư';
     importMapState = { headers: null, rows: null, fileName: '', sheetName: 'csv', workbook: null, templates: [], _defaultMode: defaultMode };
-    var rfqId = (document.getElementById('itemRfqId').value || '').trim();
+    var rfqId = _selectedRfqId;
     var html;
     if (defaultMode === 'selective_update') {
       html = ''
@@ -2890,7 +2951,7 @@
     for (var i = 0; i < rows.length; i++) {
       var payload = csvRowToPayload(headers, rows[i]);
       var rowNum = i + 2; // 1-based + header row
-      if (!payload.rfqId) payload.rfqId = (document.getElementById('itemRfqId').value || '').trim();
+      if (!payload.rfqId) payload.rfqId = _selectedRfqId;
       if (!payload.rfqId) { errs.push('Dòng ' + rowNum + ': Thiếu rfqId'); continue; }
       if (!payload.tenVatTu) { errs.push('Dòng ' + rowNum + ': Thiếu Tên vật tư'); continue; }
       var action = payload.rfqItemId ? 'updateRfqItem' : 'createRfqItem';
@@ -2905,7 +2966,7 @@
     }
     await load(true);
     if (ok > 0 && typeof RfqsModule !== 'undefined') await RfqsModule.load(true);
-    var importRfqId = (document.getElementById('itemRfqId').value || '').trim();
+    var importRfqId = _selectedRfqId;
     // log one summary audit entry to replace the suppressed per-row entries
     if (importRfqId && (ok > 0 || errs.length > 0)) {
       var _rfqRowForLog = (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === importRfqId; });
@@ -3009,6 +3070,9 @@
     quickEditBadge: quickEditBadge,
     _togglePicker: togglePicker,
     _pickOption: pickOption,
+    _onRfqInput: _onRfqInput,
+    _onRfqKeydown: _onRfqKeydown,
+    _selectRfq: _selectRfq,
     _onSupplierInput: _onSupplierInput,
     _selectSupplier: _selectSupplier,
     val: val,

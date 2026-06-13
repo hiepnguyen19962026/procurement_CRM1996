@@ -632,6 +632,14 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 
 /* ── @media 767px — task toolbar + modal overrides ──────────────────────── */
 @media (max-width: 767px) {
+/* RFQ combobox / autocomplete */
+.rfq-autocomplete-wrap { position: relative; display: inline-flex; flex: 1 1 180px; min-width: 140px; }
+#itemRfqInput { width: 100%; }
+.rfq-suggestions { position: absolute; top: 100%; left: 0; right: 0; min-width: 220px; max-height: 280px; overflow-y: auto; background: var(--bg-panel); border: 1px solid var(--border); border-top: none; border-radius: 0 0 4px 4px; z-index: 200; box-shadow: 0 4px 12px rgba(0,0,0,.15); }
+.rfq-suggestions.hidden { display: none; }
+.rfq-sug-item { padding: 6px 10px; font-size: 13px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rfq-sug-item:hover, .rfq-sug-item.rfq-sug-active { background: var(--primary-light, rgba(37,99,235,0.12)); }
+
   /* toolbar: search full width, controls on next row */
   .task-toolbar { flex-direction: column; align-items: stretch; gap: 6px; }
   .task-toolbar > #taskSearch { flex: none; width: 100%; min-width: 0; }
