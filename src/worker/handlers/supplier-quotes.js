@@ -7,6 +7,7 @@ import {
   searchSupplierQuotesSQL,
   updateSupplierQuoteSQL,
 } from '../db/supplier-quote-queries.js';
+import { deleteMediaFilesByOwnerSQL, getMediaKeysByOwnerSQL } from '../db/media-queries.js';
 import { getRfqItemSQL } from '../db/rfq-item-queries.js';
 import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
@@ -187,8 +188,6 @@ async function deleteQuote(request, env, ctx, actor) {
   const oldRow = await getSupplierQuoteSQL(env.DB, quoteId);
   if (!oldRow) return json({ ok: false, error: 'Khong tim thay bao gia' }, 404);
   await deleteSupplierQuoteSQL(env.DB, quoteId);
-  // TODO: quote media (quote_pdf, quote_evidence_image) uploaded to R2 for this quote_id
-  // are now orphaned — no safe delete-by-owner helper exists yet. Track by owner_type='quote'/owner_id=quoteId in media_files table.
   ctx.waitUntil(writeActionLog(env, {
     action: 'deleteSupplierQuote',
     entityType: 'supplier_quote',
@@ -197,7 +196,24 @@ async function deleteQuote(request, env, ctx, actor) {
     newJson: null,
     actor,
   }));
+  ctx.waitUntil(cleanupQuoteMedia(env, quoteId));
   return json({ ok: true });
+}
+
+async function cleanupQuoteMedia(env, quoteId) {
+  try {
+    const files = await getMediaKeysByOwnerSQL(env.DB, 'quote', quoteId);
+    if (!files.length) return;
+    await Promise.allSettled(
+      files
+        .filter((f) => f && f.r2_key)
+        .map((f) => env.MEDIA?.delete(f.r2_key))
+    );
+    await deleteMediaFilesByOwnerSQL(env.DB, 'quote', quoteId);
+    console.log(`[cleanup] quote ${quoteId}: removed ${files.length} media file(s)`);
+  } catch (err) {
+    console.error(`[cleanup] quote ${quoteId} media cleanup failed:`, err);
+  }
 }
 
 function normalizeQuote(body, base) {

@@ -56,6 +56,20 @@ export async function getOrphanMediaReportSQL(db) {
   };
 }
 
+export async function getMediaKeysByOwnerSQL(db, ownerType, ownerId) {
+  const res = await db.prepare(
+    `SELECT file_id, r2_key FROM media_files
+     WHERE owner_type = ? AND owner_id = ?`
+  ).bind(ownerType, ownerId).all();
+  return res.results || [];
+}
+
+export async function deleteMediaFilesByOwnerSQL(db, ownerType, ownerId) {
+  return db.prepare(
+    `DELETE FROM media_files WHERE owner_type = ? AND owner_id = ?`
+  ).bind(ownerType, ownerId).run();
+}
+
 export async function getMediaFileSQL(db, fileId) {
   const res = await db.prepare(
     `SELECT file_id, owner_type, owner_id, file_kind, r2_key, file_name, mime_type, size_bytes,
