@@ -625,6 +625,28 @@
       bodyEl.innerHTML = '<div style="grid-column:1/-1">'
         + miniTable(headers, rowsHtml)
         + '</div>';
+      if (window.innerWidth <= 640) {
+        var _dw = document.querySelector('#modal .dashboard-table-wrap');
+        var _dt = _dw && _dw.querySelector('table');
+        console.log({
+          mobile: true, innerWidth: window.innerWidth,
+          wrapClientWidth: _dw && _dw.clientWidth, wrapScrollWidth: _dw && _dw.scrollWidth, wrapOffsetWidth: _dw && _dw.offsetWidth,
+          tableClientWidth: _dt && _dt.clientWidth, tableScrollWidth: _dt && _dt.scrollWidth, tableOffsetWidth: _dt && _dt.offsetWidth,
+          modalBodyOverflowX: getComputedStyle(document.getElementById('modalBody')).overflowX,
+          modalBodyOverflowY: getComputedStyle(document.getElementById('modalBody')).overflowY,
+          modalFormOverflowX: getComputedStyle(document.getElementById('modalForm')).overflowX,
+          modalFormOverflowY: getComputedStyle(document.getElementById('modalForm')).overflowY,
+          modalOverflowX: getComputedStyle(document.querySelector('#modal .modal')).overflowX,
+          modalOverflowY: getComputedStyle(document.querySelector('#modal .modal')).overflowY,
+          scrollLeftBefore: _dw && _dw.scrollLeft
+        });
+        setTimeout(function () {
+          if (_dw) {
+            _dw.scrollLeft = 200;
+            console.log({ scrollLeftAfter: _dw.scrollLeft, touchAction: getComputedStyle(_dw).touchAction });
+          }
+        }, 500);
+      }
       Auth.applyRoleUI();
       setTimeout(function () {
         var outerDiv = bodyEl.firstElementChild;
