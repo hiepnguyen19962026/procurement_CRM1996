@@ -61,6 +61,12 @@ export async function archiveSupplierQuoteSQL(db, { quoteId, updatedAt }) {
   ).bind(updatedAt, quoteId).run();
 }
 
+export async function deleteSupplierQuoteSQL(db, quoteId) {
+  return db.prepare(
+    `DELETE FROM supplier_quotes WHERE quote_id = ?`
+  ).bind(quoteId).run();
+}
+
 export async function searchSupplierQuotesSQL(db, params) {
   const {
     q, supplierName, manufacturer, status, sourceChannel,

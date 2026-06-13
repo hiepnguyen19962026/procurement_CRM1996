@@ -1287,6 +1287,8 @@
           + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\')">Sửa</button>'
         + ' <button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.archiveQuote(\''
           + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\')">Lưu trữ</button>'
+        + ' <button type="button" data-role-only="admin,manager" class="btn-danger-sm" onclick="RfqItemsModule.deleteQuote(\''
+          + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\')">Xóa</button>'
         + ' <button type="button" data-role-only="admin,manager" onclick="RfqItemsModule.openPricingForm(\''
           + API.esc(rfqItemId) + '\', \'' + API.esc(r.quote_id) + '\', \'' + API.esc(r.supplier_name || '') + '\', '
           + (r.price_vnd_incl_tax || 0) + ')" title="Chọn làm base giá để tính phương án cân giá">★ Base</button>';
@@ -1624,6 +1626,22 @@
       Utils.closeModal();
       API.toast('Đã lưu trữ báo giá', 'success');
       await load(true);
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  async function deleteQuote(rfqItemId, quoteId) {
+    var ok = await Utils.confirmDanger(
+      'Xóa báo giá',
+      'Báo giá này sẽ bị xóa vĩnh viễn khỏi hệ thống và không thể khôi phục. File đính kèm (nếu có) sẽ xử lý sau.',
+      'Xóa vĩnh viễn'
+    );
+    if (!ok) return;
+    try {
+      await API.call('deleteSupplierQuote', { quoteId: quoteId });
+      API.toast('Đã xóa báo giá', 'success');
+      await openEdit(rfqItemId);
     } catch (err) {
       API.error(err);
     }
@@ -3228,6 +3246,7 @@
     openClarificationTimeline: openClarificationTimeline,
     openQuoteForm: openQuoteForm,
     archiveQuote: archiveQuote,
+    deleteQuote: deleteQuote,
     openPricingForm: openPricingForm,
     refreshMasterItem: refreshMasterItem,
     createMasterFromRfqItem: createMasterFromRfqItem,

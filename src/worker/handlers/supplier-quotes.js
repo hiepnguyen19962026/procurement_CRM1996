@@ -1,5 +1,6 @@
 import {
   archiveSupplierQuoteSQL,
+  deleteSupplierQuoteSQL,
   getSupplierQuoteSQL,
   insertSupplierQuoteSQL,
   listSupplierQuotesSQL,
@@ -21,6 +22,7 @@ export async function handleSupplierQuotes(action, request, env, ctx, actor) {
   if (action === 'createSupplierQuote')  return saveQuote(request, env, ctx, actor, false);
   if (action === 'updateSupplierQuote')  return saveQuote(request, env, ctx, actor, true);
   if (action === 'archiveSupplierQuote') return archiveQuote(request, env, ctx, actor);
+  if (action === 'deleteSupplierQuote')  return deleteQuote(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown supplier quote action' }, 400);
 }
 
@@ -171,6 +173,28 @@ async function archiveQuote(request, env, ctx, actor) {
     entityId: quoteId,
     oldJson: oldRow,
     newJson: { ...oldRow, status: 'archived', updated_at: now },
+    actor,
+  }));
+  return json({ ok: true });
+}
+
+async function deleteQuote(request, env, ctx, actor) {
+  const denied = requireRole(actor, MANAGE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const quoteId = cleanString(body.quoteId || body.quote_id, 80);
+  if (!quoteId) return json({ ok: false, error: 'Thieu ma bao gia' }, 400);
+  const oldRow = await getSupplierQuoteSQL(env.DB, quoteId);
+  if (!oldRow) return json({ ok: false, error: 'Khong tim thay bao gia' }, 404);
+  await deleteSupplierQuoteSQL(env.DB, quoteId);
+  // TODO: quote media (quote_pdf, quote_evidence_image) uploaded to R2 for this quote_id
+  // are now orphaned — no safe delete-by-owner helper exists yet. Track by owner_type='quote'/owner_id=quoteId in media_files table.
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'deleteSupplierQuote',
+    entityType: 'supplier_quote',
+    entityId: quoteId,
+    oldJson: oldRow,
+    newJson: null,
     actor,
   }));
   return json({ ok: true });
