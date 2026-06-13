@@ -100,7 +100,6 @@
 
     document.getElementById('dashboardStats').innerHTML = [
       kpiCard('Đang khảo giá',          dkqTotal + ' gói', rfq.total + ' gói tổng cộng', null, colorA),
-      kpiCard('Đã trúng',               trungCount + ' gói', fmtMoney(trungValue) + ' VND', trungItems + ' mục VT', 'green'),
       kpiCard('Tham khảo',              tkCount, null, null, ''),
       kpiCard('Clarification cần xử lý', clarTotal, clarParts.length ? clarParts.join(' · ') : null, null, clarTotal > 0 ? 'orange' : ''),
     ].join('');
@@ -138,10 +137,10 @@
     var rows = tasks.top20 || [];
     var today = todayVN();
     var d3 = vnDateAdd(3);
-    return panel('Việc cần làm (top 20)',
+    return panel('Việc cần làm',
       rows.length
         ? miniTable(
-            ['Task', 'Công ty', 'Deadline', 'Ưu tiên', 'Trạng thái'],
+            ['ID', 'Task', 'Công ty', 'Deadline', 'Ưu tiên', 'Trạng thái'],
             rows.map(function (r) {
               var dl = r.deadline_date || '';
               var dlHtml;
@@ -155,6 +154,7 @@
                 dlHtml = API.esc(dl);
               }
               return '<tr style="cursor:pointer" onclick="DashboardModule._navToTask(\'' + API.esc(r.task_id) + '\')">'
+                + '<td><small style="color:var(--text-faint);font-size:11px;white-space:nowrap">' + API.esc(r.task_id || '') + '</small></td>'
                 + '<td>' + API.esc(r.title || '') + (r.latest_note ? '<br><small style="color:var(--text-muted)">' + API.esc(r.latest_note) + '</small>' : '') + '</td>'
                 + '<td>' + API.esc(r.company_name || '—') + '</td>'
                 + '<td>' + dlHtml + '</td>'
@@ -180,11 +180,12 @@
     var todayRows = rows.filter(function (r) { return r.deadline_date === today; });
     var next7Rows = rows.filter(function (r) { return r.deadline_date > today && r.deadline_date <= d7; });
 
-    var headers = ['Task', 'Công ty', 'Deadline', 'Ưu tiên', 'Trạng thái'];
+    var headers = ['ID', 'Task', 'Công ty', 'Deadline', 'Ưu tiên', 'Trạng thái'];
 
     function fuRows(list) {
       return list.map(function (r) {
         return '<tr style="cursor:pointer" onclick="DashboardModule._navToTask(\'' + API.esc(r.task_id) + '\')">'
+          + '<td><small style="color:var(--text-faint);font-size:11px;white-space:nowrap">' + API.esc(r.task_id || '') + '</small></td>'
           + '<td>' + API.esc(r.title || '') + (r.latest_note ? '<br><small style="color:var(--text-muted)">' + API.esc(r.latest_note) + '</small>' : '') + '</td>'
           + '<td>' + API.esc(r.company_name || '—') + '</td>'
           + '<td>' + API.esc(r.deadline_date || '') + '</td>'
@@ -340,7 +341,7 @@
     return panel('Vật tư vừa làm rõ',
       rows.length
         ? miniTable(
-            ['Thời gian', 'Vật tư', 'Tên gói', 'Loại', 'Trạng thái', 'Tóm tắt', 'URL'],
+            ['Thời gian', 'Vật tư', 'Tên gói', 'Loại', 'Trạng thái', 'ID làm rõ', 'Tóm tắt', 'URL'],
             rows.map(function (r) {
               var summary = r.title || r.proposed_model || r.proposed_manufacturer || r.proposed_origin || '—';
               var dt = (r.created_at || '').slice(0, 16).replace('T', ' ');
@@ -352,10 +353,11 @@
                 + '<td><span class="link-edit" onclick="DashboardModule._navToItem(\'' + API.esc(r.rfq_item_id) + '\')">'
                   + API.esc(r.ten_vat_tu || r.rfq_item_id) + '</span>'
                   + (r.ma_vat_tu ? '<br><small style="color:var(--text-faint)">' + API.esc(r.ma_vat_tu) + '</small>' : '') + '</td>'
-                + '<td><span class="link-edit" onclick="DashboardModule._navToRfq(\'' + API.esc(r.rfq_id) + '\')">'
+                + '<td style="max-width:140px"><span class="link-edit" onclick="DashboardModule._navToRfq(\'' + API.esc(r.rfq_id) + '\')">'
                   + API.esc(r.ten_goi || r.rfq_id || '') + '</span></td>'
                 + '<td>' + clarTypeSel(r.clarification_id, r.clarification_type) + '</td>'
                 + '<td>' + clarStatusSel(r.clarification_id, r.status_after) + '</td>'
+                + '<td style="white-space:nowrap"><small style="color:var(--text-faint);font-size:11px">' + API.esc(r.clarification_id || '') + '</small></td>'
                 + '<td style="max-width:260px">'
                   + '<span class="link-edit" onclick="DashboardModule._navToClar(\'' + API.esc(r.rfq_item_id) + '\')">'
                   + API.esc(summary) + '</span></td>'
