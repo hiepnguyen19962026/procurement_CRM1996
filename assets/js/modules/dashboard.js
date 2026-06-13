@@ -628,10 +628,14 @@
       if (window.innerWidth <= 640) {
         var _dw = document.querySelector('#modal .dashboard-table-wrap');
         var _dt = _dw && _dw.querySelector('table');
+        var _dtSt = _dt && getComputedStyle(_dt);
         console.log({
           mobile: true, innerWidth: window.innerWidth,
-          wrapClientWidth: _dw && _dw.clientWidth, wrapScrollWidth: _dw && _dw.scrollWidth, wrapOffsetWidth: _dw && _dw.offsetWidth,
-          tableClientWidth: _dt && _dt.clientWidth, tableScrollWidth: _dt && _dt.scrollWidth, tableOffsetWidth: _dt && _dt.offsetWidth,
+          wrapClientWidth: _dw && _dw.clientWidth, wrapScrollWidth: _dw && _dw.scrollWidth,
+          tableClientWidth: _dt && _dt.clientWidth, tableScrollWidth: _dt && _dt.scrollWidth,
+          tableWidthStyle: _dtSt && _dtSt.width,
+          tableMinWidth: _dtSt && _dtSt.minWidth,
+          tableLayout: _dtSt && _dtSt.tableLayout,
           modalBodyOverflowX: getComputedStyle(document.getElementById('modalBody')).overflowX,
           modalBodyOverflowY: getComputedStyle(document.getElementById('modalBody')).overflowY,
           modalFormOverflowX: getComputedStyle(document.getElementById('modalForm')).overflowX,
