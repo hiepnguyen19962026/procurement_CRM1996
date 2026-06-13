@@ -504,6 +504,26 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     width: 100% !important;
     min-width: 0;
   }
+
+  /* modal scroll fix: max-height alone does not give the flex container a
+     definite main size — flex children never shrink, overflow-y:auto never
+     fires. Pinning height = max-height makes the main size definite so the
+     #modalForm → .modal-body scroll chain works on mobile. */
+  .modal-backdrop { padding: 12px; }
+  .modal {
+    height: calc(100vh - 24px);
+    height: calc(100dvh - 24px);
+    max-height: calc(100dvh - 24px);
+    width: calc(100vw - 24px);
+  }
+  #modalForm { flex: 1 1 auto; min-height: 0; }
+  .modal-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+  }
 }
 
 /* ── custom datepicker ─────────────────────────────────────────────────────── */
