@@ -107,6 +107,7 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
          (SELECT tc.status_after FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL ORDER BY tc.created_at DESC, tc.sequence_no DESC LIMIT 1) AS clarification_status,
          (SELECT COUNT(*) FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived') AS quote_count,
          (SELECT MIN(sq.price_vnd_incl_tax) FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived' AND sq.price_vnd_incl_tax > 0) AS min_price_vnd_incl_tax,
+         (SELECT JSON_GROUP_ARRAY(JSON_OBJECT('p', sub.p, 'n', sub.n)) FROM (SELECT sq.price_vnd_incl_tax AS p, COALESCE(sq.supplier_name,'') AS n FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived' AND sq.price_vnd_incl_tax > 0 ORDER BY sq.price_vnd_incl_tax ASC LIMIT 6) sub) AS quote_prices_json,
          (SELECT COUNT(*) FROM media_files mf WHERE mf.owner_type = 'rfq_item' AND mf.owner_id = page.rfq_item_id AND mf.file_kind = 'item_image') AS image_count,
          (SELECT COUNT(*) FROM media_files mf WHERE mf.owner_type = 'rfq_item' AND mf.owner_id = page.rfq_item_id AND mf.file_kind = 'document_pdf') AS file_count
        FROM page ORDER BY ${outerOrderBy}`

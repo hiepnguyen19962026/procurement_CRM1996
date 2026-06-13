@@ -4,6 +4,10 @@
   var _setupDone = false;
   var clarificationDataCache = {};
   var _lightboxEl = null;
+  var _lightboxGroup = [];
+  var _lightboxIndex = 0;
+  var _gallerySeq = 0;
+  var _galleryRegistry = {};
   var _supDebounce = null;
   var _pendingRfqFilter = '';
   var _selectedRfqId = '';
@@ -322,13 +326,31 @@
         + ' onclick="RfqItemsModule.openQuoteForm(\'' + escId + '\')"'
         + ' title="Thêm báo giá cho dòng này">Báo giá</button></td>';
     }
-    var priceHtml = r.min_price_vnd_incl_tax
-      ? '<div style="font-size:11px;color:var(--text-muted)">' + API.money(r.min_price_vnd_incl_tax) + '</div>'
-      : '';
+    var priceLines = '';
+    if (r.quote_prices_json) {
+      try {
+        var prices = JSON.parse(r.quote_prices_json);
+        var shown = prices.slice(0, 5);
+        priceLines = shown.map(function (q) {
+          var sup = q.n ? (q.n.length > 14 ? q.n.slice(0, 14) + '…' : q.n) : '';
+          return '<div style="font-size:11px;color:var(--text-muted);white-space:nowrap;line-height:1.35">'
+            + API.money(q.p)
+            + (sup ? ' <span style="opacity:.65">· ' + API.esc(sup) + '</span>' : '')
+            + '</div>';
+        }).join('');
+        if (prices.length > 5) priceLines += '<div style="font-size:10px;color:var(--text-faint)">…</div>';
+      } catch (_) {
+        priceLines = r.min_price_vnd_incl_tax
+          ? '<div style="font-size:11px;color:var(--text-muted)">' + API.money(r.min_price_vnd_incl_tax) + '</div>'
+          : '';
+      }
+    } else if (r.min_price_vnd_incl_tax) {
+      priceLines = '<div style="font-size:11px;color:var(--text-muted)">' + API.money(r.min_price_vnd_incl_tax) + '</div>';
+    }
     return '<td style="text-align:center">'
       + '<span class="badge badge-clickable" onclick="RfqItemsModule.openEdit(\'' + escId + '\')" title="Xem danh sách báo giá">'
       + count + ' báo giá</span>'
-      + priceHtml + '</td>';
+      + priceLines + '</td>';
   }
 
   function mediaBadges(r) {
@@ -1323,10 +1345,12 @@
 
   function imageGallery(files) {
     if (!files || !files.length) return '<div class="empty-state small">Chưa có ảnh.</div>';
+    var gId = 'g' + (++_gallerySeq);
+    _galleryRegistry[gId] = files.map(function (f) { return f.file_id; });
     return '<div class="media-gallery">'
-      + files.map(function (f) {
+      + files.map(function (f, i) {
         var src = API.mediaUrl(f.file_id);
-        return '<button type="button" class="media-thumb" onclick="RfqItemsModule.openMediaPreview(\'' + API.esc(f.file_id) + '\')" title="' + API.esc(f.file_name || f.file_id) + '">'
+        return '<button type="button" class="media-thumb" onclick="RfqItemsModule.openMediaPreviewAt(\'' + gId + '\',' + i + ')" title="' + API.esc(f.file_name || f.file_id) + '">'
           + '<img src="' + API.esc(src) + '" alt="' + API.esc(f.file_name || 'Ảnh upload') + '" loading="lazy">'
           + '<span>' + API.esc(f.file_name || f.file_id) + '</span>'
           + '</button>';
@@ -1378,23 +1402,68 @@
     }
   }
 
-  function openMediaPreview(fileId) {
+  function _ensureLightbox() {
+    if (_lightboxEl) return;
+    _lightboxEl = document.createElement('div');
+    _lightboxEl.className = 'media-lightbox';
+    _lightboxEl.innerHTML =
+      '<div class="media-lightbox-inner" onclick="event.stopPropagation()">'
+      + '<div class="media-lightbox-nav">'
+      + '<button type="button" class="media-lightbox-prev" onclick="RfqItemsModule._prevImage()">&#8249;</button>'
+      + '<span class="media-lightbox-counter"></span>'
+      + '<button type="button" class="media-lightbox-next" onclick="RfqItemsModule._nextImage()">&#8250;</button>'
+      + '</div>'
+      + '<img class="media-lightbox-img" src="" alt="">'
+      + '<a class="media-lightbox-link" href="" target="_blank" rel="noopener">&#8599; M&#7903; tab m&#7899;i</a>'
+      + '</div>';
+    _lightboxEl.addEventListener('click', function () { closeLightbox(); });
+    document.addEventListener('keydown', function (e) {
+      if (!_lightboxEl || !_lightboxEl.classList.contains('active')) return;
+      if (e.key === 'Escape') closeLightbox();
+      else if (e.key === 'ArrowLeft') _prevImage();
+      else if (e.key === 'ArrowRight') _nextImage();
+    });
+    document.body.appendChild(_lightboxEl);
+  }
+
+  function _refreshLightbox() {
+    var fileId = _lightboxGroup[_lightboxIndex];
+    if (!fileId) return;
+    _ensureLightbox();
     var src = API.mediaUrl(fileId);
-    if (!_lightboxEl) {
-      _lightboxEl = document.createElement('div');
-      _lightboxEl.className = 'media-lightbox';
-      _lightboxEl.innerHTML =
-        '<div class="media-lightbox-inner" onclick="event.stopPropagation()">'
-        + '<img class="media-lightbox-img" src="" alt="">'
-        + '<a class="media-lightbox-link" href="" target="_blank" rel="noopener">&#8599; M&#7903; tab m&#7899;i</a>'
-        + '</div>';
-      _lightboxEl.addEventListener('click', function () { closeLightbox(); });
-      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeLightbox(); });
-      document.body.appendChild(_lightboxEl);
-    }
     _lightboxEl.querySelector('.media-lightbox-img').src = src;
     _lightboxEl.querySelector('.media-lightbox-link').href = src;
+    var total = _lightboxGroup.length;
+    var nav     = _lightboxEl.querySelector('.media-lightbox-nav');
+    var counter = _lightboxEl.querySelector('.media-lightbox-counter');
+    var prevBtn = _lightboxEl.querySelector('.media-lightbox-prev');
+    var nextBtn = _lightboxEl.querySelector('.media-lightbox-next');
+    if (nav)     nav.style.display = total > 1 ? 'flex' : 'none';
+    if (counter) counter.textContent = total > 1 ? (_lightboxIndex + 1) + ' / ' + total : '';
+    if (prevBtn) prevBtn.disabled = _lightboxIndex <= 0;
+    if (nextBtn) nextBtn.disabled = _lightboxIndex >= total - 1;
     _lightboxEl.classList.add('active');
+  }
+
+  function openMediaPreview(fileId) {
+    _lightboxGroup = [fileId];
+    _lightboxIndex = 0;
+    _refreshLightbox();
+  }
+
+  function openMediaPreviewAt(groupId, idx) {
+    var group = _galleryRegistry[groupId] || [];
+    _lightboxGroup = group;
+    _lightboxIndex = Math.max(0, Math.min(idx, group.length - 1));
+    _refreshLightbox();
+  }
+
+  function _prevImage() {
+    if (_lightboxIndex > 0) { _lightboxIndex--; _refreshLightbox(); }
+  }
+
+  function _nextImage() {
+    if (_lightboxIndex < _lightboxGroup.length - 1) { _lightboxIndex++; _refreshLightbox(); }
   }
 
   function closeLightbox() {
@@ -3167,6 +3236,9 @@
     searchMasterItemsForLink: searchMasterItemsForLink,
     uploadMediaFile: uploadMediaFile,
     openMediaPreview: openMediaPreview,
+    openMediaPreviewAt: openMediaPreviewAt,
+    _prevImage: _prevImage,
+    _nextImage: _nextImage,
     downloadTemplate: downloadTemplate,
     exportCsv: exportCsv,
     importCsv: importCsv,

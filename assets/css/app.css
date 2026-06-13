@@ -145,6 +145,11 @@ td button { min-height: 30px; padding: 5px 10px; box-shadow: none; }
 .media-lightbox-img { max-width: 96vw; max-height: 88vh; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 32px rgba(0,0,0,.5); display: block; }
 .media-lightbox-link { color: #fff; font-size: 13px; text-decoration: underline; opacity: .8; }
 .media-lightbox-link:hover { opacity: 1; }
+.media-lightbox-nav { display: flex; align-items: center; gap: 14px; margin-bottom: 8px; }
+.media-lightbox-counter { color: rgba(255,255,255,.8); font-size: 13px; min-width: 48px; text-align: center; font-variant-numeric: tabular-nums; }
+.media-lightbox-prev, .media-lightbox-next { min-height: 0; width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; font-size: 26px; font-weight: 300; line-height: 1; background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.22); color: #fff; border-radius: 8px; cursor: pointer; box-shadow: none; }
+.media-lightbox-prev:hover, .media-lightbox-next:hover { background: rgba(255,255,255,.22); }
+.media-lightbox-prev:disabled, .media-lightbox-next:disabled { opacity: .2; cursor: default; }
 .sup-dropdown { background: var(--white); border: 1px solid var(--border-mid); border-radius: 8px; box-shadow: var(--shadow-md); margin-top: 2px; max-height: 200px; overflow-y: auto; }
 .sup-dropdown.hidden { display: none; }
 .sup-dropdown-item { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: 8px 12px; background: none; border: none; border-bottom: 1px solid var(--border); cursor: pointer; font-size: 13px; }
