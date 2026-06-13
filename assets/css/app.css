@@ -472,6 +472,33 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
   .metric span { font-size: 10px; letter-spacing: 0; }
   .metric strong { font-size: 22px; line-height: 1; }
   .metric small { font-size: 10px; margin-top: 1px; }
+
+  /* rfq-items filter: 2-column grid
+     Controls have inline width/flex styles so !important is required here.
+     Flex properties are ignored once the parent is a grid container, but
+     width:Npx on children still applies → override with width:100%.
+     Visible items 1-8 fill 4 rows × 2 cols matching the target layout:
+       Row 1: Từ khóa 1       | Từ khóa 2
+       Row 2: Từ khóa 3       | Lọc gói thầu
+       Row 3: Tất cả kỹ thuật | Tất cả trạng thái
+       Row 4: 500              | Tìm kiếm              */
+  #screen-items .toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    align-items: center;
+  }
+  #screen-items .toolbar > * {
+    width: 100% !important;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+  /* the autocomplete wrapper and its inner input both need full width */
+  #screen-items .toolbar .rfq-autocomplete-wrap,
+  #screen-items .toolbar .rfq-autocomplete-wrap input {
+    width: 100% !important;
+    min-width: 0;
+  }
 }
 
 /* ── custom datepicker ─────────────────────────────────────────────────────── */
