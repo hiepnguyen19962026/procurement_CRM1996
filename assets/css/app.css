@@ -526,17 +526,22 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
+    /* override ≤860px rule: 1fr = minmax(auto,1fr) lets the grid track expand
+       to fit table content (causes 4671px wrap). minmax(0,1fr) caps it at the
+       available modal width so the table-wrap stays narrow and can scroll. */
+    grid-template-columns: minmax(0, 1fr);
   }
+  /* grid child: block the div from pushing the track wide */
+  #modalBody > div { min-width: 0; max-width: 100%; }
 
-  /* dashboard items table inside modal: override the ≤860px rule that sets
-     overflow-y:hidden, which creates a competing vertical scroll container
-     and absorbs vertical swipes before they reach .modal-body */
+  /* dashboard items table inside modal */
   .modal-body .dashboard-table-wrap {
     overflow-x: auto;
-    overflow-y: visible;
+    overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-inline: contain;
     width: 100%;
+    max-width: 100%;
   }
   .modal-body .dashboard-table-wrap table { min-width: 720px; width: max-content; }
 
