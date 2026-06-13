@@ -89,6 +89,17 @@ Các nhóm nghiệp vụ đã hoạt động và đã smoke test:
   - không aggregate frontend.
 - Audit log cho các mutation quan trọng.
 - Pagination/search cơ bản.
+- Tasks / Nhắc việc theo công ty:
+  - bảng `tasks`; liên kết theo `company_name` text match, không foreign key cứng;
+  - soft delete dùng `deleted_at`;
+  - actions: `getTasks`, `getTask`, `createTask`, `updateTask`, `deleteTask`, `quickUpdateTaskStatus`, `quickUpdateTaskPriority`, `suggestTaskCompanies`.
+- Client profile mở rộng:
+  - thêm fields: `tax_code`, `legal_name`, `client_type`, `address`, `email`, `phone`, `website`, `deleted_at`;
+  - sub-modules đã triển khai: `client_equipment`, `client_contacts`, `client_bank_accounts`, `client_legal_history`.
+- RFQ Contacts: gắn liên lạc khách hàng (`client_contacts`) vào từng gói RFQ (`rfq_contacts`).
+- RFQ Item Revisions: snapshot quy cách tự động sau mỗi final confirm clarification (`rfq_item_revisions`, cột `current_revision_no`).
+- Hard delete báo giá nhập nhầm/test: xem mục 1E.
+- Cloudflare Cron Triggers (CF-1): warm `dashboard:v2` mỗi 4 phút; báo cáo hàng ngày quote hết hạn, deadline RFQ, orphan media. Xem mục 1O.
 
 Nguyên tắc triển khai đang dùng:
 
@@ -268,16 +279,25 @@ Actions:
 
 ```text
 getSupplierQuotes
+searchSupplierQuotes
 createSupplierQuote
 updateSupplierQuote
 archiveSupplierQuote
+deleteSupplierQuote
 ```
 
 Quyền:
 
 - `viewer`: xem.
 - `purchasing`: tạo mới.
-- `manager`/`admin`: tạo, sửa, archive.
+- `manager`/`admin`: tạo, sửa, archive, hard delete.
+
+**Hai luồng xóa báo giá — phân biệt rõ:**
+
+- **Archive** (`archiveSupplierQuote`): dùng cho báo giá thật đã không còn hiệu lực. Soft archive, `status = 'archived'`. Dữ liệu vẫn là lịch sử nghiệp vụ, vẫn tra được trong price history. **Đây là luồng mặc định cho báo giá thật.**
+- **Hard delete** (`deleteSupplierQuote`): chỉ dùng khi báo giá nhập nhầm, nhập test, hoặc trùng lặp không có giá trị lịch sử. D1 hard delete. Sau khi xóa quote, cleanup `media_files` D1 rows và R2 objects theo `owner_type='quote'` chạy trong background (`ctx.waitUntil`). Ghi audit log `deleteSupplierQuote` với `oldJson`. Chỉ `manager`/`admin` dùng được.
+
+Không dùng hard delete cho báo giá thật. Mặc định là archive.
 
 Bảng production:
 
@@ -337,9 +357,9 @@ active
 archived
 ```
 
-Archive là soft-hide/soft-archive, không hard delete. Báo giá archived vẫn là lịch sử nghiệp vụ.
+Hai luồng xóa — xem phần "Hai luồng xóa báo giá" bên trên.
 
-Mutation create/update/archive phải ghi audit log.
+Mutation create/update/archive/delete phải ghi audit log.
 
 ---
 
@@ -386,7 +406,8 @@ Quy tắc:
 
 - Không lưu ảnh/PDF base64 trong D1.
 - Không load bằng chứng trong RFQ Item list.
-- Quote archived vẫn là lịch sử, không hard delete.
+- Quote archived vẫn là lịch sử nghiệp vụ — đây là luồng mặc định cho báo giá thật.
+- Hard delete (`deleteSupplierQuote`) chỉ dành cho dữ liệu nhầm/test; không dùng cho báo giá thật. Xem chi tiết mục 1E.
 - Báo giá và bằng chứng phải sort mới nhất trước khi hiển thị trong các màn hình lịch sử.
 
 ---
@@ -714,7 +735,7 @@ Quy tắc:
 - Không load ảnh/file vào dashboard.
 - Không dashboard màu mè.
 - Không snapshot table ở V2; KV TTL đủ.
-- Nếu dữ liệu vừa sửa mà dashboard chưa đổi ngay, đợi TTL 5 phút hoặc thêm invalidate sau này nếu thật cần.
+- Cron trigger warm lại `dashboard:v2` mỗi 4 phút. Nếu vừa sửa dữ liệu mà dashboard chưa cập nhật ngay, chờ tối đa ~4 phút — đây không phải bug.
 
 ---
 
@@ -761,6 +782,64 @@ Các vấn đề có thể gặp khi vận hành thật:
 
 Cách xử lý vẫn là: không đoán, không refactor rộng, sửa đúng module.
 
+---
+
+## 1O. Cloudflare Background Tasks đã triển khai
+
+### CF-1 — Cron Triggers
+
+Hai cron đã đăng ký trong `wrangler.toml [triggers]`:
+
+```toml
+[triggers]
+crons = ["*/4 * * * *", "0 2 * * *"]
+```
+
+Handler: `src/worker/handlers/scheduled.js` → `runScheduledTasks(env, cron)`.
+
+Worker export:
+
+```js
+async scheduled(event, env, ctx) {
+  ctx.waitUntil(runScheduledTasks(env, event.cron));
+}
+```
+
+Nhiệm vụ theo cron:
+
+| Cron | Nhiệm vụ |
+|------|-----------|
+| `*/4 * * * *` | `warmDashboard` — warm KV `dashboard:v2` mỗi 4 phút; không để cache nguội |
+| `0 2 * * *` | `scanExpiredQuotes` — báo cáo KV `report:expired-quotes` |
+| `0 2 * * *` | `scanRfqDeadlines` — báo cáo KV `report:rfq-deadlines` |
+| `0 2 * * *` | `scanOrphanMedia` — báo cáo KV `report:orphan-media` |
+
+Tất cả CF-1 tasks là **read-only + KV write**. Không mutation D1. Không R2 delete. Không gửi email.
+
+### CF-2-lite — Background Media Cleanup sau Hard Delete
+
+Khi `deleteSupplierQuote` hard delete một báo giá, cleanup media chạy trong background:
+
+```js
+ctx.waitUntil(cleanupQuoteMedia(env, quoteId));
+```
+
+Luồng cleanup (`cleanupQuoteMedia` trong `supplier-quotes.js`):
+
+1. Query `media_files` lấy `file_id` và `r2_key` cho `owner_type='quote'`, `owner_id=quoteId`.
+2. `Promise.allSettled` xóa từng R2 object — một cái fail không chặn cái khác.
+3. `DELETE FROM media_files WHERE owner_type='quote' AND owner_id=quoteId`.
+4. Log kết quả vào console.
+
+Nguyên tắc:
+
+- Cleanup failure không làm fail response hard delete — HTTP đã return `{ ok: true }` trước khi cleanup chạy.
+- Idempotent: R2 delete silent nếu object đã xóa; D1 DELETE là no-op nếu row đã xóa.
+- Lỗi cleanup log vào `console.error`, CF-1 orphan report sẽ phát hiện row còn sót.
+- Không dùng Cloudflare Queues. Không retry tự động.
+
+---
+
 ## 2. Stack đề xuất
 
 Giữ stack quen thuộc của các web app trước:
@@ -781,6 +860,7 @@ Vai trò:
 - D1: database chính.
 - KV: cache data ít thay đổi, filter options, dashboard nhẹ.
 - R2: ảnh vật tư, file báo giá, datasheet, file Excel gốc, file xác nhận kỹ thuật.
+- Cloudflare Cron Triggers: warm KV cache và chạy báo cáo định kỳ (`scheduled()` handler, `wrangler.toml [triggers]`). Report-only — không mutation D1, không Cloudflare Queues.
 
 Không dùng framework phức tạp nếu chưa cần. Ưu tiên đơn giản, dễ inspect, dễ sửa bằng Codex.
 
@@ -821,22 +901,34 @@ project/
 │       ├── index.js
 │       ├── handlers/
 │       │   ├── accounts.js
+│       │   ├── audit.js
+│       │   ├── client-bank-accounts.js
+│       │   ├── client-contacts.js
+│       │   ├── client-equipment.js
+│       │   ├── client-legal-history.js
 │       │   ├── clients.js
-│       │   ├── suppliers.js
-│       │   ├── rfqs.js
-│       │   ├── rfq-items.js
-│       │   ├── quotes.js
-│       │   ├── pricing.js
-│       │   ├── technical-changes.js
 │       │   ├── contracts.js
+│       │   ├── dashboard.js
+│       │   ├── imports.js
 │       │   ├── items.js
 │       │   ├── media.js
-│       │   └── audit.js
+│       │   ├── ocr.js              (binding AI có; blocked tại gateway whitelist)
+│       │   ├── price-history.js
+│       │   ├── pricing-decisions.js
+│       │   ├── rfq-contacts.js
+│       │   ├── rfq-items.js
+│       │   ├── rfqs.js
+│       │   ├── scheduled.js        (CF-1 Cron Triggers)
+│       │   ├── supplier-quotes.js
+│       │   ├── suppliers.js
+│       │   ├── tasks.js
+│       │   └── technical-clarifications.js
 │       ├── db/
 │       │   ├── migrations/
 │       │   │   ├── 001_initial.sql
 │       │   │   ├── 002_indexes.sql
-│       │   │   └── 003_media.sql
+│       │   │   ├── ...
+│       │   │   └── 025_rfq_external_url.sql
 │       │   └── *-queries.js
 │       └── lib/
 │           ├── auth.js
@@ -1045,49 +1137,60 @@ Không auto-link Master Item trong import. Sau import, user link master item th�
 ### 7.1. `clients`
 
 ```sql
-client_id TEXT PRIMARY KEY,
+client_id   TEXT PRIMARY KEY,
 client_name TEXT NOT NULL,
-plant_name TEXT,
-province TEXT,
-note TEXT,
-created_at TEXT,
-updated_at TEXT
+plant_name  TEXT,
+province    TEXT,
+note        TEXT,
+tax_code    TEXT,
+legal_name  TEXT,
+client_type TEXT DEFAULT 'company',
+address     TEXT,
+email       TEXT,
+phone       TEXT,
+website     TEXT,
+deleted_at  TEXT,
+created_at  TEXT,
+updated_at  TEXT
 ```
 
 ### 7.2. `suppliers`
 
 ```sql
-supplier_id TEXT PRIMARY KEY,
+supplier_id   TEXT PRIMARY KEY,
 supplier_name TEXT NOT NULL,
 supplier_type TEXT, -- manufacturer / distributor / trader / unknown
-country TEXT,
-contact_name TEXT,
-email TEXT,
-phone TEXT,
-zalo TEXT,
-wechat TEXT,
-note TEXT,
-created_at TEXT,
-updated_at TEXT
+country       TEXT,
+contact_name  TEXT,
+email         TEXT,
+phone         TEXT,
+zalo          TEXT,
+wechat        TEXT,
+note          TEXT,
+tax_code      TEXT,
+deleted_at    TEXT,
+created_at    TEXT,
+updated_at    TEXT
 ```
 
 ### 7.3. `rfqs`
 
 ```sql
-rfq_id TEXT PRIMARY KEY,
-client_id TEXT,
-ma_goi_tbmt TEXT,
-ten_goi TEXT NOT NULL,
-nha_may_cdt TEXT,
+rfq_id                  TEXT PRIMARY KEY,
+client_id               TEXT,
+ma_goi_tbmt             TEXT,
+ten_goi                 TEXT NOT NULL,
+nha_may_cdt             TEXT,
 ngay_nhan_hoac_dang_tai TEXT,
-ngay_het_han TEXT,
-du_toan INTEGER DEFAULT 0,
-trang_thai_goi TEXT NOT NULL DEFAULT 'dang_khao_gia',
-source_file_id TEXT,
-note TEXT,
-created_by TEXT,
-created_at TEXT,
-updated_at TEXT
+ngay_het_han            TEXT,
+du_toan                 INTEGER DEFAULT 0,
+trang_thai_goi          TEXT NOT NULL DEFAULT 'dang_khao_gia',
+source_file_id          TEXT,
+note                    TEXT,
+external_url            TEXT,
+created_by              TEXT,
+created_at              TEXT,
+updated_at              TEXT
 ```
 
 ### 7.4. `rfq_items`
@@ -1126,11 +1229,13 @@ ghi_chu_final TEXT,
 item_id TEXT,
 normalized_search TEXT,
 raw_row_json TEXT,
-source_file_id TEXT,
-source_sheet_name TEXT,
-source_row_number INTEGER,
-created_at TEXT,
-updated_at TEXT
+source_file_id         TEXT,
+source_sheet_name      TEXT,
+source_row_number      INTEGER,
+current_revision_no    INTEGER NOT NULL DEFAULT 0,
+gia_hop_dong           INTEGER DEFAULT 0,
+created_at             TEXT,
+updated_at             TEXT
 ```
 
 ### 7.5. `items` — Master Item
@@ -1229,7 +1334,10 @@ active
 archived
 ```
 
-Archive là soft-hide/soft-archive, không hard delete. Báo giá archived vẫn là lịch sử nghiệp vụ.
+Hai luồng xóa:
+
+- **Archive**: `status = 'archived'`. Soft. Dữ liệu vẫn là lịch sử nghiệp vụ, vẫn tra được trong price history. Dùng cho báo giá thật hết hiệu lực. **Đây là mặc định.**
+- **Hard delete**: `DELETE FROM supplier_quotes`. Chỉ dùng cho dữ liệu nhầm/test, không có giá trị lịch sử. Kéo theo cleanup `media_files` rows và R2 objects cho `owner_type='quote'` trong background. Chỉ `manager`/`admin`. Ghi audit log.
 
 Bằng chứng báo giá lưu qua `media_files` + R2, không nhét file vào `supplier_quotes`.
 
@@ -1394,6 +1502,116 @@ actor_name TEXT,
 created_at TEXT
 ```
 
+### 7.13. `tasks` — Nhắc việc theo công ty
+
+```sql
+task_id TEXT PRIMARY KEY,
+company_name TEXT,
+title TEXT NOT NULL,
+description TEXT,
+due_date TEXT,
+priority TEXT DEFAULT 'medium',
+status TEXT DEFAULT 'open',
+created_by TEXT,
+created_at TEXT NOT NULL,
+updated_at TEXT,
+deleted_at TEXT
+```
+
+Liên kết theo `company_name` text match, không foreign key cứng vào `clients`. Soft delete dùng `deleted_at`.
+
+### 7.14. `rfq_item_revisions` — Snapshot quy cách
+
+```sql
+revision_id TEXT PRIMARY KEY,
+rfq_item_id TEXT NOT NULL,
+revision_no INTEGER NOT NULL,
+required_model TEXT,
+brand TEXT,
+manufacturer TEXT,
+origin_country TEXT,
+technical_params TEXT,
+snapshot_json TEXT,
+created_by TEXT,
+created_at TEXT NOT NULL
+```
+
+Tự động tạo snapshot sau mỗi final confirm clarification. `rfq_items.current_revision_no` tăng theo.
+
+### 7.15. `rfq_contacts` — Gắn liên lạc khách hàng vào gói RFQ
+
+```sql
+rfq_contact_id TEXT PRIMARY KEY,
+rfq_id TEXT NOT NULL,
+contact_id TEXT NOT NULL,
+role_note TEXT,
+created_by TEXT,
+created_at TEXT NOT NULL
+```
+
+Liên kết `client_contacts` vào `rfqs`. Không duplicate thông tin liên lạc.
+
+### 7.16. `client_contacts`
+
+```sql
+contact_id TEXT PRIMARY KEY,
+client_id TEXT NOT NULL,
+contact_name TEXT NOT NULL,
+position TEXT,
+phone TEXT,
+email TEXT,
+note TEXT,
+created_by TEXT,
+created_at TEXT NOT NULL,
+updated_at TEXT,
+deleted_at TEXT
+```
+
+### 7.17. `client_equipment`
+
+```sql
+equipment_id TEXT PRIMARY KEY,
+client_id TEXT NOT NULL,
+equipment_name TEXT NOT NULL,
+equipment_type TEXT,
+model TEXT,
+manufacturer TEXT,
+serial_no TEXT,
+install_date TEXT,
+note TEXT,
+created_by TEXT,
+created_at TEXT NOT NULL,
+updated_at TEXT
+```
+
+### 7.18. `client_bank_accounts`
+
+```sql
+bank_account_id TEXT PRIMARY KEY,
+client_id TEXT NOT NULL,
+bank_name TEXT NOT NULL,
+account_no TEXT NOT NULL,
+account_holder TEXT,
+branch TEXT,
+note TEXT,
+created_by TEXT,
+created_at TEXT NOT NULL,
+updated_at TEXT
+```
+
+### 7.19. `client_legal_history`
+
+```sql
+legal_id TEXT PRIMARY KEY,
+client_id TEXT NOT NULL,
+event_date TEXT,
+event_type TEXT,
+description TEXT NOT NULL,
+document_ref TEXT,
+created_by TEXT,
+created_at TEXT NOT NULL
+```
+
 ---
 
 ## 8. R2 upload và ảnh vật tư
@@ -1417,16 +1635,33 @@ medium: 1200px, dùng cho detail
 original: optional, chỉ giữ nếu cần
 ```
 
-R2 key đề xuất:
+R2 key thực tế production:
 
 ```text
-media/items/{item_id}/thumb/{file_id}.webp
-media/items/{item_id}/medium/{file_id}.webp
-media/rfq-items/{rfq_item_id}/medium/{file_id}.webp
-media/quotes/{quote_id}/{file_name}
-media/contracts/{contract_id}/{file_name}
-media/imports/{rfq_id}/{file_name}
+media/{owner_type}/{owner_id}/{file_kind}/{file_id}-{safe_name}.{ext}
 ```
+
+Ví dụ:
+
+```text
+media/quote/QUO-0001/quote_pdf/FILE-abc-bao_gia.pdf
+media/rfq_item/ITEM-0001/item_image/FILE-xyz-anh.jpg
+```
+
+Bảo mật R2 key:
+
+- `r2_key` là internal key, không bao giờ trả về trong API response (dùng `compactMediaRow` để strip).
+- `r2_key` không lưu vào `audit_logs.new_json` khi upload media — audit log dùng `compactMediaRow(row)`, không dùng `row` thô.
+- File truy xuất qua `getMediaFileContent` với JWT auth, không dùng URL R2 public.
+- `public_url` trong `media_files` luôn để trống.
+
+Biến thể ảnh:
+
+```text
+original: ảnh gốc đã validate magic bytes, JPEG hoặc WebP
+```
+
+Hiện tại chưa có thumbnail/resize pipeline. Không lưu nhiều variant cho cùng một file.
 
 ---
 
@@ -1483,14 +1718,14 @@ CREATE INDEX IF NOT EXISTS idx_media_owner ON media_files(owner_type, owner_id);
 
 Đơn giản trước:
 
-- `admin`: toàn quyền, tài khoản, migration/debug, audit, hard delete test data.
-- `manager`: quản lý RFQ, quotes, pricing, contracts, import/export.
-- `purchasing`: nhập/sửa RFQ, quotes, upload file, xem giá.
+- `admin`: toàn quyền, tài khoản, migration/debug, audit, hard delete dữ liệu nhầm/test.
+- `manager`: quản lý RFQ, quotes, pricing, contracts, import/export. Có thể hard delete báo giá nhầm/test (`deleteSupplierQuote`). Có thể archive RFQ/quote thật.
+- `purchasing`: nhập/sửa RFQ, dòng vật tư, quotes, upload file bằng chứng, xem giá.
 - `viewer`: chỉ xem/search, không sửa.
 
 Không chặn máy móc. Quyền phải theo vận hành thực tế.
 
-Gateway kiểm tra action whitelist. Worker handler vẫn check lại role.
+Gateway kiểm tra action whitelist (`api/fetch-data.js`). Worker handler vẫn check lại role bằng `requireRole`.
 
 ---
 
@@ -1533,23 +1768,26 @@ Tài khoản
 
 ## 12. Audit log
 
-Mọi mutation quan trọng phải ghi audit:
+Mọi mutation quan trọng phải ghi audit. Các action đã ghi production:
 
-- tạo/sửa RFQ;
-- import Excel;
-- sửa dòng vật tư;
-- thêm/sửa báo giá hãng;
-- tạo pricing version;
-- cập nhật final spec;
-- upload/xóa ảnh/file;
-- tạo hợp đồng;
-- sửa giá hợp đồng.
+- `createRfq`, `updateRfq`, `archiveRfq` — gói thầu.
+- `createRfqItem`, `updateRfqItem` — dòng vật tư.
+- `createSupplierQuote`, `updateSupplierQuote`, `archiveSupplierQuote` — báo giá hãng.
+- `deleteSupplierQuote` — hard delete báo giá nhầm/test; `oldJson` ghi lại row trước khi xóa, `newJson = null`.
+- `createPricingDecision` — cân giá.
+- `createTechnicalClarification`, `updateTechnicalClarification` — xác nhận kỹ thuật.
+- `uploadMedia` — upload file/ảnh bằng chứng; `newJson` dùng `compactMediaRow(row)` (không chứa `r2_key`).
+- `downloadMedia` — truy xuất file/ảnh; chỉ ghi `message`, không ghi `oldJson`/`newJson`.
+- `createContract`, `updateContract` — hợp đồng.
+- `createTask`, `updateTask`, `deleteTask` — nhắc việc.
 
 Log message phải dễ hiểu cho người nghiệp vụ:
 
 ```text
 Han cập nhật RFQITEM-2026-00045: Quy cách final từ "SKF 6310" -> "NSK 6310". Thời gian: 14:30 2026-06-10
 ```
+
+`r2_key` không bao giờ xuất hiện trong `audit_logs.new_json`. Nếu row lịch sử cũ (trước ngày fix) có chứa `r2_key` trong `new_json`, đó là dữ liệu lịch sử không thể thay đổi — không ảnh hưởng production hiện tại.
 
 ---
 
