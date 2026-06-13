@@ -154,7 +154,7 @@
                 dlHtml = API.esc(dl);
               }
               return '<tr style="cursor:pointer" onclick="DashboardModule._navToTask(\'' + API.esc(r.task_id) + '\')">'
-                + '<td><small style="color:var(--text-faint);font-size:11px;white-space:nowrap">' + API.esc(r.task_id || '') + '</small></td>'
+                + '<td><small style="color:var(--text);font-weight:600;font-size:11px;white-space:nowrap">' + API.esc(r.task_id || '') + '</small></td>'
                 + '<td>' + API.esc(r.title || '') + (r.latest_note ? '<br><small style="color:var(--text-muted)">' + API.esc(r.latest_note) + '</small>' : '') + '</td>'
                 + '<td>' + API.esc(r.company_name || '—') + '</td>'
                 + '<td>' + dlHtml + '</td>'
@@ -185,7 +185,7 @@
     function fuRows(list) {
       return list.map(function (r) {
         return '<tr style="cursor:pointer" onclick="DashboardModule._navToTask(\'' + API.esc(r.task_id) + '\')">'
-          + '<td><small style="color:var(--text-faint);font-size:11px;white-space:nowrap">' + API.esc(r.task_id || '') + '</small></td>'
+          + '<td><small style="color:var(--text);font-weight:600;font-size:11px;white-space:nowrap">' + API.esc(r.task_id || '') + '</small></td>'
           + '<td>' + API.esc(r.title || '') + (r.latest_note ? '<br><small style="color:var(--text-muted)">' + API.esc(r.latest_note) + '</small>' : '') + '</td>'
           + '<td>' + API.esc(r.company_name || '—') + '</td>'
           + '<td>' + API.esc(r.deadline_date || '') + '</td>'
@@ -357,7 +357,7 @@
                   + API.esc(r.ten_goi || r.rfq_id || '') + '</span></td>'
                 + '<td>' + clarTypeSel(r.clarification_id, r.clarification_type) + '</td>'
                 + '<td>' + clarStatusSel(r.clarification_id, r.status_after) + '</td>'
-                + '<td style="white-space:nowrap"><small style="color:var(--text-faint);font-size:11px">' + API.esc(r.clarification_id || '') + '</small></td>'
+                + '<td style="white-space:nowrap"><small style="color:var(--text);font-weight:600;font-size:11px">' + API.esc(r.clarification_id || '') + '</small></td>'
                 + '<td style="max-width:260px">'
                   + '<span class="link-edit" onclick="DashboardModule._navToClar(\'' + API.esc(r.rfq_item_id) + '\')">'
                   + API.esc(summary) + '</span></td>'
