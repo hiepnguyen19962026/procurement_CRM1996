@@ -983,9 +983,10 @@
   var CLARSUG_MAX = 8;
   var CLARSUG_MAX_LEN = 500;
   var CLAR_TITLE_STATIC = [
-    'Thay đổi quy cách vật tư', 'Thay đổi HSX', 'Thay đổi giá',
-    'Thay đổi chất liệu', 'Thay đổi xuất xứ', 'Thay đổi thời gian giao hàng',
-    'Bổ sung tài liệu kỹ thuật', 'Làm rõ thông số kỹ thuật', 'Hàng ngừng sản xuất',
+    'Thay đổi quy cách vật tư', 'Thay đổi HSX', 'Thay đổi xuất xứ',
+    'Thay đổi chất liệu', 'Thay đổi đơn vị tính', 'Thay đổi thời gian giao hàng',
+    'Ngừng sản xuất', 'Model thay thế', 'Làm rõ kỹ thuật',
+    'Bổ sung tài liệu kỹ thuật', 'Bổ sung catalogue', 'Bổ sung CO CQ', 'Bổ sung datasheet',
   ];
 
   function _clarSugLoad(key) {
