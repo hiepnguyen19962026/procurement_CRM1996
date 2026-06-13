@@ -1037,6 +1037,11 @@
     if (!dropdown || !dropdown.classList.contains('clar-url-dropdown')) return;
     var recent = _clarSugLoad('externalUrl').slice(0, 5);
     if (!recent.length) { dropdown.classList.add('hidden'); return; }
+    // position:fixed escapes modal overflow:hidden / overflow-x:clip clipping
+    var rect = inputEl.getBoundingClientRect();
+    var maxW = Math.min(900, window.innerWidth - 24);
+    dropdown.style.cssText = 'position:fixed;top:' + (rect.bottom + 4) + 'px;left:' + rect.left + 'px'
+      + ';width:' + maxW + 'px;max-height:220px;overflow-x:auto;overflow-y:auto;z-index:1000;';
     dropdown.innerHTML = recent.map(function (url) {
       return '<div class="clar-url-item" title="' + API.esc(url) + '"'
         + ' onmousedown="event.preventDefault();RfqItemsModule._clarPickUrl(this,' + JSON.stringify(url) + ')">'

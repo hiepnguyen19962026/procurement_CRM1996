@@ -635,8 +635,8 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 /* Clarification URL recent dropdown */
 .clar-url-wrap { position: relative; }
 .clar-url-wrap input { width: 100%; }
-.clar-url-dropdown { position: absolute; top: 100%; left: 0; width: min(900px, calc(100vw - 80px)); background: var(--white); border: 1px solid var(--border); border-top: none; border-radius: 0 0 4px 4px; z-index: 300; max-height: 220px; overflow-x: auto; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
-.clar-url-item { padding: 7px 10px; font-size: 12px; font-family: monospace; white-space: nowrap; cursor: pointer; color: var(--text-muted); }
+.clar-url-dropdown { background: var(--white); border: 1px solid var(--border); border-radius: 4px; box-shadow: 0 4px 16px rgba(0,0,0,.15); }
+.clar-url-item { padding: 7px 12px; font-size: 12px; font-family: monospace; white-space: nowrap; cursor: pointer; color: var(--text-muted); }
 .clar-url-item:hover { background: var(--primary-lt); color: var(--text); }
 
 /* Clarification form — recent value chips above textarea */
