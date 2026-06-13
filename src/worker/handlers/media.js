@@ -92,7 +92,7 @@ async function uploadMedia(request, env, ctx, actor) {
     entityType: 'media_file',
     entityId: fileId,
     message: `${actor.displayName || actor.username || actor.id} uploaded ${ownerType}/${ownerId}/${fileKind}`,
-    newJson: row,
+    newJson: compactMediaRow(row),
     actor,
   }));
   return json({ ok: true, file: compactMediaRow(row) });
