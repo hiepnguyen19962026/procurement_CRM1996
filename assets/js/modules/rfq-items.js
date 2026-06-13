@@ -1032,6 +1032,33 @@
     if (el) { el.value = value; el.focus(); }
   }
 
+  function _clarUrlShowRecent(inputEl) {
+    var dropdown = inputEl.nextElementSibling;
+    if (!dropdown || !dropdown.classList.contains('clar-url-dropdown')) return;
+    var recent = _clarSugLoad('externalUrl').slice(0, 5);
+    if (!recent.length) { dropdown.classList.add('hidden'); return; }
+    dropdown.innerHTML = recent.map(function (url) {
+      return '<div class="clar-url-item" title="' + API.esc(url) + '"'
+        + ' onmousedown="event.preventDefault();RfqItemsModule._clarPickUrl(this,' + JSON.stringify(url) + ')">'
+        + API.esc(url) + '</div>';
+    }).join('');
+    dropdown.classList.remove('hidden');
+  }
+
+  function _clarUrlHide(inputEl) {
+    var dropdown = inputEl.nextElementSibling;
+    if (dropdown && dropdown.classList.contains('clar-url-dropdown')) dropdown.classList.add('hidden');
+  }
+
+  function _clarPickUrl(itemEl, url) {
+    var wrap = itemEl.closest('.clar-url-wrap');
+    if (!wrap) return;
+    var input = wrap.querySelector('input[name="externalUrl"]');
+    if (input) input.value = url;
+    var dropdown = wrap.querySelector('.clar-url-dropdown');
+    if (dropdown) dropdown.classList.add('hidden');
+  }
+
   function clarificationFields(item, r) {
     var type = r.clarification_type || 'ask_supplier';
     var status = r.status_after || 'waiting_supplier';
@@ -1043,7 +1070,6 @@
       + _clarSugDatalist('dl-clar-proposedModel', [], 'proposedModel')
       + _clarSugDatalist('dl-clar-proposedManufacturer', [], 'proposedManufacturer')
       + _clarSugDatalist('dl-clar-proposedOrigin', [], 'proposedOrigin')
-      + _clarSugDatalist('dl-clar-externalUrl', [], 'externalUrl')
       + input('title', 'Tiêu đề', r.title || '', 'required list="dl-clar-title"', 'span-12')
       + '<label class="span-12 compact-ta">Nội dung' + _clarRecentBar('content', 'content') + '<textarea name="content">' + API.esc(r.content || '') + '</textarea></label>'
       + input('oldModel', 'Model cũ', r.old_model || val(item, 'required_model', 'quy_cach_model_yeu_cau'), '', 'span-3')
@@ -1051,7 +1077,12 @@
       + input('proposedManufacturer', 'Hãng SX đề xuất', r.proposed_manufacturer || item.hang_final || '', 'list="dl-clar-proposedManufacturer"', 'span-3')
       + input('proposedOrigin', 'Xuất xứ đề xuất', r.proposed_origin || item.xuat_xu_final || '', 'list="dl-clar-proposedOrigin"', 'span-3')
       + '<label class="span-12 compact-ta">Ghi chú gốc' + _clarRecentBar('rawNote', 'rawNote') + '<textarea name="rawNote">' + API.esc(r.raw_note || '') + '</textarea></label>'
-      + input('externalUrl', 'URL tài liệu', r.external_url || '', 'placeholder="Link Google Drive / file phương án / công văn…" maxlength="2000" type="url" list="dl-clar-externalUrl"', 'span-12');
+      + '<label class="span-12">URL tài liệu'
+      + '<div class="clar-url-wrap">'
+      + '<input name="externalUrl" type="url" placeholder="Link Google Drive / file phương án / công văn…" maxlength="2000" value="' + API.esc(r.external_url || '') + '"'
+      + ' onfocus="RfqItemsModule._clarUrlShowRecent(this)" onblur="RfqItemsModule._clarUrlHide(this)">'
+      + '<div class="clar-url-dropdown hidden"></div>'
+      + '</div></label>';
     // updateFinal is auto-applied by backend when type=final_confirm or status=final_confirmed
   }
 
@@ -3134,6 +3165,9 @@
     _onRfqKeydown: _onRfqKeydown,
     _selectRfq: _selectRfq,
     _clarPickRecent: _clarPickRecent,
+    _clarUrlShowRecent: _clarUrlShowRecent,
+    _clarUrlHide: _clarUrlHide,
+    _clarPickUrl: _clarPickUrl,
     _onSupplierInput: _onSupplierInput,
     _selectSupplier: _selectSupplier,
     val: val,

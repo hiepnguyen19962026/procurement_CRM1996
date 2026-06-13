@@ -632,6 +632,13 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 
 /* ── @media 767px — task toolbar + modal overrides ──────────────────────── */
 @media (max-width: 767px) {
+/* Clarification URL recent dropdown */
+.clar-url-wrap { position: relative; }
+.clar-url-wrap input { width: 100%; }
+.clar-url-dropdown { position: absolute; top: 100%; left: 0; right: 0; background: var(--white); border: 1px solid var(--border); border-top: none; border-radius: 0 0 4px 4px; z-index: 300; max-height: 220px; overflow-y: auto; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+.clar-url-item { padding: 7px 10px; font-size: 12px; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; color: var(--text-muted); }
+.clar-url-item:hover { background: var(--primary-lt); color: var(--text); }
+
 /* Clarification form — recent value chips above textarea */
 .clar-recent-bar { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0 2px; }
 .clar-recent-chip { padding: 2px 8px; font-size: 11px; min-height: 22px; background: var(--bg); border: 1px solid var(--border-mid); border-radius: 3px; color: var(--text-muted); cursor: pointer; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
