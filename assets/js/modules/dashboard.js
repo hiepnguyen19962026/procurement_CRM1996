@@ -621,9 +621,22 @@
           + '</tr>';
       }).join('');
       bodyEl.innerHTML = '<div style="grid-column:1/-1">'
+        + '<div id="popupItemsTopScroll" style="overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:6px"><div></div></div>'
         + miniTable(headers, rowsHtml)
         + '</div>';
       Auth.applyRoleUI();
+      (function () {
+        var top = document.getElementById('popupItemsTopScroll');
+        if (!top) return;
+        var wrap = top.nextElementSibling;
+        if (!wrap) return;
+        var inner = top.firstElementChild;
+        if (!inner) return;
+        inner.style.width = wrap.scrollWidth + 'px';
+        var lock = false;
+        top.onscroll = function () { if (lock) return; lock = true; wrap.scrollLeft = top.scrollLeft; lock = false; };
+        wrap.onscroll = function () { if (lock) return; lock = true; top.scrollLeft = wrap.scrollLeft; lock = false; };
+      })();
     } catch (err) {
       var bodyEl2 = document.getElementById('modalBody');
       if (bodyEl2) bodyEl2.innerHTML = '<div style="grid-column:1/-1"><p style="color:var(--red)">Lỗi tải dữ liệu.</p></div>';
