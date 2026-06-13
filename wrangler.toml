@@ -17,7 +17,10 @@ binding = "MEDIA"
 bucket_name = "procurement-crm-media"
 
 [vars]
-MEDIA_PUBLIC_URL = ""
+# R2 media bucket must remain private. Do not add a public URL var here.
+# All file access goes through /api/media (Vercel JWT gateway → Worker → private R2 binding).
+# Never enable the r2.dev public subdomain or attach a custom domain on this bucket.
+# Never store a populated public_url in D1 media_files for internal procurement files.
 
 [ai]
 binding = "AI"

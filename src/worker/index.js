@@ -49,20 +49,22 @@ const PUBLIC_ACTIONS = ['authLogin', 'initSetup'];
 
 export default {
   async fetch(request, env, ctx) {
-    if (request.method === 'OPTIONS') return cors(json({ ok: true }));
-    if (!validateSecret(request, env)) return cors(json({ ok: false, error: 'Forbidden' }, 403));
+    // Worker is called only by Vercel gateway (server-to-server).
+    // All requests must carry X-Worker-Secret. ALLOWED_ORIGIN restricts CORS if set.
+    const allowedOrigin = env.ALLOWED_ORIGIN || null;
+    if (request.method === 'OPTIONS') return cors(json({ ok: true }), allowedOrigin);
+    if (!validateSecret(request, env)) return cors(json({ ok: false, error: 'Forbidden' }, 403), allowedOrigin);
 
     const { action, parsedBody } = await getActionAndBody(request);
-    if (!action) return cors(json({ ok: false, error: 'Missing action' }, 400));
+    if (!action) return cors(json({ ok: false, error: 'Missing action' }, 400), allowedOrigin);
 
     let actor = null;
     if (!PUBLIC_ACTIONS.includes(action)) {
       actor = actorFromRequest(request);
       if (!await validateActorSession(env.DB, actor)) {
-        return cors(json({ ok: false, error: 'Session het han' }, 401));
+        return cors(json({ ok: false, error: 'Session het han' }, 401), allowedOrigin);
       }
     }
-
     let res;
     if (ACCOUNT_ACTIONS.includes(action)) res = await handleAccounts(action, request, env, ctx, actor);
     else if (CLIENT_ACTIONS.includes(action)) res = await handleClients(action, request, env, ctx, actor, parsedBody);
@@ -87,7 +89,7 @@ export default {
     else if (OCR_ACTIONS.includes(action)) res = await handleOcr(action, request, env, ctx, actor);
     else if (TASK_ACTIONS.includes(action)) res = await handleTasks(action, request, env, ctx, actor);
     else res = json({ ok: false, error: 'Unknown action' }, 400);
-    return cors(res);
+    return cors(res, allowedOrigin);
   },
 };
 
@@ -104,9 +106,11 @@ async function getActionAndBody(request) {
   return { action: parsedBody.action || '', parsedBody };
 }
 
-function cors(response) {
+// allowedOrigin: set ALLOWED_ORIGIN in Cloudflare Worker secrets to restrict to your Vercel domain.
+// If not set, falls back to '*'. Worker is still protected by X-Worker-Secret on every request.
+function cors(response, allowedOrigin) {
   const headers = new Headers(response.headers);
-  headers.set('Access-Control-Allow-Origin', '*');
+  headers.set('Access-Control-Allow-Origin', allowedOrigin || '*');
   headers.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   headers.set('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Worker-Secret,X-App-Actor');
   return new Response(response.body, { status: response.status, headers });

@@ -18,7 +18,7 @@ const IMAGE_KINDS = new Set(['item_image', 'quote_evidence_image']);
 export async function handleMedia(action, request, env, ctx, actor) {
   if (action === 'getMediaFiles') return listMedia(request, env, actor);
   if (action === 'uploadMedia') return uploadMedia(request, env, ctx, actor);
-  if (action === 'getMediaFileContent') return getMediaContent(request, env, actor);
+  if (action === 'getMediaFileContent') return getMediaContent(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown media action' }, 400);
 }
 
@@ -73,6 +73,8 @@ async function uploadMedia(request, env, ctx, actor) {
     owner_id: ownerId,
     file_kind: fileKind,
     r2_key: key,
+    // public_url must stay empty. Files are private; access only via /api/media?fileId= (JWT auth).
+    // Never store r2.dev URLs or custom domain URLs here.
     public_url: '',
     file_name: displayName,
     mime_type: uploadType.mimeType,
@@ -96,7 +98,7 @@ async function uploadMedia(request, env, ctx, actor) {
   return json({ ok: true, file: compactMediaRow(row) });
 }
 
-async function getMediaContent(request, env, actor) {
+async function getMediaContent(request, env, ctx, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
   if (!env.MEDIA) return json({ ok: false, error: 'R2 MEDIA binding chua cau hinh' }, 500);
@@ -107,6 +109,13 @@ async function getMediaContent(request, env, actor) {
   if (!row) return json({ ok: false, error: 'Khong tim thay file' }, 404);
   const object = await env.MEDIA.get(row.r2_key);
   if (!object) return json({ ok: false, error: 'File khong con trong R2' }, 404);
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'downloadMedia',
+    entityType: 'media_file',
+    entityId: row.file_id,
+    message: `${actor.displayName || actor.username || actor.id} downloaded ${row.owner_type}/${row.owner_id}/${row.file_kind}: ${row.file_name || row.file_id}`,
+    actor,
+  }));
   return new Response(object.body, {
     status: 200,
     headers: {
