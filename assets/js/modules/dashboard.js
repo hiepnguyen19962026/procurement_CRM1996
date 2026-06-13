@@ -621,22 +621,26 @@
           + '</tr>';
       }).join('');
       bodyEl.innerHTML = '<div style="grid-column:1/-1">'
-        + '<div id="popupItemsTopScroll" style="overflow-x:auto;overflow-y:hidden;height:14px;margin-bottom:6px"><div></div></div>'
         + miniTable(headers, rowsHtml)
         + '</div>';
       Auth.applyRoleUI();
-      (function () {
-        var top = document.getElementById('popupItemsTopScroll');
-        if (!top) return;
-        var wrap = top.nextElementSibling;
+      setTimeout(function () {
+        var outerDiv = bodyEl.firstElementChild;
+        if (!outerDiv) return;
+        var wrap = outerDiv.querySelector('.table-wrap');
         if (!wrap) return;
-        var inner = top.firstElementChild;
-        if (!inner) return;
+        var top = document.createElement('div');
+        top.id = 'popupItemsTopScroll';
+        top.className = 'table-top-scroll';
+        var inner = document.createElement('div');
+        inner.style.height = '1px';
         inner.style.width = wrap.scrollWidth + 'px';
+        top.appendChild(inner);
+        outerDiv.insertBefore(top, wrap);
         var lock = false;
         top.onscroll = function () { if (lock) return; lock = true; wrap.scrollLeft = top.scrollLeft; lock = false; };
         wrap.onscroll = function () { if (lock) return; lock = true; top.scrollLeft = wrap.scrollLeft; lock = false; };
-      })();
+      }, 0);
     } catch (err) {
       var bodyEl2 = document.getElementById('modalBody');
       if (bodyEl2) bodyEl2.innerHTML = '<div style="grid-column:1/-1"><p style="color:var(--red)">Lỗi tải dữ liệu.</p></div>';
