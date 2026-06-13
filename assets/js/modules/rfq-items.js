@@ -620,6 +620,7 @@
             form.confirmRevision = confirmed;
           }
           await API.call(action, form);
+          _clarSugSaveAll(form);
           Utils.closeModal();
           var msg = isFinal && form.confirmRevision
             ? 'Đã lưu trao đổi và tạo lịch sử thay đổi quy cách'
@@ -977,6 +978,59 @@
     if (list) list.classList.add('hidden');
   }
 
+  // Clarification form suggestions. localStorage only — persists across sessions.
+  var CLARSUG_PREFIX = 'procurement_crm:tech_clarification_recent:';
+  var CLARSUG_MAX = 8;
+  var CLARSUG_MAX_LEN = 500;
+  var CLAR_TITLE_STATIC = [
+    'Thay đổi quy cách vật tư', 'Thay đổi HSX', 'Thay đổi giá',
+    'Thay đổi chất liệu', 'Thay đổi xuất xứ', 'Thay đổi thời gian giao hàng',
+    'Bổ sung tài liệu kỹ thuật', 'Làm rõ thông số kỹ thuật', 'Hàng ngừng sản xuất',
+  ];
+
+  function _clarSugLoad(key) {
+    try { return JSON.parse(localStorage.getItem(CLARSUG_PREFIX + key) || '[]'); }
+    catch (e) { return []; }
+  }
+
+  function _clarSugSaveAll(form) {
+    ['title', 'content', 'proposedModel', 'proposedManufacturer', 'proposedOrigin', 'rawNote', 'externalUrl'].forEach(function (f) {
+      var v = String(form[f] || '').trim();
+      if (!v || v.length > CLARSUG_MAX_LEN) return;
+      try {
+        var arr = _clarSugLoad(f);
+        arr = [v].concat(arr.filter(function (x) { return x !== v; })).slice(0, CLARSUG_MAX);
+        localStorage.setItem(CLARSUG_PREFIX + f, JSON.stringify(arr));
+      } catch (e) { /* quota / private browsing */ }
+    });
+  }
+
+  function _clarSugDatalist(id, staticItems, recentKey) {
+    var recent = recentKey ? _clarSugLoad(recentKey) : [];
+    var combined = recent.concat((staticItems || []).filter(function (s) { return recent.indexOf(s) < 0; }));
+    if (!combined.length) return '';
+    return '<datalist id="' + id + '">'
+      + combined.map(function (v) { return '<option value="' + API.esc(v) + '">'; }).join('')
+      + '</datalist>';
+  }
+
+  function _clarRecentBar(fieldKey, name) {
+    var recent = _clarSugLoad(fieldKey);
+    if (!recent.length) return '';
+    return '<div class="clar-recent-bar">'
+      + recent.map(function (v) {
+          var display = v.length > 45 ? v.slice(0, 45) + '…' : v;
+          return '<button type="button" class="clar-recent-chip" onclick="RfqItemsModule._clarPickRecent('
+            + JSON.stringify(name) + ',' + JSON.stringify(v) + ')">' + API.esc(display) + '</button>';
+        }).join('')
+      + '</div>';
+  }
+
+  function _clarPickRecent(targetName, value) {
+    var el = document.querySelector('#modalBody [name="' + targetName + '"]');
+    if (el) { el.value = value; el.focus(); }
+  }
+
   function clarificationFields(item, r) {
     var type = r.clarification_type || 'ask_supplier';
     var status = r.status_after || 'waiting_supplier';
@@ -984,14 +1038,19 @@
       + '<div class="span-4">' + renderPickerDropdown('Loại trao đổi', 'clarificationType', TYPE_CHIPS, type) + '</div>'
       + '<div class="span-4">' + renderPickerDropdown('Trạng thái sau trao đổi', 'statusAfter', STATUS_CHIPS, status) + '</div>'
       + '<div class="span-4"></div>'
-      + input('title', 'Tiêu đề', r.title, 'required', 'span-12')
-      + textarea('content', 'Nội dung', r.content, '', 'span-12 compact-ta')
+      + _clarSugDatalist('dl-clar-title', CLAR_TITLE_STATIC, 'title')
+      + _clarSugDatalist('dl-clar-proposedModel', [], 'proposedModel')
+      + _clarSugDatalist('dl-clar-proposedManufacturer', [], 'proposedManufacturer')
+      + _clarSugDatalist('dl-clar-proposedOrigin', [], 'proposedOrigin')
+      + _clarSugDatalist('dl-clar-externalUrl', [], 'externalUrl')
+      + input('title', 'Tiêu đề', r.title || '', 'required list="dl-clar-title"', 'span-12')
+      + '<label class="span-12 compact-ta">Nội dung' + _clarRecentBar('content', 'content') + '<textarea name="content">' + API.esc(r.content || '') + '</textarea></label>'
       + input('oldModel', 'Model cũ', r.old_model || val(item, 'required_model', 'quy_cach_model_yeu_cau'), '', 'span-3')
-      + input('proposedModel', 'Model đề xuất / final', r.proposed_model || item.quy_cach_final, '', 'span-3')
-      + input('proposedManufacturer', 'Hãng SX đề xuất', r.proposed_manufacturer || item.hang_final, '', 'span-3')
-      + input('proposedOrigin', 'Xuất xứ đề xuất', r.proposed_origin || item.xuat_xu_final, '', 'span-3')
-      + textarea('rawNote', 'Ghi chú gốc', r.raw_note, '', 'span-12 compact-ta')
-      + input('externalUrl', 'URL tài liệu', r.external_url || '', 'placeholder="Link Google Drive / file phương án / công văn…" maxlength="2000" type="url"', 'span-12');
+      + input('proposedModel', 'Model đề xuất / final', r.proposed_model || item.quy_cach_final || '', 'list="dl-clar-proposedModel"', 'span-3')
+      + input('proposedManufacturer', 'Hãng SX đề xuất', r.proposed_manufacturer || item.hang_final || '', 'list="dl-clar-proposedManufacturer"', 'span-3')
+      + input('proposedOrigin', 'Xuất xứ đề xuất', r.proposed_origin || item.xuat_xu_final || '', 'list="dl-clar-proposedOrigin"', 'span-3')
+      + '<label class="span-12 compact-ta">Ghi chú gốc' + _clarRecentBar('rawNote', 'rawNote') + '<textarea name="rawNote">' + API.esc(r.raw_note || '') + '</textarea></label>'
+      + input('externalUrl', 'URL tài liệu', r.external_url || '', 'placeholder="Link Google Drive / file phương án / công văn…" maxlength="2000" type="url" list="dl-clar-externalUrl"', 'span-12');
     // updateFinal is auto-applied by backend when type=final_confirm or status=final_confirmed
   }
 
@@ -3073,6 +3132,7 @@
     _onRfqInput: _onRfqInput,
     _onRfqKeydown: _onRfqKeydown,
     _selectRfq: _selectRfq,
+    _clarPickRecent: _clarPickRecent,
     _onSupplierInput: _onSupplierInput,
     _selectSupplier: _selectSupplier,
     val: val,

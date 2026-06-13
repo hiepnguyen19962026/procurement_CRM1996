@@ -632,6 +632,11 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 
 /* ── @media 767px — task toolbar + modal overrides ──────────────────────── */
 @media (max-width: 767px) {
+/* Clarification form — recent value chips above textarea */
+.clar-recent-bar { display: flex; flex-wrap: wrap; gap: 4px; margin: 3px 0 2px; }
+.clar-recent-chip { padding: 2px 8px; font-size: 11px; min-height: 22px; background: var(--bg); border: 1px solid var(--border-mid); border-radius: 3px; color: var(--text-muted); cursor: pointer; white-space: nowrap; max-width: 260px; overflow: hidden; text-overflow: ellipsis; line-height: 1.4; }
+.clar-recent-chip:hover { background: var(--primary-lt); border-color: var(--primary); color: var(--text); }
+
 /* RFQ combobox / autocomplete */
 .rfq-autocomplete-wrap { position: relative; display: inline-flex; flex: 0 0 auto; width: 320px; min-width: 200px; }
 #itemRfqInput { width: 100%; }
