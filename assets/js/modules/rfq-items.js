@@ -528,7 +528,15 @@
 
   function openCreate() {
     state.currentMedia = {};
-    openForm({}, [], [], [], {});
+    state.currentMaster = {};
+    var rfqSeed = {};
+    if (_selectedRfqId) {
+      var cached = _rfqListCache.find(function (r) { return r.rfq_id === _selectedRfqId; });
+      rfqSeed = cached
+        ? { rfq_id: cached.rfq_id, ma_goi_tbmt: cached.ma_goi_tbmt, ten_goi: cached.ten_goi, client_name: cached.client_name }
+        : { rfq_id: _selectedRfqId };
+    }
+    openForm(rfqSeed, [], [], [], {});
   }
 
   function safeGet(action, params, fallback) {
@@ -674,9 +682,32 @@
     var status = r.trang_thai_dong || 'chua_xu_ly';
     var techStatus = r.clarification_status || r.trang_thai_ky_thuat || '';
     var latestDecision = (pricingDecisions || [])[0] || null;
-    return ''
+    var isCreate = !r.rfq_item_id;
+    var rfqPreFilled = isCreate && !!r.rfq_id;
+    // readonly when editing (always) or when creating with a pre-filled rfq_id
+    var rfqIdIsReadonly = !isCreate || rfqPreFilled;
+    // context banner shown only on create
+    var contextBlock = '';
+    if (isCreate) {
+      if (rfqPreFilled) {
+        contextBlock = '<div class="span-12" style="background:var(--primary-bg);border:1px solid var(--primary-border);border-radius:8px;padding:8px 12px;font-size:13px;line-height:1.5;margin-bottom:2px">'
+          + '<strong style="color:var(--primary-dk)">Gói thầu:</strong> '
+          + (r.ma_goi_tbmt ? '<span class="badge">' + API.esc(r.ma_goi_tbmt) + '</span>&ensp;' : '')
+          + API.esc(r.ten_goi || r.rfq_id)
+          + (r.client_name ? '&ensp;<span style="color:var(--text-muted)">·</span>&ensp;<strong style="color:var(--primary-dk)">CĐT:</strong> ' + API.esc(r.client_name) : '')
+          + '</div>';
+      } else {
+        contextBlock = '<div class="span-12" style="background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:8px 12px;font-size:13px;color:#b91c1c;margin-bottom:2px">'
+          + '⚠ Chưa chọn gói thầu. Nhập RFQ ID bên dưới hoặc lọc gói thầu từ màn hình danh sách trước.'
+          + '</div>';
+      }
+    }
+    return contextBlock
       // Row 1: identifiers (2+1+2+3) + quantities (1+1+1+1) = 12
-      + '<label class="span-2 readonly-field">RFQ ID<input name="rfqId" value="' + API.esc(r.rfq_id || '') + '" readonly tabindex="-1"></label>'
+      + '<label class="span-2' + (rfqIdIsReadonly ? ' readonly-field' : '') + '">RFQ ID'
+      + '<input name="rfqId" value="' + API.esc(r.rfq_id || '') + '"'
+      + (rfqIdIsReadonly ? ' readonly tabindex="-1"' : ' placeholder="VD: RFQ-2026-00001" required')
+      + '></label>'
       + input('sttGoc', 'STT', r.stt_goc, '', 'span-1')
       + input('maMuaSam', 'Mã mua sắm', r.ma_mua_sam, '', 'span-2')
       + input('maVatTu', 'Mã vật tư', r.ma_vat_tu, '', 'span-3')
