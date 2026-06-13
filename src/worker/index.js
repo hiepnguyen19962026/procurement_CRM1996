@@ -22,6 +22,7 @@ import { handleOcr } from './handlers/ocr.js';
 import { handleTasks } from './handlers/tasks.js';
 import { actorFromRequest, validateActorSession, validateSecret } from './lib/auth.js';
 import { json, readJson } from './lib/utils.js';
+import { runScheduledTasks } from './handlers/scheduled.js';
 
 const ACCOUNT_ACTIONS = ['authLogin', 'initSetup', 'logout', 'getSession', 'changePassword', 'getAccounts', 'createAccount', 'updateAccount'];
 const CLIENT_ACTIONS = ['getClients', 'createClient', 'updateClient', 'archiveClient'];
@@ -90,6 +91,10 @@ export default {
     else if (TASK_ACTIONS.includes(action)) res = await handleTasks(action, request, env, ctx, actor);
     else res = json({ ok: false, error: 'Unknown action' }, 400);
     return cors(res, allowedOrigin);
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runScheduledTasks(env, event.cron));
   },
 };
 

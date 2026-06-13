@@ -95,6 +95,37 @@ export async function quickUpdateRfqStatusSQL(db, rfqId, status, now) {
   ).bind(status, now, rfqId).run();
 }
 
+// Report open RFQs that are overdue or due within the next 7 days. Read-only — no mutation.
+export async function getRfqDeadlineReportSQL(db, today, d7) {
+  const [overdueRow, dueSoonRow, samplesRes] = await Promise.all([
+    db.prepare(
+      `SELECT COUNT(*) AS n FROM rfqs
+       WHERE trang_thai_goi IN ('dang_khao_gia','treo')
+         AND ngay_het_han IS NOT NULL AND ngay_het_han != ''
+         AND ngay_het_han < ?`
+    ).bind(today).first(),
+    db.prepare(
+      `SELECT COUNT(*) AS n FROM rfqs
+       WHERE trang_thai_goi IN ('dang_khao_gia','treo')
+         AND ngay_het_han IS NOT NULL AND ngay_het_han != ''
+         AND ngay_het_han >= ? AND ngay_het_han <= ?`
+    ).bind(today, d7).first(),
+    db.prepare(
+      `SELECT rfq_id, ma_goi_tbmt, ten_goi, ngay_het_han, trang_thai_goi
+       FROM rfqs
+       WHERE trang_thai_goi IN ('dang_khao_gia','treo')
+         AND ngay_het_han IS NOT NULL AND ngay_het_han != ''
+         AND ngay_het_han < ?
+       ORDER BY ngay_het_han ASC LIMIT 10`
+    ).bind(today).all(),
+  ]);
+  return {
+    overdue_count:  overdueRow?.n || 0,
+    due_soon_count: dueSoonRow?.n || 0,
+    samples:        samplesRes.results || [],
+  };
+}
+
 export async function getDashboardSQL(db) {
   const rfqs = await db.prepare('SELECT COUNT(*) AS total FROM rfqs').bind().first();
   const items = await db.prepare('SELECT COUNT(*) AS total FROM rfq_items').bind().first();

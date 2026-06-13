@@ -67,6 +67,27 @@ export async function deleteSupplierQuoteSQL(db, quoteId) {
   ).bind(quoteId).run();
 }
 
+// Report active quotes whose valid_until has passed. Read-only — no mutation.
+export async function getExpiredQuotesReportSQL(db, today) {
+  const [countRow, samplesRes] = await Promise.all([
+    db.prepare(
+      `SELECT COUNT(*) AS n FROM supplier_quotes
+       WHERE status = 'active'
+         AND valid_until IS NOT NULL AND valid_until != ''
+         AND valid_until < ?`
+    ).bind(today).first(),
+    db.prepare(
+      `SELECT quote_id, rfq_item_id, supplier_name, valid_until
+       FROM supplier_quotes
+       WHERE status = 'active'
+         AND valid_until IS NOT NULL AND valid_until != ''
+         AND valid_until < ?
+       ORDER BY valid_until ASC LIMIT 10`
+    ).bind(today).all(),
+  ]);
+  return { count: countRow?.n || 0, samples: samplesRes.results || [] };
+}
+
 export async function searchSupplierQuotesSQL(db, params) {
   const {
     q, supplierName, manufacturer, status, sourceChannel,
