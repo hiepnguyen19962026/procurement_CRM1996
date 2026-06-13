@@ -15,6 +15,20 @@ export async function getTechnicalClarificationSQL(db, clarificationId) {
   ).bind(clarificationId).first();
 }
 
+// VN date-based clarification ID: Cla-YYYY-MMDD-NN, resets per date, collision-safe.
+export async function nextClarificationId(db) {
+  const d    = new Date(Date.now() + 7 * 60 * 60 * 1000); // UTC+7
+  const yyyy = d.toISOString().slice(0, 4);
+  const mmdd = d.toISOString().slice(5, 10).replace('-', '');
+  const prefix = `Cla-${yyyy}-${mmdd}`;
+  const row = await db.prepare(
+    `SELECT clarification_id FROM technical_clarifications WHERE clarification_id LIKE ? ORDER BY clarification_id DESC LIMIT 1`
+  ).bind(`${prefix}-%`).first();
+  const last = row?.clarification_id ? Number(row.clarification_id.split('-').pop()) : 0;
+  const seq  = (Number.isFinite(last) ? last : 0) + 1;
+  return `${prefix}-${String(seq).padStart(2, '0')}`;
+}
+
 export async function nextClarificationSequenceSQL(db, rfqItemId) {
   const row = await db.prepare(
     `SELECT COALESCE(MAX(sequence_no), 0) + 1 AS next_sequence

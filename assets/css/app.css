@@ -165,6 +165,7 @@ mark { background: #fcd34d; padding: 0 2px; border-radius: 2px; font-style: norm
 .metric strong { font-size: 36px; line-height: 1.1; font-weight: 700; color: var(--text); }
 .metric small { display: block; color: var(--text-muted); font-size: 12px; margin-top: 2px; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; }
+#dash-panel-clars { grid-column: 1 / -1; }
 /* dashboard mini-table scroll wrapper — always horizontally scrollable */
 .dashboard-table-wrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 /* task/followup panel: fixed-layout, no horizontal scroll, text wraps */

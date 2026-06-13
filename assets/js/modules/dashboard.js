@@ -342,7 +342,7 @@
         ? miniTable(
             ['Thời gian', 'Vật tư', 'Tên gói', 'Loại', 'Trạng thái', 'Tóm tắt', 'URL'],
             rows.map(function (r) {
-              var summary = r.proposed_model || r.proposed_manufacturer || r.proposed_origin || r.title || '—';
+              var summary = r.title || r.proposed_model || r.proposed_manufacturer || r.proposed_origin || '—';
               var dt = (r.created_at || '').slice(0, 16).replace('T', ' ');
               var datePart = dt.slice(0, 10);
               var timePart = dt.slice(11, 16);
@@ -356,7 +356,7 @@
                   + API.esc(r.ten_goi || r.rfq_id || '') + '</span></td>'
                 + '<td>' + clarTypeSel(r.clarification_id, r.clarification_type) + '</td>'
                 + '<td>' + clarStatusSel(r.clarification_id, r.status_after) + '</td>'
-                + '<td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'
+                + '<td style="max-width:260px">'
                   + '<span class="link-edit" onclick="DashboardModule._navToClar(\'' + API.esc(r.rfq_item_id) + '\')">'
                   + API.esc(summary) + '</span></td>'
                 + urlCell(bestUrl)

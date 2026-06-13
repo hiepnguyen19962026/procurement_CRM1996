@@ -2,13 +2,13 @@ import {
   listTasksSQL, getTasksSummarySQL, getTaskSQL,
   insertTaskSQL, updateTaskSQL, softDeleteTaskSQL,
   quickUpdateTaskStatusSQL, quickUpdateTaskPrioritySQL,
-  suggestTaskCompaniesSQL,
+  suggestTaskCompaniesSQL, nextTaskId,
 } from '../db/task-queries.js';
 import { ALL_ROLES, WRITE_ROLES, MANAGE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
 import { invalidateKv } from '../lib/cache.js';
 import { normalizeText, cleanString } from '../lib/normalize.js';
-import { clampLimit, json, nextEntityId, nowIso, readJson } from '../lib/utils.js';
+import { clampLimit, json, nowIso, readJson } from '../lib/utils.js';
 
 const DASHBOARD_CACHE_KEY = 'dashboard:v2';
 
@@ -85,7 +85,7 @@ async function saveTask(request, env, ctx, actor, isUpdate) {
   if (status !== 'hoan_thanh') completedAt = null;
 
   const row = {
-    task_id:            isUpdate ? oldRow.task_id : await nextEntityId(env.DB, 'tasks', 'task_id', 'TASK'),
+    task_id:            isUpdate ? oldRow.task_id : await nextTaskId(env.DB),
     company_name:       companyName,
     company_normalized: normalizeText(companyName),
     title,

@@ -2,6 +2,7 @@ import {
   getTechnicalClarificationSQL,
   insertTechnicalClarificationSQL,
   listTechnicalClarificationsSQL,
+  nextClarificationId,
   nextClarificationSequenceSQL,
   quickUpdateClarificationSQL,
   softDeleteTechnicalClarificationSQL,
@@ -121,7 +122,7 @@ async function saveClarification(request, env, ctx, actor, isUpdate) {
   let row;
   try {
     row = normalizeClarification(body, {
-      clarification_id: isUpdate ? oldRow.clarification_id : makeId('TCL'),
+      clarification_id: isUpdate ? oldRow.clarification_id : await nextClarificationId(env.DB),
       rfq_item_id: rfqItemId,
       sequence_no: isUpdate ? oldRow.sequence_no : await nextClarificationSequenceSQL(env.DB, rfqItemId),
       created_by: isUpdate ? oldRow.created_by : actor.id,
