@@ -84,12 +84,34 @@ async function saveClarification(request, env, ctx, actor, isUpdate) {
   const oldRow = isUpdate ? await getTechnicalClarificationSQL(env.DB, clarificationId) : null;
   if (isUpdate && (!oldRow || oldRow.deleted_at)) return json({ ok: false, error: 'Khong tim thay trao doi ky thuat' }, 404);
 
-  // Block editing a clarification that already sourced a confirmed revision — spec is locked.
+  // Business fields are locked once a revision exists — spec history must not be rewritten.
+  // Exception: external_url and attachment_file_id (URL/file evidence) may still be updated.
   if (isUpdate) {
     const linked = await env.DB.prepare(
       `SELECT 1 FROM rfq_item_revisions WHERE source_clarification_id = ? LIMIT 1`
     ).bind(clarificationId).first();
-    if (linked) return json({ ok: false, error: 'Trao doi nay da tao lich su thay doi quy cach va khong the chinh sua' }, 409);
+    if (linked) {
+      if (!isEvidenceOnlyUpdate(body, oldRow)) {
+        return json({ ok: false, error: 'Trao doi nay da tao lich su thay doi quy cach va khong the chinh sua' }, 409);
+      }
+      // Narrow evidence-only path: update URL/file only, no revision side-effects.
+      const evUrl    = cleanUrl(body.externalUrl || body.external_url);
+      const evFileId = cleanString(body.attachmentFileId || body.attachment_file_id, 120) || null;
+      const evNow    = nowIso();
+      await env.DB.prepare(
+        `UPDATE technical_clarifications SET external_url = ?, attachment_file_id = ?, updated_at = ? WHERE clarification_id = ? AND deleted_at IS NULL`
+      ).bind(evUrl || null, evFileId, evNow, clarificationId).run();
+      ctx.waitUntil(writeActionLog(env, {
+        action:     'updateTechnicalClarificationEvidence',
+        entityType: 'technical_clarification',
+        entityId:   clarificationId,
+        message:    `Cập nhật URL/bằng chứng trao đổi kỹ thuật — ${clarificationId}`,
+        oldJson:    { external_url: oldRow.external_url, attachment_file_id: oldRow.attachment_file_id },
+        newJson:    { external_url: evUrl || null, attachment_file_id: evFileId },
+        actor,
+      }));
+      return json({ ok: true, clarification: { ...oldRow, external_url: evUrl || null, attachment_file_id: evFileId, updated_at: evNow } });
+    }
   }
 
   const rfqItemId = cleanString(body.rfqItemId || body.rfq_item_id || oldRow?.rfq_item_id, 80);
@@ -288,4 +310,27 @@ function normalizeClarification(body, base) {
 function mappedTechnicalStatus(row) {
   const status = row.clarification_type === 'final_confirm' ? 'final_confirmed' : row.status_after;
   return TECH_STATUS_MAP[status] || 'da_xac_nhan';
+}
+
+// isEvidenceOnlyUpdate — returns true when body changes only external_url / attachment_file_id.
+// Compares every business field from body against oldRow using the same cleanString limits as
+// normalizeClarification. Any mismatch means a business field was changed → must stay locked.
+function isEvidenceOnlyUpdate(body, oldRow) {
+  if (body.confirmRevision === true || body.confirmRevision === 'true') return false;
+  const c = (s, max) => cleanString(s ?? '', max);
+  const checks = [
+    [c(body.clarificationType || body.clarification_type, 40),        c(oldRow.clarification_type, 40)],
+    [c(body.title, 240),                                               c(oldRow.title, 240)],
+    [c(body.content, 3000),                                            c(oldRow.content, 3000)],
+    [c(body.oldModel || body.old_model, 1000),                        c(oldRow.old_model, 1000)],
+    [c(body.proposedModel || body.proposed_model, 1000),              c(oldRow.proposed_model, 1000)],
+    [c(body.proposedManufacturer || body.proposed_manufacturer, 180), c(oldRow.proposed_manufacturer, 180)],
+    [c(body.proposedOrigin || body.proposed_origin, 120),             c(oldRow.proposed_origin, 120)],
+    [c(body.statusAfter || body.status_after, 40),                    c(oldRow.status_after, 40)],
+    [c(body.rawNote || body.raw_note, 2000),                          c(oldRow.raw_note, 2000)],
+  ];
+  for (const [fromBody, fromRow] of checks) {
+    if (fromBody !== fromRow) return false;
+  }
+  return true;
 }

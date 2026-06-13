@@ -125,6 +125,19 @@
     return '<td>' + hlEsc(String(text), state.q) + '</td>';
   }
 
+  // finalOrOrigCell — shows finalVal as primary text.
+  // When finalVal differs from origVal, origVal appears as a muted sub-line to preserve audit visibility.
+  function finalOrOrigCell(finalVal, origVal) {
+    var primary = finalVal || '';
+    var original = origVal || '';
+    if (!primary) return renderCell(original, true);
+    var diff = original && original !== primary;
+    return '<td>'
+      + hlEsc(primary, state.q)
+      + (diff ? '<div class="muted" style="font-size:11px">' + hlEsc(original, state.q) + '</div>' : '')
+      + '</td>';
+  }
+
   function urlCell(url, rfqItemId) {
     var escId = API.esc(rfqItemId || '');
     if (!url || !/^https?:\/\//i.test(url)) {
@@ -151,7 +164,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="30" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="31" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -183,11 +196,11 @@
         + renderCell(r.ma_mua_sam, true)
         + renderCell(r.ma_vat_tu, true)
         + nameCell
-        + renderCell(val(r, 'required_model', 'quy_cach_model_yeu_cau'), true)
+        + finalOrOrigCell(r.quy_cach_final, val(r, 'required_model', 'quy_cach_model_yeu_cau'))
         + renderCell(val(r, 'brand', 'nhan_hieu'), true)
         + renderCell(val(r, 'manufacture_year', 'nam_san_xuat'), true)
-        + renderCell(val(r, 'origin_country', 'xuat_xu'), true)
-        + renderCell(val(r, 'manufacturer', 'hang_goc_nsx_goc'), true)
+        + finalOrOrigCell(r.xuat_xu_final, val(r, 'origin_country', 'xuat_xu'))
+        + finalOrOrigCell(r.hang_final, val(r, 'manufacturer', 'hang_goc_nsx_goc'))
         + renderCell(val(r, 'technical_params', 'thong_so_ky_thuat'), true)
         + renderCell(r.vat_lieu, true)
         + renderCell(r.phu_tung_chuyen_dung, true)
@@ -270,14 +283,12 @@
 
   function technicalSummary(r) {
     var count = Number(r.clarification_count || 0);
-    var finalText = [r.quy_cach_final, r.hang_final].filter(Boolean).join(' - ');
     var techStatus = r.clarification_status || r.trang_thai_ky_thuat;
     var badge = '<span class="badge badge-clickable" title="Xem lịch sử xác nhận kỹ thuật" onclick="RfqItemsModule.openClarificationTimeline(\'' + API.esc(r.rfq_item_id) + '\')">'
       + API.esc(technicalStatusLabel(techStatus)) + '</span>';
     return '<div class="tech-summary">'
       + badge
       + '<span>' + API.esc(count + ' lần trao đổi') + '</span>'
-      + (finalText ? '<strong>' + API.esc(finalText) + '</strong>' : '')
       + '</div>';
   }
 
