@@ -505,18 +505,21 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     min-width: 0;
   }
 
-  /* modal scroll fix: max-height alone does not give the flex container a
-     definite main size — flex children never shrink, overflow-y:auto never
-     fires. Pinning height = max-height makes the main size definite so the
-     #modalForm → .modal-body scroll chain works on mobile. */
+  /* ── modal scroll (vertical + horizontal) ──────────────────────────────────
+     overflow:hidden creates a scroll container on iOS Safari that intercepts
+     ALL touch events — horizontal swipes never reach .dashboard-table-wrap.
+     overflow:clip clips visually (preserves border-radius) without creating
+     a scroll container, so touch events pass through to child scroll areas.
+     Same pattern used on .main and .content (see note at line ~365 above). */
   .modal-backdrop { padding: 12px; }
   .modal {
+    overflow: clip;
     height: calc(100vh - 24px);
     height: calc(100dvh - 24px);
     max-height: calc(100dvh - 24px);
     width: calc(100vw - 24px);
   }
-  #modalForm { flex: 1 1 auto; min-height: 0; }
+  #modalForm { overflow: clip; flex: 1 1 auto; min-height: 0; }
   .modal-body {
     flex: 1 1 auto;
     min-height: 0;
@@ -524,6 +527,34 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
   }
+
+  /* dashboard items table inside modal: override the ≤860px rule that sets
+     overflow-y:hidden, which creates a competing vertical scroll container
+     and absorbs vertical swipes before they reach .modal-body */
+  .modal-body .dashboard-table-wrap {
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-inline: contain;
+    width: 100%;
+  }
+  .modal-body .dashboard-table-wrap table { min-width: 720px; width: max-content; }
+
+  /* swipe hint: mobile-only, shown above the wide table */
+  .modal-body .dashboard-table-wrap::before {
+    content: "← Vuốt ngang để xem thêm cột →";
+    display: block;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+    padding: 3px 0 5px;
+    font-style: italic;
+  }
+
+  /* hide the horizontal scroll-mirror bar inside the modal — drag-scrollbar
+     is not useful on touch devices; the bar itself has overflow-x:auto which
+     can also compete for horizontal touch gestures */
+  #popupItemsTopScroll { display: none; }
 }
 
 /* ── custom datepicker ─────────────────────────────────────────────────────── */
