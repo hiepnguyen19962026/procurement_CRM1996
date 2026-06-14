@@ -338,7 +338,7 @@
       return;
     }
     if (baseRows.length && !rows.length) {
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="38" style="text-align:center;color:var(--text-muted);padding:18px">Không có dòng vật tư phù hợp bộ lọc.</td></tr>';
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="38" style="text-align:center;color:var(--text-muted);padding:18px">Không có dòng vật tư phù hợp.</td></tr>';
       document.getElementById('itemMore').classList.toggle('hidden', !state.hasMore);
       Auth.applyRoleUI();
       var noMatchSelectAll = document.getElementById('itemSelectAll');
@@ -2617,7 +2617,7 @@
     var type = form.deliveryTriggerType || 'contract_sign';
     if (type === 'manual') {
       if (!form.deliveryDeadlineDate) {
-        API.toast('Vui lòng nhập hạn giao thủ công', 'warn');
+        API.toast('Vui lòng nhập hạn giao thủ công.', 'warn');
         return false;
       }
       form.deliveryTriggerDate = form.deliveryTriggerDate || '';
@@ -2629,11 +2629,11 @@
     }
     if (type === 'award_notice' || type === 'delivery_notice' || type === 'po_date') {
       if (!form.deliveryTriggerDate) {
-        API.toast('Vui lòng nhập ngày bắt đầu tính', 'warn');
+        API.toast('Vui lòng nhập ngày bắt đầu tính.', 'warn');
         return false;
       }
       if (form.deliveryLeadDays === '' || form.deliveryLeadDays == null) {
-        API.toast('Vui lòng nhập số ngày giao', 'warn');
+        API.toast('Vui lòng nhập số ngày giao hàng.', 'warn');
         return false;
       }
     }
