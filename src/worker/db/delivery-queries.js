@@ -100,7 +100,7 @@ export async function getDeliveryNoteItemsSQL(db, deliveryNoteId) {
        FROM clar_ranked WHERE rn = 1
      )
      SELECT dni.*,
-            ci.contract_quantity, ci.contract_unit_price, ci.contract_line_total,
+            COALESCE(ci.contract_quantity, ri.so_luong, ri.quantity, 0) AS contract_quantity, ci.contract_unit_price, ci.contract_line_total,
             ci.delivery_deadline_date,
             ri.stt_goc, ri.hang_final, ri.quy_cach_final, ri.vat_lieu, ri.thong_so_ky_thuat,
             COALESCE(cu.cumulative_delivered_qty, 0) AS cumulative_delivered_qty,

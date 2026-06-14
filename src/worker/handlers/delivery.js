@@ -329,7 +329,7 @@ async function buildDeliveryItem(db, p, now, oldItem = null) {
   }
 
   const qty = cleanNumber(p.deliveredQuantity ?? p.delivered_quantity ?? oldItem?.delivered_quantity ?? 0);
-  if (!deliveryNoteId || !rfqItemId || !tenVatTu || qty < 0) return null;
+  if (!deliveryNoteId || !rfqItemId || !tenVatTu || qty <= 0) return null;
 
   return {
     delivery_note_item_id: oldItem?.delivery_note_item_id || makeId('DNI'),

@@ -3251,12 +3251,26 @@
         inputRows.push({ rfqItemId: id, deliveredQuantity: qty, note: noteInp ? (noteInp.value || '') : '' });
       });
     } else {
+      // "Không điều chỉnh": compute remaining from best available contract qty
       inputRows = s.items.map(function (r) {
-        return { rfqItemId: r.rfq_item_id, deliveredQuantity: toQty(r.remaining_quantity), note: '' };
+        var contractQty = toQty(r.contract_quantity_total) || toQty(r.so_luong) || toQty(r.quantity) || 0;
+        var deliveredBefore = toQty(r.delivered_quantity_total) || 0;
+        var remaining = Math.max(contractQty - deliveredBefore, 0);
+        return { rfqItemId: r.rfq_item_id, deliveredQuantity: remaining, note: '' };
       });
     }
 
     if (invalid) { API.toast('Số lượng giao phải lớn hơn hoặc bằng 0', 'warn'); return; }
+
+    var zeroCount = inputRows.filter(function (r) { return r.deliveredQuantity === 0; }).length;
+    if (zeroCount === inputRows.length) {
+      API.toast('Tất cả dòng có số lượng bằng 0. Vui lòng chọn "Có" để điều chỉnh số lượng.', 'warn');
+      return;
+    }
+    if (zeroCount > 0) {
+      API.toast(zeroCount + ' dòng có SL = 0 đã bỏ qua.', 'warn');
+      inputRows = inputRows.filter(function (r) { return r.deliveredQuantity > 0; });
+    }
     if (over) {
       var ok = await confirmDeliveryChoice(
         'Cảnh báo số lượng',
