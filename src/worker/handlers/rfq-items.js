@@ -348,6 +348,46 @@ const EXPORT_TEMPLATES = {
     longTextCols: [1, 2, 7],
     leftAlignCols: [1, 2, 7],
   },
+  don_giao_hang: {
+    headers: ['序号\nSTT','合同序号\nSTT hợp đồng','物资编号\nMã vật tư','名称\nTên vật tư','规格型号\nMã quy cách','材质/品牌\nChất liệu/Thương hiệu','数量\nSố lượng','单位\nĐơn vị','原设备供货商/生产厂/品牌\nNhà CC/NSX/Thương hiệu','MIS需求单号\nMã yêu cầu MIS','MIS订单号\nMã đơn hàng MIS','备注\nGhi chú'],
+    row: (r, i) => [
+      i + 1,
+      r.stt_goc || '',
+      r.ma_vat_tu || '',
+      r.ten_vat_tu || '',
+      r.required_model || r.quy_cach_model_yeu_cau || '',
+      r.vat_lieu || r.nhan_hieu || r.brand || '',
+      r.quantity ?? r.so_luong ?? '',
+      r.unit || r.don_vi || '',
+      r.manufacturer || r.hang_goc_nsx_goc || r.nhan_hieu || r.brand || '',
+      r.ma_mua_sam || '',
+      '',
+      r.note || '',
+    ],
+    textCols: [2],
+    longTextCols: [3, 4, 5, 8, 11],
+    leftAlignCols: [3, 4, 5, 8, 11],
+  },
+  don_tra_hang: {
+    headers: ['序号\nSTT','合同序号\nSTT hợp đồng','物资编号\nMã vật tư','名称\nTên vật tư','规格型号\nMã quy cách','材质/品牌\nChất liệu/Thương hiệu','数量\nSố lượng','单位\nĐơn vị','原设备供货商/生产厂/品牌\nNhà CC/NSX/Thương hiệu','MIS需求单号\nMã yêu cầu MIS','MIS订单号\nMã đơn hàng MIS','备注\nGhi chú'],
+    row: (r, i) => [
+      i + 1,
+      r.stt_goc || '',
+      r.ma_vat_tu || '',
+      r.ten_vat_tu || '',
+      r.required_model || r.quy_cach_model_yeu_cau || '',
+      r.vat_lieu || r.nhan_hieu || r.brand || '',
+      r.quantity ?? r.so_luong ?? '',
+      r.unit || r.don_vi || '',
+      r.manufacturer || r.hang_goc_nsx_goc || r.nhan_hieu || r.brand || '',
+      r.ma_mua_sam || '',
+      '',
+      r.note || '',
+    ],
+    textCols: [2],
+    longTextCols: [3, 4, 5, 8, 11],
+    leftAlignCols: [3, 4, 5, 8, 11],
+  },
 };
 
 function csvQ(value) {
@@ -365,7 +405,7 @@ function buildExportCsv(rows, opts) {
   if (template !== 'chung' && EXPORT_TEMPLATES[template]) {
     const tpl = EXPORT_TEMPLATES[template];
     const lines = [...prefix, tpl.headers.map(csvQ).join(',')];
-    for (const r of rows) lines.push(tpl.row(r).map(csvQ).join(','));
+    for (const [i, r] of rows.entries()) lines.push(tpl.row(r, i).map(csvQ).join(','));
     return '﻿' + lines.join('\r\n') + '\r\n';
   }
   // Chung: apply optional column mask
@@ -459,7 +499,7 @@ function buildExportJson(rows, opts) {
     const tpl = EXPORT_TEMPLATES[template];
     return {
       headers: tpl.headers,
-      rows: rows.map(r => tpl.row(r).map(rawMaVatTu)),
+      rows: rows.map((r, i) => tpl.row(r, i).map(rawMaVatTu)),
       textCols: tpl.textCols,
       longTextCols: tpl.longTextCols,
       leftAlignCols: tpl.leftAlignCols,
@@ -492,7 +532,7 @@ async function exportItemsJson(request, env, actor) {
   if (denied) return denied;
   const p = await readJson(request);
   const VALID_TECH_FILTERS = new Set(['has_clarification','no_clarification','khong_can','dang_hoi','da_xac_nhan','bi_tu_choi']);
-  const VALID_TEMPLATES = new Set(['chung', 'vt1_lam_ro_1', 'vt1_lam_ro_2', 'kq_muasamcong']);
+  const VALID_TEMPLATES = new Set(['chung', 'vt1_lam_ro_1', 'vt1_lam_ro_2', 'kq_muasamcong', 'don_giao_hang', 'don_tra_hang']);
   const rawTemplate = cleanString(p.exportTemplate || 'chung', 40);
   const template = VALID_TEMPLATES.has(rawTemplate) ? rawTemplate : 'chung';
   const rawIds = Array.isArray(p.selectedIds) ? p.selectedIds : [];
@@ -517,6 +557,7 @@ async function exportItemsJson(request, env, actor) {
   return json({
     ok: true,
     filename: `rfq-items${tplSuffix}-${rfqId}-${today}.xlsx`,
+    templateKey: template,
     headers,
     rows: dataRows,
     preface: preface || ['', '', ''],

@@ -2504,7 +2504,61 @@
     }
   }
 
+  function _closeDonMenu() {
+    var m = document.getElementById('rfqDonTplMenu');
+    if (m) m.remove();
+  }
+
+  function openDonMenu(btn) {
+    _closeDonMenu();
+    var menu = document.createElement('div');
+    menu.id = 'rfqDonTplMenu';
+    menu.style.cssText = 'position:fixed;z-index:9999;background:var(--white,#fff);border:1px solid var(--border,#e5e7eb);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:180px;padding:4px 0;font-size:13px';
+    var items = [
+      { key: 'don_giao_hang', label: 'VT1-Đơn giao hàng' },
+      { key: 'don_tra_hang', label: 'VT1-Đơn trả hàng' },
+    ];
+    items.forEach(function (item) {
+      var div = document.createElement('div');
+      div.textContent = item.label;
+      div.style.cssText = 'padding:8px 16px;cursor:pointer';
+      div.onmouseenter = function () { div.style.background = 'var(--bg,#f3f4f6)'; };
+      div.onmouseleave = function () { div.style.background = ''; };
+      div.onclick = function () { _closeDonMenu(); exportDon(item.key); };
+      menu.appendChild(div);
+    });
+    var rect = btn.getBoundingClientRect();
+    menu.style.left = rect.left + 'px';
+    menu.style.top = (rect.bottom + 4) + 'px';
+    document.body.appendChild(menu);
+    setTimeout(function () {
+      document.addEventListener('click', _closeDonMenu, { once: true });
+    }, 0);
+  }
+
+  async function exportDon(type) {
+    var selectedIds = _getSelectedItemIds();
+    var params = Object.assign({}, getCurrentFilterParams(), { exportTemplate: type });
+    if (selectedIds.length) params.selectedIds = selectedIds;
+    try {
+      var data = await API.call('exportRfqItemsJson', params);
+      if (!data.ok) { API.error(data.error || 'Không thể xuất đơn'); return; }
+      if (!data.row_count) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
+      if (data.capped) API.toast('⚠ Kết quả bị giới hạn tối đa 5.000 dòng', 'warn');
+      _buildAndDownloadXlsx(data);
+      var rowMsg = selectedIds.length ? selectedIds.length + ' dòng đã chọn' : data.row_count + ' dòng';
+      var label = type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng';
+      API.toast('Đã xuất ' + label + ' ' + rowMsg, 'success');
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
   function _buildAndDownloadXlsx(data) {
+    if (data.templateKey === 'don_giao_hang' || data.templateKey === 'don_tra_hang') {
+      _buildDonXlsx(data);
+      return;
+    }
     var preface = data.preface || [];
     var headers = data.headers;
     var rows = data.rows;
@@ -2565,6 +2619,165 @@
         }
       }
     } catch (e) { /* style API not available */ }
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    XLSX.writeFile(wb, data.filename);
+  }
+
+  function _buildDonXlsx(data) {
+    var isDelivery = data.templateKey === 'don_giao_hang';
+    var headers = data.headers;
+    var rows = data.rows;
+    var nCols = 12;
+    var nRows = rows.length;
+    var preface = data.preface || ['', '', ''];
+    var maGoiTbmt = preface[0] || '';
+    var tenGoi = preface[1] || '';
+    var tenCdt = preface[2] || '';
+    var textColSet = new Set(data.textCols || []);
+    var leftColSet = new Set(data.leftAlignCols || []);
+
+    var COMP_ROW = 0;
+    var COMP_VN_ROW = 1;
+    var BLANK1 = 2;
+    var TITLE_ROW = 3;
+    var INFO1 = 4;
+    var INFO2 = 5;
+    var INFO3 = 6;
+    var BLANK2 = 7;
+    var HDR_ROW = 8;
+    var DATA_START = 9;
+
+    function blankRow() { var a = []; for (var k = 0; k < nCols; k++) a.push(''); return a; }
+
+    var aoa = [];
+    var r0 = blankRow(); r0[0] = '越南永新一期电力有限公司'; aoa.push(r0);
+    var r1 = blankRow(); r1[0] = 'Công ty TNHH điện lực Vĩnh Tân 1'; aoa.push(r1);
+    aoa.push(blankRow());
+    var r3 = blankRow();
+    r3[0] = isDelivery ? '送货单  ĐƠN GIAO HÀNG' : '退货单  ĐƠN TRẢ HÀNG';
+    aoa.push(r3);
+    var r4 = blankRow();
+    r4[0] = '合同名称:\nTên Hợp đồng:'; r4[2] = tenGoi;
+    r4[6] = '合同编号:\nMã Hợp đồng:'; r4[8] = maGoiTbmt;
+    aoa.push(r4);
+    var r5 = blankRow();
+    r5[0] = isDelivery ? '收货单位:\nĐơn vị nhận hàng:' : '退货单位:\nĐơn vị trả hàng:';
+    r5[2] = isDelivery ? tenCdt : '';
+    r5[6] = '送货单位:\nĐơn vị giao hàng:';
+    r5[8] = isDelivery ? '' : tenCdt;
+    aoa.push(r5);
+    var r6 = blankRow();
+    r6[0] = '日期:\nThời gian:'; r6[2] = '';
+    r6[6] = '送货人:\nNgười giao hàng:'; r6[8] = '';
+    aoa.push(r6);
+    aoa.push(blankRow());
+    aoa.push(headers.slice());
+    for (var di = 0; di < nRows; di++) aoa.push(rows[di].slice());
+    aoa.push(blankRow());
+    var footer = blankRow();
+    footer[0] = '收货人签字:'; footer[1] = 'Người nhận hàng ký tên';
+    footer[6] = '日期:'; footer[7] = 'Thời gian:';
+    aoa.push(footer);
+
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    textColSet.forEach(function (ci) {
+      for (var ri = DATA_START; ri < DATA_START + nRows; ri++) {
+        var addr = XLSX.utils.encode_cell({ r: ri, c: ci });
+        if (ws[addr]) { ws[addr].t = 's'; ws[addr].z = '@'; }
+      }
+    });
+
+    ws['!merges'] = [
+      { s: { r: COMP_ROW, c: 0 }, e: { r: COMP_ROW, c: 11 } },
+      { s: { r: COMP_VN_ROW, c: 0 }, e: { r: COMP_VN_ROW, c: 11 } },
+      { s: { r: TITLE_ROW, c: 0 }, e: { r: TITLE_ROW, c: 11 } },
+      { s: { r: INFO1, c: 0 }, e: { r: INFO1, c: 1 } },
+      { s: { r: INFO1, c: 2 }, e: { r: INFO1, c: 5 } },
+      { s: { r: INFO1, c: 6 }, e: { r: INFO1, c: 7 } },
+      { s: { r: INFO1, c: 8 }, e: { r: INFO1, c: 11 } },
+      { s: { r: INFO2, c: 0 }, e: { r: INFO2, c: 1 } },
+      { s: { r: INFO2, c: 2 }, e: { r: INFO2, c: 5 } },
+      { s: { r: INFO2, c: 6 }, e: { r: INFO2, c: 7 } },
+      { s: { r: INFO2, c: 8 }, e: { r: INFO2, c: 11 } },
+      { s: { r: INFO3, c: 0 }, e: { r: INFO3, c: 1 } },
+      { s: { r: INFO3, c: 2 }, e: { r: INFO3, c: 5 } },
+      { s: { r: INFO3, c: 6 }, e: { r: INFO3, c: 7 } },
+      { s: { r: INFO3, c: 8 }, e: { r: INFO3, c: 11 } },
+    ];
+
+    ws['!cols'] = [
+      { wch: 6 }, { wch: 9 }, { wch: 14 }, { wch: 28 }, { wch: 18 }, { wch: 18 },
+      { wch: 10 }, { wch: 8 }, { wch: 22 }, { wch: 15 }, { wch: 15 }, { wch: 18 },
+    ];
+
+    ws['!rows'] = [];
+    for (var ir = INFO1; ir <= INFO3; ir++) ws['!rows'][ir] = { hpt: 30 };
+    ws['!rows'][HDR_ROW] = { hpt: 42 };
+
+    ws['!freeze'] = { xSplit: 0, ySplit: DATA_START };
+
+    try {
+      var thin = { style: 'thin' };
+      var border = { top: thin, bottom: thin, left: thin, right: thin };
+
+      var a0 = XLSX.utils.encode_cell({ r: COMP_ROW, c: 0 });
+      if (ws[a0]) ws[a0].s = { font: { bold: true, sz: 13 }, alignment: { horizontal: 'center', vertical: 'center' } };
+      var a1 = XLSX.utils.encode_cell({ r: COMP_VN_ROW, c: 0 });
+      if (ws[a1]) ws[a1].s = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center', vertical: 'center' } };
+
+      var a3 = XLSX.utils.encode_cell({ r: TITLE_ROW, c: 0 });
+      if (ws[a3]) ws[a3].s = {
+        font: { bold: true, sz: 15 },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        fill: { patternType: 'solid', fgColor: { rgb: 'D9D9D9' } },
+      };
+
+      var lblStyle = { font: { bold: true }, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border: border };
+      var valStyle = { alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border: border };
+      [INFO1, INFO2, INFO3].forEach(function (ir2) {
+        [0, 6].forEach(function (lc) {
+          var la = XLSX.utils.encode_cell({ r: ir2, c: lc });
+          if (!ws[la]) ws[la] = { t: 's', v: '' };
+          ws[la].s = lblStyle;
+        });
+        [2, 8].forEach(function (vc) {
+          var va = XLSX.utils.encode_cell({ r: ir2, c: vc });
+          if (!ws[va]) ws[va] = { t: 's', v: '' };
+          ws[va].s = valStyle;
+        });
+      });
+
+      var hdrStyle = {
+        font: { bold: true },
+        alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
+        fill: { patternType: 'solid', fgColor: { rgb: 'BDD7EE' } },
+        border: border,
+      };
+      for (var hc = 0; hc < nCols; hc++) {
+        var ha = XLSX.utils.encode_cell({ r: HDR_ROW, c: hc });
+        if (ws[ha]) ws[ha].s = hdrStyle;
+      }
+
+      for (var dr = DATA_START; dr < DATA_START + nRows; dr++) {
+        for (var dc = 0; dc < nCols; dc++) {
+          var da = XLSX.utils.encode_cell({ r: dr, c: dc });
+          if (ws[da]) {
+            ws[da].s = leftColSet.has(dc)
+              ? { alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border: border }
+              : { alignment: { horizontal: 'center', vertical: 'center' }, border: border };
+          }
+        }
+      }
+
+      var footerRow = DATA_START + nRows + 1;
+      [[footerRow, 0, true], [footerRow, 1, false], [footerRow, 6, true], [footerRow, 7, false]].forEach(function (fc) {
+        var fa = XLSX.utils.encode_cell({ r: fc[0], c: fc[1] });
+        if (ws[fa]) ws[fa].s = { font: fc[2] ? { bold: true } : undefined, alignment: { horizontal: 'left', vertical: 'center' } };
+      });
+    } catch (e) {}
 
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
@@ -3510,6 +3723,7 @@
     exportCsv: exportCsv,
     openExportMenu: openExportMenu,
     openExcelMenu: openExcelMenu,
+    openDonMenu: openDonMenu,
     toggleExportColPanel: toggleExportColPanel,
     _exportColAll: _exportColAll,
     importCsv: importCsv,
