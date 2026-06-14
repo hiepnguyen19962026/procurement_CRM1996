@@ -721,6 +721,7 @@
       + '<th ' + th + '>Đã giao LK</th>'
       + '<th ' + th + '>Còn lại</th>'
       + '<th ' + th + ' style="min-width:90px">SL giao lần này</th>'
+      + '<th ' + th + ' style="min-width:120px;text-align:left">Làm rõ</th>'
       + '<th ' + th + ' style="min-width:120px;text-align:left">Ghi chú dòng</th>'
       + '</tr></thead>';
     var stt = 0;
@@ -747,6 +748,7 @@
             + '<td ' + tdr + '>' + API.esc(formatQty(r.delivered_quantity_total) || '0') + '</td>'
             + '<td ' + tdr + '><strong>' + API.esc(formatQty(remaining) || '0') + '</strong></td>'
             + '<td><input data-qty data-rfq-item-id="' + API.esc(r.rfq_item_id) + '" inputmode="decimal" value="' + API.esc(remaining) + '" style="width:90px;text-align:right;font-size:12px"></td>'
+            + lamRoCell(r)
             + '<td><input data-line-note type="text" placeholder="(tùy chọn)" style="width:150px;font-size:12px"></td>'
             + '</tr>';
         }).join('')
@@ -3074,7 +3076,7 @@
     var first     = s.items[0] || {};
     var maGoi     = first.ma_goi_tbmt || '';
     var tenGoi    = first.ten_goi     || '';
-    var cdt       = first.ten_cdt || '';
+    var cdt       = first.ten_cdt || first.client_name || first.nha_may_cdt || '';
     var contractNo = first.contract_no || '';
     var fld = 'style="width:100%;font-size:13px"';
     var lbl = 'style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px"';
@@ -3306,7 +3308,7 @@
         + kv('Mã đơn (dự kiến):', previewNo)
         + kv('Mã gói:', first.ma_goi_tbmt || '')
         + kv('Tên gói:', first.ten_goi || '')
-        + (first.ten_cdt ? kv('CĐT:', first.ten_cdt) : '')
+        + ((first.ten_cdt || first.client_name || first.nha_may_cdt) ? kv('CĐT:', first.ten_cdt || first.client_name || first.nha_may_cdt) : '')
         + (first.contract_no ? kv('Số HĐ:', first.contract_no) : '')
         + '</table>'
         + '<table style="font-size:13px;border-collapse:collapse">'
