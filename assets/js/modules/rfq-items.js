@@ -2563,7 +2563,11 @@
         _openDonPrintModal(data, label);
         API.toast('Xem trước ' + label + ' — ' + rowMsg, 'success');
       } else {
-        _buildAndDownloadXlsx(data);
+        if (data.templateKey === 'don_giao_hang' || data.templateKey === 'don_tra_hang') {
+          await _buildDonXlsxFromTemplate(data);
+        } else {
+          _buildAndDownloadXlsx(data);
+        }
         API.toast('Đã xuất ' + label + ' XLSX — ' + rowMsg, 'success');
       }
     } catch (err) {
@@ -2639,6 +2643,88 @@
 
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    XLSX.writeFile(wb, data.filename);
+  }
+
+  // Template-based export: fetches pre-formatted .xlsx from /assets/templates/,
+  // fills cell values only (preserves all borders/merges/colors from template),
+  // clears unused data rows. Falls back to _buildDonXlsx if template not found.
+  //
+  // Template layout expected (see assets/templates/README.md):
+  //   Row 5  (r=4): col C (c=2)=tenGoi, col I (c=8)=maGoiTbmt
+  //   Row 6  (r=5): col C (c=2)=recv unit (delivery) or col I (c=8)=send unit (return)
+  //   Rows 10–109 (r=9..108): 100 pre-formatted blank data rows, 12 columns A–L
+  async function _buildDonXlsxFromTemplate(data) {
+    var isDelivery  = data.templateKey === 'don_giao_hang';
+    var tplFile     = isDelivery ? '/assets/templates/vt1-don-giao-hang.xlsx' : '/assets/templates/vt1-don-tra-hang.xlsx';
+    var rows        = data.rows;
+    var nRows       = rows.length;
+    var preface     = data.preface || ['', '', ''];
+    var maGoiTbmt   = preface[0] || '';
+    var tenGoi      = preface[1] || '';
+    var tenCdt      = preface[2] || '';
+    var textColSet  = new Set(data.textCols || []);
+
+    var resp = null;
+    try { resp = await fetch(tplFile); } catch (e) { resp = null; }
+
+    if (!resp || !resp.ok) {
+      API.toast('⚠ Chưa có file mẫu (' + tplFile + '), dùng định dạng tạm thời', 'warn');
+      _buildDonXlsx(data);
+      return;
+    }
+
+    var ab = await resp.arrayBuffer();
+    var wb = XLSX.read(new Uint8Array(ab), { type: 'array', cellStyles: true });
+    var ws = wb.Sheets[wb.SheetNames[0]];
+
+    // Template cell positions (0-based)
+    var INFO_ROW1  = 4;   // Row 5:  tenGoi at col C(2), maGoiTbmt at col I(8)
+    var INFO_ROW2  = 5;   // Row 6:  recv/return unit at col C(2) or I(8)
+    var DATA_START = 9;   // Row 10: first data row
+    var DATA_ROWS  = 100; // template has 100 pre-formatted blank data rows
+    var NCOLS      = 12;
+
+    function setVal(r, c, v, asText) {
+      var addr = XLSX.utils.encode_cell({ r: r, c: c });
+      var sv = String(v == null ? '' : v);
+      if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+      ws[addr].t = 's';
+      ws[addr].v = sv;
+      ws[addr].w = sv;
+      delete ws[addr].f;
+      if (asText) ws[addr].z = '@';
+    }
+
+    // Fill info block
+    setVal(INFO_ROW1, 2, tenGoi);
+    setVal(INFO_ROW1, 8, maGoiTbmt);
+    if (isDelivery) {
+      setVal(INFO_ROW2, 2, tenCdt); // 收货单位
+      setVal(INFO_ROW2, 8, '');
+    } else {
+      setVal(INFO_ROW2, 2, '');
+      setVal(INFO_ROW2, 8, tenCdt); // 送货单位 for return
+    }
+
+    // Fill or clear the 100 template data rows
+    for (var i = 0; i < DATA_ROWS; i++) {
+      var r = DATA_START + i;
+      if (i < nRows) {
+        var rowData = rows[i];
+        for (var c = 0; c < NCOLS; c++) {
+          setVal(r, c, rowData[c] == null ? '' : rowData[c], textColSet.has(c));
+        }
+      } else {
+        for (var c = 0; c < NCOLS; c++) {
+          var addr = XLSX.utils.encode_cell({ r: r, c: c });
+          if (ws[addr]) { ws[addr].t = 's'; ws[addr].v = ''; ws[addr].w = ''; delete ws[addr].f; }
+        }
+      }
+    }
+
+    if (nRows > DATA_ROWS) API.toast('⚠ Số dòng (' + nRows + ') vượt quá 100 dòng mẫu — một số dòng cuối có thể thiếu định dạng', 'warn');
+
     XLSX.writeFile(wb, data.filename);
   }
 
