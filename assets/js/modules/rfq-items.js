@@ -2551,21 +2551,49 @@
     var selectedIds = _getSelectedItemIds();
     var params = Object.assign({}, getCurrentFilterParams(), { exportTemplate: type });
     if (selectedIds.length) params.selectedIds = selectedIds;
+    var label = type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng';
+
+    // Open print window synchronously inside the click handler (user-gesture context).
+    // Must happen BEFORE any await, otherwise browsers block it as async popup.
+    var printWin = null;
+    if (format === 'pdf') {
+      printWin = window.open('', '_blank', 'width=850,height=960,scrollbars=yes');
+      if (!printWin) {
+        API.toast('Trình duyệt chặn popup. Cho phép popup để xuất PDF.', 'warn');
+        return;
+      }
+      printWin.document.write('<html><head><title>' + (type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng') + '</title></head><body style="font-family:sans-serif;padding:20px">Đang tải dữ liệu…</body></html>');
+    }
+
     try {
       var data = await API.call('exportRfqItemsJson', params);
-      if (!data.ok) { API.error(data.error || 'Không thể xuất đơn'); return; }
-      if (!data.row_count) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
+      if (!data.ok) {
+        if (printWin) printWin.close();
+        API.error(data.error || 'Không thể xuất đơn');
+        return;
+      }
+      if (!data.row_count) {
+        if (printWin) printWin.close();
+        API.toast('Không có dữ liệu để xuất', 'warn');
+        return;
+      }
       if (data.capped) API.toast('⚠ Kết quả bị giới hạn tối đa 5.000 dòng', 'warn');
       var rowMsg = selectedIds.length ? selectedIds.length + ' dòng đã chọn' : data.row_count + ' dòng';
-      var label = type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng';
       if (format === 'pdf') {
-        _buildDonPdf(data);
-        API.toast('Đang mở ' + label + ' để in PDF — ' + rowMsg, 'success');
+        try {
+          _buildDonPdf(data, printWin);
+          API.toast('Đang mở ' + label + ' để in PDF — ' + rowMsg, 'success');
+        } catch (pdfErr) {
+          console.error('_buildDonPdf error', pdfErr);
+          API.error('Lỗi tạo PDF: ' + (pdfErr.message || pdfErr));
+          if (printWin) printWin.close();
+        }
       } else {
         _buildAndDownloadXlsx(data);
         API.toast('Đã xuất ' + label + ' XLSX — ' + rowMsg, 'success');
       }
     } catch (err) {
+      if (printWin) printWin.close();
       API.error(err);
     }
   }
@@ -2889,7 +2917,7 @@
     XLSX.writeFile(wb, data.filename);
   }
 
-  function _buildDonPdf(data) {
+  function _buildDonPdf(data, printWin) {
     var isDelivery = data.templateKey === 'don_giao_hang';
     var headers    = data.headers;
     var rows       = data.rows;
@@ -2908,8 +2936,6 @@
         .replace(/\n/g, '<br>');
     }
 
-    var docTitle  = isDelivery ? '&#x9001;&#x8D27;&#x5355;&nbsp;&nbsp;&#x110;&#x1a0;N GIAO H&#xc0;NG' : '&#x9000;&#x8D27;&#x5355;&nbsp;&nbsp;&#x110;&#x1a0;N TR&#x1ea2; H&#xc0;NG';
-    // use literal strings — safer than numeric entities for non-BMP
     var titleText = isDelivery ? '送货单  ĐƠN GIAO HÀNG' : '退货单  ĐƠN TRẢ HÀNG';
     var pageTitle = isDelivery ? 'Đơn giao hàng' : 'Đơn trả hàng';
 
@@ -2982,17 +3008,13 @@
       +   '<div class="fb">收货人签字:<br>Người nhận hàng ký tên:</div>'
       +   '<div class="fb">日期:<br>Thời gian:</div>'
       + '</div>'
-      + '<script>window.onload=function(){window.print();}<\/script>'
+      + '<script>window.onload=function(){setTimeout(function(){window.print();},300);}<\/script>'
       + '</body></html>';
 
-    var w = window.open('', '_blank', 'width=850,height=960,scrollbars=yes');
-    if (!w) {
-      API.toast('Trình duyệt chặn popup. Cho phép popup để xuất PDF.', 'warn');
-      return;
-    }
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
+    printWin.document.open();
+    printWin.document.write(html);
+    printWin.document.close();
+    printWin.focus();
   }
 
   function csvQuote(value) {
