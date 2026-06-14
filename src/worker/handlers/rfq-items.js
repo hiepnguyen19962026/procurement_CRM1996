@@ -16,6 +16,7 @@ export async function handleRfqItems(action, request, env, ctx, actor) {
   if (action === 'hardDeleteAllRfqItems') return hardDeleteAll(request, env, ctx, actor);
   if (action === 'logRfqItemImportSummary') return logImportSummary(request, env, ctx, actor);
   if (action === 'exportRfqItemsCsv') return exportItems(request, env, actor);
+  if (action === 'exportRfqItemsJson') return exportItemsJson(request, env, actor);
   return json({ ok: false, error: 'Unknown RFQ item action' }, 400);
 }
 
@@ -298,6 +299,8 @@ const EXPORT_TEMPLATES = {
       r.note || '',
       r.latest_clarification_title || '',
     ],
+    textCols: [2],
+    longTextCols: [3, 4, 6, 10, 11],
   },
   vt1_lam_ro_2: {
     headers: ['编号','需求计划编号','物资编码','物资名称','图片','规格型号','图号','材质','原设备制造商生产厂','是否专用件','是否停产件','订购数量','订购单位','技术参数、安装尺寸及特殊要求','投标设备品牌/生产厂','问题','回答'],
@@ -318,6 +321,8 @@ const EXPORT_TEMPLATES = {
       r.latest_clarification_title || '',
       '',
     ],
+    textCols: [2],
+    longTextCols: [3, 5, 13, 14, 15, 16],
   },
   kq_muasamcong: {
     headers: ['STT','Danh mục hàng hóa','Ký mã hiệu','Nhãn hiệu','Năm sản xuất','Xuất xứ (quốc gia, vùng lãnh thổ sản xuất)','Hãng sản xuất','Cấu hình, tính năng kỹ thuật cơ bản','Đơn vị tính','Khối lượng','Mã HS','Đơn giá trúng thầu','Thành tiền đã bao gồm thuế, phí, lệ phí (nếu có)','Thời gian giao hàng (ngày)/ Tiến độ cung cấp'],
@@ -337,6 +342,8 @@ const EXPORT_TEMPLATES = {
       r.thanh_tien_sau_thue || '',
       r.delivery_time || '',
     ],
+    textCols: [],
+    longTextCols: [1, 2, 7],
   },
 };
 
@@ -404,6 +411,90 @@ async function exportItems(request, env, actor) {
     ok: true,
     filename: `rfq-items${tplSuffix}-${rfqId}-${today}.csv`,
     csv: buildExportCsv(rows, { template, colMask }),
+    row_count: rows.length,
+    capped: rows.length >= EXPORT_MAX_ROWS,
+  });
+}
+
+function rawMaVatTu(v) {
+  // Strip ="..." Excel formula wrapper (from maVatTuExcel) for raw JSON/XLSX export
+  if (typeof v === 'string' && v.startsWith('="') && v.endsWith('"')) {
+    return v.slice(2, -1).replace(/""/g, '"');
+  }
+  return v;
+}
+
+const CHUNG_LONG_HEADERS = new Set([
+  'Tên gói', 'Tên vật tư / Danh mục hàng hóa', 'Ký mã hiệu / Model',
+  'Quy cách / thông số kỹ thuật', 'Yêu cầu kỹ thuật bổ sung', 'Ghi chú', 'Làm rõ',
+]);
+
+function buildExportJson(rows, opts) {
+  const template = (opts && opts.template) || 'chung';
+  const colMask = (opts && opts.colMask) || [];
+
+  if (template !== 'chung' && EXPORT_TEMPLATES[template]) {
+    const tpl = EXPORT_TEMPLATES[template];
+    return {
+      headers: tpl.headers,
+      rows: rows.map(r => tpl.row(r).map(rawMaVatTu)),
+      textCols: tpl.textCols,
+      longTextCols: tpl.longTextCols,
+    };
+  }
+
+  // Chung with optional colMask
+  const allHeaders = EXPORT_COL_HEADERS;
+  const indices = colMask.length
+    ? colMask.map(c => allHeaders.indexOf(c)).filter(i => i >= 0)
+    : allHeaders.map((_, i) => i);
+  const activeIndices = indices.length ? indices : allHeaders.map((_, i) => i);
+  const headers = activeIndices.map(i => allHeaders[i]);
+  return {
+    headers,
+    rows: rows.map(r => {
+      const vals = rowToExportCsv(r);
+      return activeIndices.map(i => rawMaVatTu(vals[i]));
+    }),
+    textCols: headers.reduce((acc, h, i) => { if (h === 'Mã vật tư') acc.push(i); return acc; }, []),
+    longTextCols: headers.reduce((acc, h, i) => { if (CHUNG_LONG_HEADERS.has(h)) acc.push(i); return acc; }, []),
+  };
+}
+
+async function exportItemsJson(request, env, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const p = await readJson(request);
+  const VALID_TECH_FILTERS = new Set(['has_clarification','no_clarification','khong_can','dang_hoi','da_xac_nhan','bi_tu_choi']);
+  const VALID_TEMPLATES = new Set(['chung', 'vt1_lam_ro_1', 'vt1_lam_ro_2', 'kq_muasamcong']);
+  const rawTemplate = cleanString(p.exportTemplate || 'chung', 40);
+  const template = VALID_TEMPLATES.has(rawTemplate) ? rawTemplate : 'chung';
+  const rawIds = Array.isArray(p.selectedIds) ? p.selectedIds : [];
+  const selectedIds = rawIds.map(s => cleanString(String(s), 80)).filter(Boolean).slice(0, 500);
+  const rawCols = template === 'chung' && Array.isArray(p.cols) ? p.cols : [];
+  const colMask = rawCols.map(s => cleanString(String(s), 120)).filter(Boolean);
+  const rows = await exportRfqItemsSQL(env.DB, {
+    q: normalizeText(p.q),
+    q2: normalizeText(p.q2),
+    q3: normalizeText(p.q3),
+    rfqId: p.rfqId || p.rfq_id || '',
+    status: p.status || '',
+    techFilter: VALID_TECH_FILTERS.has(p.techFilter) ? p.techFilter : '',
+    sortBy: p.sortBy || '',
+    sortDir: p.sortDir || '',
+    selectedIds,
+  });
+  const rfqId = cleanString(p.rfqId || p.rfq_id || 'all', 80);
+  const today = nowIso().slice(0, 10);
+  const tplSuffix = template === 'chung' ? '' : '-' + template.replace(/_/g, '-');
+  const { headers, rows: dataRows, textCols, longTextCols } = buildExportJson(rows, { template, colMask });
+  return json({
+    ok: true,
+    filename: `rfq-items${tplSuffix}-${rfqId}-${today}.xlsx`,
+    headers,
+    rows: dataRows,
+    textCols,
+    longTextCols,
     row_count: rows.length,
     capped: rows.length >= EXPORT_MAX_ROWS,
   });

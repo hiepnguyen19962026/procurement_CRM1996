@@ -2443,6 +2443,124 @@
     }, 0);
   }
 
+  function _closeExcelMenu() {
+    var m = document.getElementById('rfqExcelTplMenu');
+    if (m) m.remove();
+  }
+
+  function openExcelMenu(btn) {
+    _closeExcelMenu();
+    var menu = document.createElement('div');
+    menu.id = 'rfqExcelTplMenu';
+    menu.style.cssText = 'position:fixed;z-index:9999;background:var(--white,#fff);border:1px solid var(--border,#e5e7eb);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:170px;padding:4px 0;font-size:13px';
+    var items = [
+      { key: 'chung', label: 'Chung' },
+      { key: 'vt1_lam_ro_1', label: 'VT1-Làm rõ 1' },
+      { key: 'vt1_lam_ro_2', label: 'VT1-Làm rõ 2' },
+      { key: 'kq_muasamcong', label: 'Kq Muasamcong' },
+    ];
+    items.forEach(function (item) {
+      var div = document.createElement('div');
+      div.textContent = item.label;
+      div.style.cssText = 'padding:8px 16px;cursor:pointer';
+      div.onmouseenter = function () { div.style.background = 'var(--bg,#f3f4f6)'; };
+      div.onmouseleave = function () { div.style.background = ''; };
+      div.onclick = function () { _closeExcelMenu(); exportExcel(item.key); };
+      menu.appendChild(div);
+    });
+    var rect = btn.getBoundingClientRect();
+    menu.style.left = rect.left + 'px';
+    menu.style.top = (rect.bottom + 4) + 'px';
+    document.body.appendChild(menu);
+    setTimeout(function () {
+      document.addEventListener('click', _closeExcelMenu, { once: true });
+    }, 0);
+  }
+
+  async function exportExcel(template) {
+    var tpl = template || 'chung';
+    var statusEl = document.getElementById('itemStatus');
+    var techEl = document.getElementById('itemTechFilter');
+    var selectedIds = _getSelectedItemIds();
+    var cols = tpl === 'chung' ? _getExportCols() : [];
+    var params = {
+      rfqId: _selectedRfqId,
+      q: state.q || '',
+      q2: state.q2 || '',
+      q3: state.q3 || '',
+      status: statusEl ? statusEl.value : '',
+      techFilter: techEl ? techEl.value : '',
+      sortBy: sort.by || '',
+      sortDir: sort.dir || '',
+      exportTemplate: tpl,
+    };
+    if (selectedIds.length) params.selectedIds = selectedIds;
+    if (cols.length) params.cols = cols;
+    try {
+      var data = await API.call('exportRfqItemsJson', params);
+      if (!data.ok) { API.error(data.error || 'Không thể xuất Excel'); return; }
+      if (!data.row_count) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
+      if (data.capped) API.toast('⚠ Kết quả bị giới hạn tối đa 5.000 dòng', 'warn');
+      _buildAndDownloadXlsx(data);
+      var rowMsg = selectedIds.length ? selectedIds.length + ' dòng đã chọn' : data.row_count + ' dòng';
+      API.toast('Đã xuất Excel ' + rowMsg, 'success');
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  function _buildAndDownloadXlsx(data) {
+    var headers = data.headers;
+    var rows = data.rows;
+    var textColSet = new Set(data.textCols || []);
+    var longColSet = new Set(data.longTextCols || []);
+    var nCols = headers.length;
+    var nRows = rows.length;
+
+    var aoa = [headers].concat(rows);
+    var ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    // Force text type on numeric-looking columns (prevent scientific notation for Mã vật tư / 物资编码)
+    textColSet.forEach(function (ci) {
+      for (var ri = 1; ri <= nRows; ri++) {
+        var addr = XLSX.utils.encode_cell({ r: ri, c: ci });
+        if (ws[addr]) { ws[addr].t = 's'; ws[addr].z = '@'; }
+      }
+    });
+
+    // Column widths: long text = 35, others = 14
+    ws['!cols'] = headers.map(function (h, ci) {
+      return { wch: longColSet.has(ci) ? 35 : 14 };
+    });
+
+    // Freeze first row
+    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+
+    // Cell styles (xlsx >= 0.20 supports .s; silently skipped if not available)
+    try {
+      for (var c = 0; c < nCols; c++) {
+        var hAddr = XLSX.utils.encode_cell({ r: 0, c: c });
+        if (ws[hAddr]) {
+          ws[hAddr].s = { font: { bold: true }, alignment: { horizontal: 'center', vertical: 'center' } };
+        }
+      }
+      for (var r = 1; r <= nRows; r++) {
+        for (var c = 0; c < nCols; c++) {
+          var addr = XLSX.utils.encode_cell({ r: r, c: c });
+          if (ws[addr]) {
+            ws[addr].s = longColSet.has(c)
+              ? { alignment: { horizontal: 'left', vertical: 'center', wrapText: true } }
+              : { alignment: { horizontal: 'center', vertical: 'center' } };
+          }
+        }
+      }
+    } catch (e) { /* style API not available */ }
+
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    XLSX.writeFile(wb, data.filename);
+  }
+
   function csvQuote(value) {
     var s = String(value == null ? '' : value);
     if (s.indexOf(',') >= 0 || s.indexOf('"') >= 0 || s.indexOf('\n') >= 0) {
@@ -3381,6 +3499,7 @@
     downloadTemplate: downloadTemplate,
     exportCsv: exportCsv,
     openExportMenu: openExportMenu,
+    openExcelMenu: openExcelMenu,
     toggleExportColPanel: toggleExportColPanel,
     _exportColAll: _exportColAll,
     importCsv: importCsv,
