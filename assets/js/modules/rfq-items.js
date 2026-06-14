@@ -3083,7 +3083,7 @@
 
     // Context header: package identity separate from logistics form
     var ctxHtml = '<div style="background:var(--bg,#f9fafb);border:1px solid var(--border);border-radius:6px;'
-      + 'padding:10px 16px;margin-bottom:14px;display:flex;flex-wrap:wrap;gap:10px 32px;align-items:flex-start">'
+      + 'padding:10px 16px;display:flex;flex-wrap:wrap;gap:10px 32px;align-items:flex-start">'
       + '<div><span style="font-size:11px;color:var(--text-muted);display:block;margin-bottom:2px">Mã gói</span>'
         + '<span style="font-size:13px;font-family:monospace;font-weight:600">'
         + (maGoi ? API.esc(maGoi) : '<span style="color:var(--text-faint)">—</span>') + '</span></div>'
@@ -3119,10 +3119,10 @@
         + '<input id="donWfNote" type="text" placeholder="(tùy chọn)" ' + fld + '></div>'
       + '</div>';
 
-    var html = '<div style="display:flex;flex-direction:column;height:100%;gap:0">'
+    var html = '<div class="span-12" style="display:grid;gap:14px">'
       + ctxHtml
       + formHtml
-      + '<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:14px;flex:1;overflow:auto">'
+      + '<div style="border-top:1px solid var(--border);padding-top:12px">'
         + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'
           + '<span style="font-size:13px;font-weight:500">Điều chỉnh số lượng giao hàng?</span>'
           + '<button type="button" id="donWfQtyNo" onclick="RfqItemsModule._donStep1Qty(false)"'
@@ -3137,12 +3137,7 @@
     Utils.openModal(typeLabel + ' — Bước 1/2', html, _donStep1Submit);
     setTimeout(function () {
       var m = document.querySelector('#modal .modal');
-      if (m) {
-        m.style.width    = 'calc(100vw - 40px)';
-        m.style.maxWidth = 'none';
-        m.style.height   = 'calc(100vh - 40px)';
-        m.style.maxHeight = 'none';
-      }
+      if (m) m.classList.add('modal--import-wide');
     }, 0);
   }
 
