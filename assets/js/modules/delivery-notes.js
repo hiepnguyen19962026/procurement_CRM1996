@@ -150,26 +150,28 @@
         && (!r.acceptance_status || r.acceptance_status === 'pending')
         && (!r.payment_request_status || r.payment_request_status === 'not_ready');
       var canArchive = mgr && !adm && r.status === 'active';
-      var actionBtns = '';
+      var eid = esc(r.delivery_note_id);
+      var eno = esc(r.delivery_note_no);
+      var actionBtns = '<button type="button" onclick="DeliveryNotesModule.openDetail(\'' + eid + '\')"'
+        + ' style="font-size:11px;padding:2px 7px">Chi tiết</button>'
+        + '<button type="button" onclick="DeliveryNotesModule.exportFromList(\'' + eid + '\',\'xlsx\')"'
+        + ' style="font-size:11px;padding:2px 7px;margin-left:2px">VT1 XLSX</button>'
+        + '<button type="button" onclick="DeliveryNotesModule.exportFromList(\'' + eid + '\',\'pdf\')"'
+        + ' style="font-size:11px;padding:2px 7px;margin-left:2px">VT1 PDF</button>';
       if (canDel) {
-        actionBtns += '<button type="button" onclick="DeliveryNotesModule.deleteDN(\''
-          + esc(r.delivery_note_id) + '\',\'' + esc(r.delivery_note_no) + '\')"'
-          + ' style="color:var(--red);border-color:var(--red);background:#fff">Xóa</button>';
+        actionBtns += '<button type="button" onclick="DeliveryNotesModule.deleteDN(\'' + eid + '\',\'' + eno + '\')"'
+          + ' style="color:var(--red);border-color:var(--red);background:#fff;font-size:11px;padding:2px 7px;margin-left:2px">Xóa</button>';
       }
       if (canArchive) {
-        actionBtns += '<button type="button" onclick="DeliveryNotesModule.archive(\''
-          + esc(r.delivery_note_id) + '\',\'' + esc(r.delivery_note_no) + '\')"'
-          + ' style="color:var(--text-muted);border-color:var(--border);background:#fff">Lưu trữ</button>';
+        actionBtns += '<button type="button" onclick="DeliveryNotesModule.archive(\'' + eid + '\',\'' + eno + '\')"'
+          + ' style="color:var(--text-muted);border-color:var(--border);background:#fff;font-size:11px;padding:2px 7px;margin-left:2px">Lưu trữ</button>';
       }
 
-      // Mã đơn cell — clickable, note as sub-line
-      var noteSubline = r.note
-        ? '<div style="font-size:11px;color:var(--text-muted);margin-top:1px">Ghi chú: ' + esc(r.note.slice(0, 60)) + (r.note.length > 60 ? '…' : '') + '</div>'
-        : '';
+      // Mã đơn cell — clickable
       var noteNoCell = '<td>'
         + '<span class="link-edit" style="font-weight:600;font-size:13px" onclick="DeliveryNotesModule.openDetail(\'' + esc(r.delivery_note_id) + '\')">'
         + esc(r.delivery_note_no || '—') + '</span>'
-        + noteSubline + '</td>';
+        + '</td>';
 
       // Tên gói — drilldown via RfqsModule if available
       var tenGoiCell = r.rfq_id && r.ten_goi
@@ -190,9 +192,10 @@
         + '<td><span class="badge" style="' + (ACCEPT_STYLE[acceptSt] || '') + '">' + esc(ACCEPT_LABEL[acceptSt] || acceptSt) + '</span></td>'
         + '<td><span class="badge" style="' + (PAYMENT_STYLE[paymentSt] || '') + '">' + esc(PAYMENT_LABEL[paymentSt] || paymentSt) + '</span></td>'
         + '<td><span class="badge" style="' + (STATUS_STYLE[r.status] || '') + '">' + esc(statusLabel(r.status)) + '</span></td>'
+        + '<td style="font-size:12px;color:var(--text-muted);max-width:150px">' + esc((r.note || '').slice(0, 60)) + (r.note && r.note.length > 60 ? '…' : '') + '</td>'
         + '<td style="white-space:nowrap">' + actionBtns + '</td>'
         + '</tr>';
-    }).join('') || '<tr><td colspan="14" style="text-align:center;color:var(--text-faint);padding:24px">Không có dữ liệu</td></tr>';
+    }).join('') || '<tr><td colspan="15" style="text-align:center;color:var(--text-faint);padding:24px">Không có dữ liệu</td></tr>';
 
     if (more) more.classList.toggle('hidden', !state.hasMore);
   }
@@ -644,6 +647,17 @@
     } catch (e) { API.error(e); }
   }
 
+  // --- Export from list (fetches full detail first) ---
+
+  async function exportFromList(id, format) {
+    if (typeof RfqItemsModule === 'undefined') { API.toast('Module xuất chưa sẵn sàng', 'warn'); return; }
+    try {
+      var data = await API.call('getDeliveryNoteDetail', { deliveryNoteId: id });
+      if (!data || !data.note) { API.toast('Không tải được dữ liệu đơn', 'warn'); return; }
+      RfqItemsModule.exportDeliveryNoteDoc(data.note, data.items || [], format);
+    } catch (e) { API.error(e); }
+  }
+
   // --- Export from detail ---
 
   function exportDetail(format) {
@@ -693,6 +707,7 @@
     _tickAllAccepted:       _tickAllAccepted,
     _toggleSelectAllDetail: _toggleSelectAllDetail,
     _onDetailItemCheck:     _onDetailItemCheck,
+    exportFromList:         exportFromList,
     exportDetail:           exportDetail,
     archive:                archive,
     deleteDN:               deleteDN,

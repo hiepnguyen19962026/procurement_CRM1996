@@ -3285,15 +3285,15 @@
         ten_vat_tu:     it.ten_vat_tu,
         required_model: it.required_model || it.quy_cach_final || '',
         quy_cach_final: it.quy_cach_final,
-        vat_lieu:       it.vat_lieu,
+        vat_lieu:       [it.vat_lieu, it.brand || it.hang_final].filter(Boolean).join(' / '),
         hang_final:     it.hang_final,
         brand:          it.brand,
-        manufacturer:   it.manufacturer,
+        manufacturer:   it.manufacturer || it.hang_final || it.brand || '',
         unit:           it.unit,
         note:           it.note,
         ma_goi_tbmt:    note.ma_goi_tbmt || '',
         ten_goi:        note.ten_goi || '',
-        ten_cdt:        note.client_name || '',
+        ten_cdt:        noteType === 'don_giao_hang' ? (note.receiver_unit || note.client_name || '') : (note.sender_unit || note.client_name || ''),
       };
     });
     var inputRows = items.map(function (it) {
@@ -3301,6 +3301,11 @@
     });
     var data = _buildExportDataFromRows(rfqItems, inputRows, noteType, note);
     if (!data || !data.rows.length) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
+    data.deliveryDate = note.delivery_date  || '';
+    data.receiverName = note.receiver_name  || '';
+    data.senderName   = note.sender_name    || '';
+    data.senderUnit   = note.sender_unit    || '';
+    data.vehicleNo    = note.vehicle_no     || '';
     if (format === 'pdf') {
       _openDonPrintModal(data, typeLabel);
     } else {
@@ -3411,12 +3416,14 @@
 
     var ab = await resp.arrayBuffer();
     var wb = XLSX.read(new Uint8Array(ab), { type: 'array', cellStyles: true });
-    var ws = wb.Sheets[wb.SheetNames[0]];
+    // Workbook has a hidden "Task" sheet as SheetNames[0] — actual form is "DN"
+    var wsName = wb.SheetNames.find(function(n) { return n === 'DN'; }) || wb.SheetNames[0];
+    var ws = wb.Sheets[wsName];
 
     // Template cell positions (0-based)
     var INFO_ROW1  = 4;   // Row 5:  tenGoi at col C(2), maGoiTbmt at col I(8)
     var INFO_ROW2  = 5;   // Row 6:  recv/return unit at col C(2) or I(8)
-    var DATA_START = 9;   // Row 10: first data row
+    var DATA_START = 8;   // Row 9:  first data row (headers at row 8 = r=7)
     var DATA_ROWS  = 100; // template has 100 pre-formatted blank data rows
     var NCOLS      = 12;
 
@@ -3440,6 +3447,10 @@
     } else {
       setVal(INFO_ROW2, 2, '');
       setVal(INFO_ROW2, 8, tenCdt); // 送货单位 for return
+    }
+    if (data.deliveryDate || data.senderName) {
+      setVal(6, 2, data.deliveryDate || '');
+      setVal(6, 8, data.senderName   || '');
     }
 
     // Fill or clear the 100 template data rows
