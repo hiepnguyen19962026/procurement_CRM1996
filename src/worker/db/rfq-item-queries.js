@@ -120,8 +120,8 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
     db.prepare(countSql).bind(...baseBinds).first(),
     db.prepare(
       `WITH page AS (
-         SELECT i.*, r.ten_goi, r.ma_goi_tbmt
-         FROM rfq_items i LEFT JOIN rfqs r ON r.rfq_id = i.rfq_id
+         SELECT i.*, r.ten_goi, r.ma_goi_tbmt, COALESCE(c.client_name, r.nha_may_cdt, '') AS ten_cdt
+         FROM rfq_items i LEFT JOIN rfqs r ON r.rfq_id = i.rfq_id LEFT JOIN clients c ON c.client_id = r.client_id
          ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
          ORDER BY ${innerOrderBy} LIMIT ?
        ),
