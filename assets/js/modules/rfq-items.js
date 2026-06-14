@@ -2553,47 +2553,20 @@
     if (selectedIds.length) params.selectedIds = selectedIds;
     var label = type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng';
 
-    // Open print window synchronously inside the click handler (user-gesture context).
-    // Must happen BEFORE any await, otherwise browsers block it as async popup.
-    var printWin = null;
-    if (format === 'pdf') {
-      printWin = window.open('', '_blank', 'width=850,height=960,scrollbars=yes');
-      if (!printWin) {
-        API.toast('Trình duyệt chặn popup. Cho phép popup để xuất PDF.', 'warn');
-        return;
-      }
-      printWin.document.write('<html><head><title>' + (type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng') + '</title></head><body style="font-family:sans-serif;padding:20px">Đang tải dữ liệu…</body></html>');
-    }
-
     try {
       var data = await API.call('exportRfqItemsJson', params);
-      if (!data.ok) {
-        if (printWin) printWin.close();
-        API.error(data.error || 'Không thể xuất đơn');
-        return;
-      }
-      if (!data.row_count) {
-        if (printWin) printWin.close();
-        API.toast('Không có dữ liệu để xuất', 'warn');
-        return;
-      }
+      if (!data.ok) { API.error(data.error || 'Không thể xuất đơn'); return; }
+      if (!data.row_count) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
       if (data.capped) API.toast('⚠ Kết quả bị giới hạn tối đa 5.000 dòng', 'warn');
       var rowMsg = selectedIds.length ? selectedIds.length + ' dòng đã chọn' : data.row_count + ' dòng';
       if (format === 'pdf') {
-        try {
-          _buildDonPdf(data, printWin);
-          API.toast('Đang mở ' + label + ' để in PDF — ' + rowMsg, 'success');
-        } catch (pdfErr) {
-          console.error('_buildDonPdf error', pdfErr);
-          API.error('Lỗi tạo PDF: ' + (pdfErr.message || pdfErr));
-          if (printWin) printWin.close();
-        }
+        _openDonPrintModal(data, label);
+        API.toast('Xem trước ' + label + ' — ' + rowMsg, 'success');
       } else {
         _buildAndDownloadXlsx(data);
         API.toast('Đã xuất ' + label + ' XLSX — ' + rowMsg, 'success');
       }
     } catch (err) {
-      if (printWin) printWin.close();
       API.error(err);
     }
   }
@@ -2917,7 +2890,7 @@
     XLSX.writeFile(wb, data.filename);
   }
 
-  function _buildDonPdf(data, printWin) {
+  function _openDonPrintModal(data, label) {
     var isDelivery = data.templateKey === 'don_giao_hang';
     var headers    = data.headers;
     var rows       = data.rows;
@@ -2937,13 +2910,10 @@
     }
 
     var titleText = isDelivery ? '送货单  ĐƠN GIAO HÀNG' : '退货单  ĐƠN TRẢ HÀNG';
-    var pageTitle = isDelivery ? 'Đơn giao hàng' : 'Đơn trả hàng';
-
     var recvLabel = isDelivery ? '收货单位:<br>Đơn vị nhận hàng:' : '退货单位:<br>Đơn vị trả hàng:';
     var recvVal   = isDelivery ? esc(tenCdt) : '';
     var sendVal   = isDelivery ? '' : esc(tenCdt);
 
-    // Column widths in % for A4 portrait ~190mm usable (12 cols)
     var colWidths = ['2.6%','5.3%','9.5%','18.4%','11.6%','10.5%','6.3%','5.3%','13.2%','7.9%','5.3%','4.2%'];
 
     var colgroupHtml = '<colgroup>';
@@ -2965,34 +2935,34 @@
     });
     tbodyHtml += '</tbody>';
 
-    var css = [
+    var printCss = [
       '@page{size:A4 portrait;margin:10mm}',
-      '*{box-sizing:border-box;margin:0;padding:0}',
-      'body{font-family:Arial,sans-serif;font-size:10pt}',
-      '.cn{text-align:center;font-weight:bold;font-size:13pt;margin-bottom:1px}',
-      '.vn{text-align:center;font-weight:bold;font-size:11pt;margin-bottom:4px}',
-      '.ttl{text-align:center;font-weight:bold;font-size:13pt;background:#D9D9D9;padding:5px 0;margin-bottom:0}',
-      '.inf{width:100%;border-collapse:collapse;margin:0}',
-      '.inf td{border:1px solid #000;padding:3px 5px;vertical-align:middle;font-size:9pt;line-height:1.3}',
-      '.inf .lb{font-weight:bold;width:17%;white-space:nowrap}',
-      '.inf .vl{width:33%}',
-      '.tbl{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:4px}',
-      '.tbl th,.tbl td{border:1px solid #000;padding:2px 3px;vertical-align:middle;word-break:break-word}',
-      '.tbl th{background:#BDD7EE;font-weight:bold;text-align:center;font-size:8pt;line-height:1.25}',
-      '.tbl td{font-size:8.5pt;text-align:center}',
-      '.tbl td.l{text-align:left}',
-      'thead{display:table-header-group}',
-      'tr{page-break-inside:avoid}',
-      '.ft{margin-top:12px;display:flex;justify-content:space-between;gap:20px}',
-      '.fb{flex:1;padding-top:36px;border-top:1px solid #000;font-size:9pt;font-weight:bold;line-height:1.5}',
-    ].join('');
+      '.don-print-area *{box-sizing:border-box}',
+      '.don-print-area{font-family:Arial,sans-serif;font-size:10pt}',
+      '.don-cn{text-align:center;font-weight:bold;font-size:13pt;margin-bottom:1px}',
+      '.don-vn{text-align:center;font-weight:bold;font-size:11pt;margin-bottom:4px}',
+      '.don-ttl{text-align:center;font-weight:bold;font-size:13pt;background:#D9D9D9;padding:5px 0;margin-bottom:0}',
+      '.don-inf{width:100%;border-collapse:collapse;margin:0}',
+      '.don-inf td{border:1px solid #000;padding:3px 5px;vertical-align:middle;font-size:9pt;line-height:1.3}',
+      '.don-inf .lb{font-weight:bold;width:17%;white-space:nowrap}',
+      '.don-inf .vl{width:33%}',
+      '.don-tbl{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:4px}',
+      '.don-tbl th,.don-tbl td{border:1px solid #000;padding:2px 3px;vertical-align:middle;word-break:break-word}',
+      '.don-tbl th{background:#BDD7EE;font-weight:bold;text-align:center;font-size:8pt;line-height:1.25}',
+      '.don-tbl td{font-size:8.5pt;text-align:center}',
+      '.don-tbl td.l{text-align:left}',
+      '.don-tbl thead{display:table-header-group}',
+      '.don-tbl tr{page-break-inside:avoid}',
+      '.don-ft{margin-top:12px;display:flex;justify-content:space-between;gap:20px}',
+      '.don-fb{flex:1;padding-top:36px;border-top:1px solid #000;font-size:9pt;font-weight:bold;line-height:1.5}',
+    ].join('\n');
 
-    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(pageTitle) + '</title>'
-      + '<style>' + css + '</style></head><body>'
-      + '<div class="cn">越南永新一期电力有限公司</div>'
-      + '<div class="vn">Công ty TNHH điện lực Vĩnh Tân 1</div>'
-      + '<div class="ttl">' + esc(titleText) + '</div>'
-      + '<table class="inf"><tbody>'
+    var printAreaHtml = '<style>' + printCss + '</style>'
+      + '<div class="don-print-area">'
+      + '<div class="don-cn">越南永新一期电力有限公司</div>'
+      + '<div class="don-vn">Công ty TNHH điện lực Vĩnh Tân 1</div>'
+      + '<div class="don-ttl">' + esc(titleText) + '</div>'
+      + '<table class="don-inf"><tbody>'
       + '<tr>'
       +   '<td class="lb">合同名称:<br>Tên Hợp đồng:</td><td class="vl">' + esc(tenGoi) + '</td>'
       +   '<td class="lb">合同编号:<br>Mã Hợp đồng:</td><td class="vl">' + esc(maGoiTbmt) + '</td>'
@@ -3003,18 +2973,37 @@
       +   '<td class="lb">日期:<br>Thời gian:</td><td class="vl"></td>'
       +   '<td class="lb">送货人:<br>Người giao hàng:</td><td class="vl"></td>'
       + '</tr></tbody></table>'
-      + '<table class="tbl">' + colgroupHtml + theadHtml + tbodyHtml + '</table>'
-      + '<div class="ft">'
-      +   '<div class="fb">收货人签字:<br>Người nhận hàng ký tên:</div>'
-      +   '<div class="fb">日期:<br>Thời gian:</div>'
+      + '<table class="don-tbl">' + colgroupHtml + theadHtml + tbodyHtml + '</table>'
+      + '<div class="don-ft">'
+      +   '<div class="don-fb">收货人签字:<br>Người nhận hàng ký tên:</div>'
+      +   '<div class="don-fb">日期:<br>Thời gian:</div>'
       + '</div>'
-      + '<script>window.onload=function(){setTimeout(function(){window.print();},300);}<\/script>'
-      + '</body></html>';
+      + '</div>';
 
-    printWin.document.open();
-    printWin.document.write(html);
-    printWin.document.close();
-    printWin.focus();
+    // Remove any existing instance
+    var existing = document.getElementById('donPrintBackdrop');
+    if (existing) document.body.removeChild(existing);
+
+    var backdrop = document.createElement('div');
+    backdrop.id = 'donPrintBackdrop';
+    backdrop.innerHTML = '<div id="donPrintModal">'
+      + '<div class="don-modal-head">'
+      +   '<span>' + esc(label || (isDelivery ? 'Đơn giao hàng' : 'Đơn trả hàng')) + '</span>'
+      +   '<button type="button" id="donPrintClose" title="Đóng">&#x2715;</button>'
+      + '</div>'
+      + '<div class="don-modal-body">' + printAreaHtml + '</div>'
+      + '<div class="don-modal-actions">'
+      +   '<button type="button" id="donPrintCancel" class="btn-cancel">Đóng</button>'
+      +   '<button type="button" id="donPrintBtn" class="btn-green">In đơn</button>'
+      + '</div>'
+      + '</div>';
+
+    document.body.appendChild(backdrop);
+
+    function closeDonModal() { document.body.removeChild(backdrop); }
+    document.getElementById('donPrintClose').onclick  = closeDonModal;
+    document.getElementById('donPrintCancel').onclick = closeDonModal;
+    document.getElementById('donPrintBtn').onclick    = function () { window.print(); };
   }
 
   function csvQuote(value) {
