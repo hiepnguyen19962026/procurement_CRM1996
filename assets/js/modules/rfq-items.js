@@ -2994,35 +2994,71 @@
     var recvVal   = isDelivery ? esc(tenCdt) : '';
     var sendVal   = isDelivery ? '' : esc(tenCdt);
 
-    // Grid column template — 12 cols, total 100%, A4 landscape
-    var GCOLS = '3% 5% 9% 16% 14% 10% 6% 5% 14% 8% 6% 4%';
+    // SVG grid: vector lines drawn once, cell text overlaid with abs-positioned divs.
+    // No table/CSS-grid borders — SVG <line> and <rect> cannot have rounding gaps.
+    var COL_W = [3, 5, 9, 16, 14, 10, 6, 5, 14, 8, 6, 4]; // % — total 100
+    var HDR_H = 12;  // mm
+    var ROW_H = 16;  // mm (fixed height — text clips, no layout shift)
+    var nRows  = rows.length;
+    var gridH  = HDR_H + nRows * ROW_H; // mm
 
     function escPlain(s) {
       return String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // Header row: each bilingual header split into two <div> lines
-    var gridHeadHtml = '<div class="don-grid-row don-grid-head">';
-    headers.forEach(function (h) {
+    // Cumulative left positions (%)
+    var cumL = [0];
+    COL_W.forEach(function (w) { cumL.push(cumL[cumL.length - 1] + w); });
+
+    // ── SVG border lines ──────────────────────────────────────────────────────
+    var SK = 'stroke="#000" stroke-width="1"';
+    var svgParts = [
+      '<svg width="100%" height="' + gridH + 'mm"',
+      '  style="position:absolute;top:0;left:0;overflow:visible;display:block">',
+      // Outer rectangle
+      '<rect x="0" y="0" width="100%" height="' + gridH + 'mm" fill="none" ' + SK + '/>',
+      // Internal vertical lines — one per column boundary (ci = 1..11)
+    ];
+    for (var ci = 1; ci <= 11; ci++) {
+      svgParts.push('<line x1="' + cumL[ci] + '%" y1="0" x2="' + cumL[ci] + '%" y2="' + gridH + 'mm" ' + SK + '/>');
+    }
+    // Horizontal line after header
+    svgParts.push('<line x1="0" y1="' + HDR_H + 'mm" x2="100%" y2="' + HDR_H + 'mm" ' + SK + '/>');
+    // Horizontal lines between data rows (not after the last — rect bottom covers it)
+    for (var ri = 1; ri < nRows; ri++) {
+      var yMm = HDR_H + ri * ROW_H;
+      svgParts.push('<line x1="0" y1="' + yMm + 'mm" x2="100%" y2="' + yMm + 'mm" ' + SK + '/>');
+    }
+    svgParts.push('</svg>');
+    var svgHtml = svgParts.join('');
+
+    // ── Header cell text overlays ─────────────────────────────────────────────
+    var hdrHtml = '';
+    headers.forEach(function (h, ci) {
       var lines = String(h == null ? '' : h).split('\n');
-      gridHeadHtml += '<div class="don-grid-cell">'
-        + lines.map(function (l) { return '<div>' + escPlain(l) + '</div>'; }).join('')
+      hdrHtml += '<div style="position:absolute;left:' + cumL[ci] + '%;top:0;'
+        + 'width:' + COL_W[ci] + '%;height:' + HDR_H + 'mm;'
+        + 'display:flex;flex-direction:column;align-items:center;justify-content:center;'
+        + 'padding:1px 2px;overflow:hidden;font-weight:700;font-size:7.5pt;line-height:1.15;text-align:center">'
+        + lines.map(function (l) { return '<span style="display:block">' + escPlain(l) + '</span>'; }).join('')
         + '</div>';
     });
-    gridHeadHtml += '</div>';
 
-    // Data rows
-    var gridBodyHtml = '';
-    rows.forEach(function (row) {
-      gridBodyHtml += '<div class="don-grid-row">';
+    // ── Data cell text overlays ───────────────────────────────────────────────
+    var dataHtml = '';
+    rows.forEach(function (row, ri) {
+      var topMm = HDR_H + ri * ROW_H;
       row.forEach(function (cell, ci) {
-        var cls = leftColSet.has(ci) ? ' left' : '';
-        gridBodyHtml += '<div class="don-grid-cell' + cls + '">'
+        var isLeft = leftColSet.has(ci);
+        dataHtml += '<div style="position:absolute;left:' + cumL[ci] + '%;top:' + topMm + 'mm;'
+          + 'width:' + COL_W[ci] + '%;height:' + ROW_H + 'mm;'
+          + 'display:flex;align-items:center;'
+          + (isLeft ? 'justify-content:flex-start;text-align:left' : 'justify-content:center;text-align:center') + ';'
+          + 'padding:2px 3px;overflow:hidden;font-size:8pt;line-height:1.2;word-break:break-word">'
           + esc(String(cell == null ? '' : cell))
           + '</div>';
       });
-      gridBodyHtml += '</div>';
     });
 
     // @page placed here (top-level in DOM) applies while this element is in the document
@@ -3037,17 +3073,6 @@
       '.don-inf td{border:1px solid #000;padding:3px 5px;vertical-align:middle;font-size:8.5pt;line-height:1.3}',
       '.don-inf .lb{font-weight:bold;width:16%;white-space:nowrap}',
       '.don-inf .vl{width:34%}',
-      // Grid item section — individual row grids guarantee column alignment across rows
-      '.don-grid{width:100%;margin-top:3px}',
-      '.don-grid-row{display:grid;grid-template-columns:' + GCOLS + ';border-left:1px solid #000}',
-      '.don-grid-head{border-top:1px solid #000}',
-      '.don-grid-cell{border-right:1px solid #000;border-bottom:1px solid #000;' +
-        'padding:3px 2px;display:flex;align-items:center;justify-content:center;' +
-        'text-align:center;overflow-wrap:anywhere;word-break:normal;line-height:1.15;font-size:8pt}',
-      '.don-grid-head .don-grid-cell{min-height:40px;font-weight:700;font-size:7.5pt;align-items:center}',
-      '.don-grid-head .don-grid-cell div{display:block;line-height:1.15}',
-      '.don-grid-cell.left{justify-content:flex-start;text-align:left}',
-      // Footer: 2-col table, top-border signature lines only
       '.don-ft{width:100%;border-collapse:collapse;margin-top:14px}',
       '.don-ft td{width:50%;padding-top:28px;border-top:1px solid #000;' +
         'font-size:8.5pt;font-weight:bold;line-height:1.5;padding-left:4px;vertical-align:top}',
@@ -3069,7 +3094,9 @@
       +   '<td class="lb">日期:<br>Thời gian:</td><td class="vl"></td>'
       +   '<td class="lb">送货人:<br>Người giao hàng:</td><td class="vl"></td>'
       + '</tr></tbody></table>'
-      + '<div class="don-grid">' + gridHeadHtml + gridBodyHtml + '</div>'
+      + '<div style="position:relative;width:100%;height:' + gridH + 'mm;margin-top:3px">'
+      +   svgHtml + hdrHtml + dataHtml
+      + '</div>'
       + '<table class="don-ft"><tr>'
       +   '<td>收货人签字:<br>Người nhận hàng ký tên:</td>'
       +   '<td>日期:<br>Thời gian:</td>'
