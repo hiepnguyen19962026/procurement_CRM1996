@@ -1,26 +1,36 @@
 const DELIVERY_SORT_EXPR = 'dn.delivery_date';
 
-export async function nextDeliveryNoteNoSQL(db) {
-  const year = new Date().getUTCFullYear();
-  const prefix = `DN-${year}-`;
+// deliveryDate: 'YYYY-MM-DD', noteType: 'delivery' | 'return'
+// DGH-2026-0614-001 (delivery) / DTH-2026-0614-001 (return)
+// Sequence resets per day + note_type. Relies on UNIQUE delivery_note_no — caller retries on conflict.
+export async function nextDeliveryNoteNoSQL(db, deliveryDate, noteType) {
+  const d = String(deliveryDate || '');
+  const year = d.slice(0, 4) || String(new Date().getUTCFullYear());
+  const mmdd = d.replace(/-/g, '').slice(4, 8) || (() => {
+    const n = new Date();
+    return String(n.getUTCMonth() + 1).padStart(2, '0') + String(n.getUTCDate()).padStart(2, '0');
+  })();
+  const code   = noteType === 'return' ? 'DTH' : 'DGH';
+  const prefix = `${code}-${year}-${mmdd}-`;
   const row = await db.prepare(
     `SELECT delivery_note_no FROM delivery_notes
      WHERE delivery_note_no LIKE ?
      ORDER BY delivery_note_no DESC LIMIT 1`
   ).bind(`${prefix}%`).first();
   const last = row?.delivery_note_no ? Number(String(row.delivery_note_no).split('-').pop()) : 0;
-  return `${prefix}${String((Number.isFinite(last) ? last : 0) + 1).padStart(5, '0')}`;
+  return `${prefix}${String((Number.isFinite(last) ? last : 0) + 1).padStart(3, '0')}`;
 }
 
 export async function listDeliveryNotesSQL(db, params) {
-  const { q, rfqId, contractId, clientId, status, dateFrom, dateTo, cursorDate, cursorId, limit } = params;
+  const { q, rfqId, contractId, clientId, noteType, status, dateFrom, dateTo, cursorDate, cursorId, limit } = params;
   const conds = [];
   const binds = [];
 
-  if (rfqId)      { conds.push('dn.rfq_id = ?');      binds.push(rfqId); }
-  if (contractId) { conds.push('dn.contract_id = ?'); binds.push(contractId); }
-  if (clientId)   { conds.push('dn.client_id = ?');   binds.push(clientId); }
-  if (status)     { conds.push('dn.status = ?');      binds.push(status); }
+  if (rfqId)      { conds.push('dn.rfq_id = ?');       binds.push(rfqId); }
+  if (contractId) { conds.push('dn.contract_id = ?');  binds.push(contractId); }
+  if (clientId)   { conds.push('dn.client_id = ?');    binds.push(clientId); }
+  if (noteType)   { conds.push('dn.note_type = ?');    binds.push(noteType); }
+  if (status)     { conds.push('dn.status = ?');       binds.push(status); }
   if (dateFrom)   { conds.push(`${DELIVERY_SORT_EXPR} >= ?`); binds.push(dateFrom); }
   if (dateTo)     { conds.push(`${DELIVERY_SORT_EXPR} <= ?`); binds.push(dateTo); }
   if (q) {
@@ -98,12 +108,13 @@ export async function getDeliveryNoteItemSQL(db, deliveryNoteItemId) {
 export async function insertDeliveryNoteSQL(db, row) {
   return db.prepare(
     `INSERT INTO delivery_notes (
-      delivery_note_id, delivery_note_no, rfq_id, contract_id, client_id,
+      delivery_note_id, delivery_note_no, note_type, rfq_id, contract_id, client_id,
       delivery_date, receiver_unit, sender_unit, receiver_name, sender_name,
       note, status, created_by, created_at, updated_at, archived_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
-    row.delivery_note_id, row.delivery_note_no, row.rfq_id, row.contract_id, row.client_id,
+    row.delivery_note_id, row.delivery_note_no, row.note_type,
+    row.rfq_id, row.contract_id, row.client_id,
     row.delivery_date, row.receiver_unit, row.sender_unit, row.receiver_name, row.sender_name,
     row.note, row.status, row.created_by, row.created_at, row.updated_at, row.archived_at
   ).run();

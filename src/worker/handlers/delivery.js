@@ -21,7 +21,8 @@ import { writeActionLog } from '../lib/action-log.js';
 import { cleanNumber, cleanString } from '../lib/normalize.js';
 import { clampLimit, json, makeId, nowIso, readJson } from '../lib/utils.js';
 
-const VALID_STATUS = new Set(['active', 'archived']);
+const VALID_STATUS    = new Set(['active', 'archived']);
+const VALID_NOTE_TYPES = new Set(['delivery', 'return']);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DASHBOARD_KEYS = ['dashboard:v1', 'dashboard:v2'];
 
@@ -54,13 +55,15 @@ async function listNotes(request, env, actor) {
     }
   }
 
-  const status = cleanString(body.status || '', 20);
+  const status   = cleanString(body.status   || '', 20);
+  const noteType = cleanString(body.noteType || body.note_type || '', 20);
   const rows = await listDeliveryNotesSQL(env.DB, {
     q: cleanString(body.q || '', 200),
-    rfqId: cleanString(body.rfqId || body.rfq_id || '', 80),
+    rfqId:      cleanString(body.rfqId      || body.rfq_id      || '', 80),
     contractId: cleanString(body.contractId || body.contract_id || '', 80),
-    clientId: cleanString(body.clientId || body.client_id || '', 80),
-    status: VALID_STATUS.has(status) ? status : '',
+    clientId:   cleanString(body.clientId   || body.client_id   || '', 80),
+    noteType:   VALID_NOTE_TYPES.has(noteType) ? noteType : '',
+    status:     VALID_STATUS.has(status) ? status : '',
     dateFrom: validateDate(body.dateFrom || body.date_from || ''),
     dateTo: validateDate(body.dateTo || body.date_to || ''),
     cursorDate,
@@ -110,9 +113,12 @@ async function saveNote(request, env, ctx, actor, isUpdate) {
   const deliveryDate = validateDate(body.deliveryDate || body.delivery_date || oldNote?.delivery_date || '');
   if (!deliveryDate) return json({ ok: false, error: 'Ngay giao hang khong hop le' }, 400);
 
-  const rfqId = cleanString(body.rfqId || body.rfq_id || oldNote?.rfq_id || '', 80);
+  const rawNoteType = cleanString(body.noteType || body.note_type || oldNote?.note_type || '', 20);
+  const noteType    = VALID_NOTE_TYPES.has(rawNoteType) ? rawNoteType : 'delivery';
+
+  const rfqId      = cleanString(body.rfqId      || body.rfq_id      || oldNote?.rfq_id      || '', 80);
   const contractId = cleanString(body.contractId || body.contract_id || oldNote?.contract_id || '', 80);
-  let clientId = cleanString(body.clientId || body.client_id || oldNote?.client_id || '', 80);
+  let clientId     = cleanString(body.clientId   || body.client_id   || oldNote?.client_id   || '', 80);
 
   if (rfqId) {
     const rfq = await getRfqSQL(env.DB, rfqId);
@@ -125,27 +131,45 @@ async function saveNote(request, env, ctx, actor, isUpdate) {
     if (!clientId) clientId = contract.client_id || '';
   }
 
+  const manualNo = isUpdate ? null : cleanString(body.deliveryNoteNo || body.delivery_note_no || '', 80);
   const note = {
     delivery_note_id: isUpdate ? oldNote.delivery_note_id : makeId('DN'),
-    delivery_note_no: isUpdate ? oldNote.delivery_note_no : cleanString(body.deliveryNoteNo || body.delivery_note_no || '', 80) || await nextDeliveryNoteNoSQL(env.DB),
-    rfq_id: rfqId || null,
-    contract_id: contractId || null,
-    client_id: clientId || null,
+    delivery_note_no: isUpdate ? oldNote.delivery_note_no : (manualNo || await nextDeliveryNoteNoSQL(env.DB, deliveryDate, noteType)),
+    note_type:    isUpdate ? oldNote.note_type : noteType,
+    rfq_id:       rfqId      || null,
+    contract_id:  contractId || null,
+    client_id:    clientId   || null,
     delivery_date: deliveryDate,
-    receiver_unit: cleanString(body.receiverUnit || body.receiver_unit || oldNote?.receiver_unit || '', 200),
-    sender_unit: cleanString(body.senderUnit || body.sender_unit || oldNote?.sender_unit || '', 200),
-    receiver_name: cleanString(body.receiverName || body.receiver_name || oldNote?.receiver_name || '', 120),
-    sender_name: cleanString(body.senderName || body.sender_name || oldNote?.sender_name || '', 120),
-    note: cleanString(body.note || oldNote?.note || '', 2000),
-    status: isUpdate ? oldNote.status : 'active',
-    created_by: isUpdate ? oldNote.created_by : actor.id,
-    created_at: isUpdate ? oldNote.created_at : now,
-    updated_at: now,
-    archived_at: oldNote?.archived_at || null,
+    receiver_unit: cleanString(body.receiverUnit  || body.receiver_unit  || oldNote?.receiver_unit  || '', 200),
+    sender_unit:   cleanString(body.senderUnit    || body.sender_unit    || oldNote?.sender_unit    || '', 200),
+    receiver_name: cleanString(body.receiverName  || body.receiver_name  || oldNote?.receiver_name  || '', 120),
+    sender_name:   cleanString(body.senderName    || body.sender_name    || oldNote?.sender_name    || '', 120),
+    note:          cleanString(body.note          || oldNote?.note        || '', 2000),
+    status:        isUpdate ? oldNote.status : 'active',
+    created_by:    isUpdate ? oldNote.created_by : actor.id,
+    created_at:    isUpdate ? oldNote.created_at : now,
+    updated_at:    now,
+    archived_at:   oldNote?.archived_at || null,
   };
 
-  if (isUpdate) await updateDeliveryNoteSQL(env.DB, note);
-  else await insertDeliveryNoteSQL(env.DB, note);
+  if (isUpdate) {
+    await updateDeliveryNoteSQL(env.DB, note);
+  } else {
+    // Retry up to 3 times on UNIQUE conflict (concurrent same-day inserts).
+    let inserted = false;
+    for (let attempt = 0; attempt < 3 && !inserted; attempt++) {
+      if (attempt > 0) {
+        note.delivery_note_no = await nextDeliveryNoteNoSQL(env.DB, deliveryDate, noteType);
+      }
+      try {
+        await insertDeliveryNoteSQL(env.DB, note);
+        inserted = true;
+      } catch (e) {
+        const msg = String(e?.message || '');
+        if (attempt >= 2 || !msg.includes('UNIQUE')) throw e;
+      }
+    }
+  }
 
   const createdItems = [];
   if (!isUpdate && Array.isArray(body.items)) {

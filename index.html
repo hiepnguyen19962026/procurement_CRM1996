@@ -38,6 +38,7 @@
         <button data-screen="clients" data-title="Khách hàng / CĐT"><span>◎</span>Khách hàng / CĐT</button>
         <button data-screen="suppliers" data-title="Nhà cung cấp"><span>◌</span>Nhà cung cấp</button>
         <button data-screen="quotes" data-title="Báo giá NCC"><span>◈</span>Báo giá NCC</button>
+        <button data-screen="delivery-notes" data-title="Đơn giao hàng"><span>◻</span>Đơn giao hàng</button>
         <div class="nav-section">Hệ thống</div>
         <button data-screen="audit" data-title="Nhật ký hệ thống" data-role-only="admin,manager"><span>☷</span>Nhật ký hệ thống</button>
         <button data-screen="accounts" data-title="Tài khoản" data-role-only="admin"><span>○</span>Tài khoản</button>
@@ -230,6 +231,21 @@
           </div>
         </section>
 
+        <section class="screen" id="screen-delivery-notes">
+          <div class="panel">
+            <div class="toolbar">
+              <input id="dnSearch" placeholder="Tìm mã đơn, đơn vị..." style="width:200px;flex:0 0 auto">
+              <select id="dnNoteType" style="width:130px;flex:0 0 auto"><option value="">Tất cả loại</option><option value="delivery">Giao hàng</option><option value="return">Trả hàng</option></select>
+              <select id="dnStatus" style="width:130px;flex:0 0 auto"><option value="">Tất cả TT</option><option value="active">Hoạt động</option><option value="archived">Lưu trữ</option></select>
+              <input type="date" id="dnDateFrom" title="Từ ngày" style="width:135px;flex:0 0 auto">
+              <input type="date" id="dnDateTo"   title="Đến ngày" style="width:135px;flex:0 0 auto">
+              <button onclick="DeliveryNotesModule.load(true)">Tìm kiếm</button>
+            </div>
+            <div class="table-wrap"><table><thead><tr><th style="min-width:140px">Mã đơn</th><th style="width:95px">Ngày giao</th><th style="width:90px">Loại</th><th style="min-width:140px">RFQ</th><th style="min-width:120px">Bên nhận</th><th style="min-width:100px">Bên giao</th><th style="width:60px;text-align:center">Số dòng</th><th style="width:70px;text-align:right">Tổng SL</th><th style="width:90px">Trạng thái</th><th style="width:130px">Thao tác</th></tr></thead><tbody id="dnRows"></tbody></table></div>
+            <p><button id="dnMore" class="hidden" onclick="DeliveryNotesModule.load(false)">Tải thêm</button></p>
+          </div>
+        </section>
+
         <section class="screen" id="screen-audit">
           <div class="panel"><div class="toolbar"><input id="auditSearch" placeholder="Tìm hành động, người thao tác, nội dung"><button onclick="AuditModule.load(true)">Tìm kiếm</button></div><div class="table-wrap"><table><thead><tr><th data-sort-key="created_at">Thời gian</th><th data-sort-key="actor_name">Người thao tác</th><th data-sort-key="action">Hành động</th><th>Nội dung</th></tr></thead><tbody id="auditRows"></tbody></table></div><p><button id="auditMore" class="hidden" onclick="AuditModule.load(false)">Tải thêm</button></p></div>
         </section>
@@ -262,6 +278,7 @@
   <script src="/assets/js/modules/rfq-items.js"></script>
   <script src="/assets/js/modules/ocr.js"></script>
   <script src="/assets/js/modules/supplier-quotes.js"></script>
+  <script src="/assets/js/modules/delivery-notes.js"></script>
   <script src="/assets/js/modules/tasks.js"></script>
   <script src="/assets/js/modules/audit.js"></script>
   <script src="/assets/js/modules/accounts.js"></script>
@@ -274,6 +291,7 @@
       clients:   '<button onclick="ClientsModule.downloadClientTemplate()">Tải template CSV</button><button data-write onclick="ClientsModule.importClientsCsv()">Import CSV/XLSX</button><button onclick="ClientsModule.exportClientsCsv()">Xuất CSV</button><button class="primary" data-write onclick="ClientsModule.openCreate()">+ Thêm khách hàng</button>',
       suppliers: '<button data-write onclick="OcrModule.openSupplierOcr()">OCR danh thiếp</button><button class="primary" data-write onclick="SuppliersModule.openCreate()">+ Thêm NCC</button>',
       quotes:    '',
+      'delivery-notes': '',
       audit:     '',
       accounts:  '<button onclick="AccountsModule.load(true)">Tải lại</button><button class="primary" onclick="AccountsModule.openCreate()">+ Thêm tài khoản</button>',
     };
@@ -306,6 +324,7 @@
       if (screen === 'clients') ClientsModule.load(true);
       if (screen === 'suppliers') SuppliersModule.load(true);
       if (screen === 'quotes') SupplierQuotesModule.load(true);
+      if (screen === 'delivery-notes') DeliveryNotesModule.load(true);
       if (screen === 'audit') AuditModule.load(true);
       if (screen === 'accounts') AccountsModule.load(true);
     });
