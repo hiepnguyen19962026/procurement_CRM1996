@@ -2347,3 +2347,43 @@ Thiết kế quan trọng nhất là:
 - search nhanh sau vài năm;
 - R2 lưu ảnh/file, D1 chỉ lưu metadata;
 - Codex luôn theo `.skills/*.md` ở các bước quan trọng.
+
+## Modal/Layout Debug Rule — Bắt buộc trước khi sửa UI modal
+
+Khi lỗi liên quan đến modal, table, scroll, width, overflow, cột bị mất, cột quá rộng/quá hẹp, chữ bị đè/tràn, tuyệt đối không prompt sửa code ngay.
+
+Bắt buộc làm theo thứ tự:
+
+1. Reproduce đúng màn hình/modal đang lỗi.
+2. Mở DevTools Console.
+3. Inspect DOM thực tế:
+   - modal width/height
+   - modal body width/overflow
+   - parent chain
+   - grid/flex wrapper
+   - table width/min-width/table-layout
+   - th/td width
+   - overflow-x/overflow-y
+4. Xác định element nào đang bó/kéo layout.
+5. Chỉ sau khi có root cause DOM/CSS cụ thể mới prompt sửa code.
+
+Không được đoán kiểu:
+- “thêm table-layout fixed”
+- “xóa overflow-x”
+- “thêm modal--wide”
+- “bỏ modal--wide”
+- “thêm span-12”
+
+nếu chưa có console/DOM evidence.
+
+Nguyên tắc modal Procurement CRM:
+
+- Form/modal nghiệp vụ mặc định phải tận dụng 90–96% chiều rộng laptop.
+- Section nằm trong `form-grid-12` nếu muốn full width phải có `span-12`.
+- Modal có ít cột phải fit vừa modal, không horizontal scroll.
+- Modal có nhiều cột được phép horizontal scroll, nhưng scroll nằm ở table wrapper, không làm vỡ toàn modal.
+- Không được xóa cột nghiệp vụ để sửa layout.
+- Không được để 2 table hoặc child element có `min-width` lớn kéo rộng toàn bộ modal.
+- Nếu summary chỉ có vài field, dùng grid/div rows thay vì table `min-width` lớn.
+- Trước mọi fix modal/table phải báo root cause dạng:
+  “element A width X trong parent B width Y nên gây overflow Z”.
