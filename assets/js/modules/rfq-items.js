@@ -3067,6 +3067,7 @@
       senderUnit: '', senderName: '',
       vehicleNo: '', headerNote: '',
       inputRows: null,
+      qtyAdjust: false,
     };
     _openDonWorkflowStep1();
   }
@@ -3212,6 +3213,7 @@
     var btnNo  = document.getElementById('donWfQtyNo');
     var btnYes = document.getElementById('donWfQtyYes');
     if (!table) return;
+    if (_donWorkflowState) _donWorkflowState.qtyAdjust = !!show;
     table.style.display = show ? '' : 'none';
     if (show) {
       btnYes.style.background = 'var(--primary)'; btnYes.style.color = '#fff'; btnYes.style.fontWeight = '600';
@@ -3234,8 +3236,7 @@
     s.vehicleNo     = (document.getElementById('donWfVehicleNo')    || {}).value || '';
     s.headerNote    = (document.getElementById('donWfNote')         || {}).value || '';
 
-    var tableDiv = document.getElementById('donWfQtyTable');
-    var useTable = tableDiv && tableDiv.style.display !== 'none';
+    var useTable = s.qtyAdjust === true;
     var inputRows = [];
     var invalid = false;
     var over = false;

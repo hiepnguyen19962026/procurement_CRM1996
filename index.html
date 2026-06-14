@@ -108,7 +108,7 @@
               </div>
               <select id="itemPageSize" style="width:72px;flex:0 0 auto" onchange="RfqItemsModule.load(true)"><option value="500" selected>500</option><option value="1000">1.000</option><option value="2000">2.000</option><option value="all">Tất cả</option></select>
               <button onclick="RfqItemsModule.load(true)">Tìm kiếm</button>
-              <button id="itemCreateDeliverySelected" class="hidden" data-write onclick="RfqItemsModule.openCreateDeliveryForSelected()">Tạo đơn giao hàng (<span id="itemDeliveryCount">0</span>)</button>
+              <button id="itemCreateDeliverySelected" class="hidden" data-write onclick="RfqItemsModule.openDonWorkflow('don_giao_hang')">Tạo đơn giao hàng (<span id="itemDeliveryCount">0</span>)</button>
               <button id="itemDeleteSelected" class="hidden" style="color:#dc2626;border-color:#dc2626" data-role-only="admin,manager" onclick="RfqItemsModule.deleteSelected()">Xóa đã chọn (<span id="itemDeleteCount">0</span>)</button>
               <button id="itemDeleteAll" class="hidden" style="color:#dc2626;border-color:#dc2626;flex:0 0 auto" data-role-only="admin,manager" onclick="RfqItemsModule.deleteAll()">Xóa DS vật tư RFQ</button>
             </div>
@@ -275,7 +275,7 @@
   <script src="/assets/js/modules/suppliers.js"></script>
   <script src="/assets/js/modules/rfqs.js"></script>
   <script src="/assets/js/vendor/xlsx.min.js"></script>
-  <script src="/assets/js/modules/rfq-items.js?v=20260614i"></script>
+  <script src="/assets/js/modules/rfq-items.js?v=20260614j"></script>
   <script src="/assets/js/modules/ocr.js"></script>
   <script src="/assets/js/modules/supplier-quotes.js"></script>
   <script src="/assets/js/modules/delivery-notes.js?v=20260614b"></script>
