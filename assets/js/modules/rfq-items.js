@@ -2633,150 +2633,239 @@
     var nRows = rows.length;
     var preface = data.preface || ['', '', ''];
     var maGoiTbmt = preface[0] || '';
-    var tenGoi = preface[1] || '';
-    var tenCdt = preface[2] || '';
+    var tenGoi    = preface[1] || '';
+    var tenCdt    = preface[2] || '';
     var textColSet = new Set(data.textCols || []);
     var leftColSet = new Set(data.leftAlignCols || []);
 
-    var COMP_ROW = 0;
-    var COMP_VN_ROW = 1;
-    var BLANK1 = 2;
-    var TITLE_ROW = 3;
-    var INFO1 = 4;
-    var INFO2 = 5;
-    var INFO3 = 6;
-    var BLANK2 = 7;
-    var HDR_ROW = 8;
-    var DATA_START = 9;
+    // Row index constants (0-based)
+    var R_COMP    = 0;   // 越南永新一期电力有限公司
+    var R_COMP_VN = 1;   // Công ty TNHH điện lực Vĩnh Tân 1
+    var R_BLANK1  = 2;   // narrow blank
+    var R_TITLE   = 3;   // 送货单/退货单 title
+    var R_INFO1   = 4;   // contract name / contract code
+    var R_INFO2   = 5;   // receiving unit / sending unit
+    var R_INFO3   = 6;   // date / sender
+    var R_BLANK2  = 7;   // narrow blank before table
+    var R_HDR     = 8;   // bilingual column headers
+    var R_DATA    = 9;   // data rows start
+    var R_FTR_BLK = R_DATA + nRows;      // blank before footer
+    var R_FTR     = R_DATA + nRows + 1;  // footer row
 
-    function blankRow() { var a = []; for (var k = 0; k < nCols; k++) a.push(''); return a; }
+    function blankRow() {
+      var a = [];
+      for (var k = 0; k < nCols; k++) a.push('');
+      return a;
+    }
 
+    // ── AoA ──────────────────────────────────────────────────────────────────
     var aoa = [];
-    var r0 = blankRow(); r0[0] = '越南永新一期电力有限公司'; aoa.push(r0);
-    var r1 = blankRow(); r1[0] = 'Công ty TNHH điện lực Vĩnh Tân 1'; aoa.push(r1);
-    aoa.push(blankRow());
-    var r3 = blankRow();
-    r3[0] = isDelivery ? '送货单  ĐƠN GIAO HÀNG' : '退货单  ĐƠN TRẢ HÀNG';
-    aoa.push(r3);
-    var r4 = blankRow();
-    r4[0] = '合同名称:\nTên Hợp đồng:'; r4[2] = tenGoi;
-    r4[6] = '合同编号:\nMã Hợp đồng:'; r4[8] = maGoiTbmt;
-    aoa.push(r4);
-    var r5 = blankRow();
-    r5[0] = isDelivery ? '收货单位:\nĐơn vị nhận hàng:' : '退货单位:\nĐơn vị trả hàng:';
-    r5[2] = isDelivery ? tenCdt : '';
-    r5[6] = '送货单位:\nĐơn vị giao hàng:';
-    r5[8] = isDelivery ? '' : tenCdt;
-    aoa.push(r5);
-    var r6 = blankRow();
-    r6[0] = '日期:\nThời gian:'; r6[2] = '';
-    r6[6] = '送货人:\nNgười giao hàng:'; r6[8] = '';
-    aoa.push(r6);
-    aoa.push(blankRow());
-    aoa.push(headers.slice());
-    for (var di = 0; di < nRows; di++) aoa.push(rows[di].slice());
-    aoa.push(blankRow());
-    var footer = blankRow();
-    footer[0] = '收货人签字:'; footer[1] = 'Người nhận hàng ký tên';
-    footer[6] = '日期:'; footer[7] = 'Thời gian:';
-    aoa.push(footer);
 
+    var rComp = blankRow();
+    rComp[0] = '越南永新一期电力有限公司';
+    aoa.push(rComp);
+
+    var rCompVn = blankRow();
+    rCompVn[0] = 'Công ty TNHH điện lực Vĩnh Tân 1';
+    aoa.push(rCompVn);
+
+    aoa.push(blankRow()); // R_BLANK1
+
+    var rTitle = blankRow();
+    rTitle[0] = isDelivery ? '送货单  ĐƠN GIAO HÀNG' : '退货单  ĐƠN TRẢ HÀNG';
+    aoa.push(rTitle);
+
+    // info row 1: contract name (left) / contract code (right)
+    var rI1 = blankRow();
+    rI1[0] = '合同名称:\nTên Hợp đồng:';
+    rI1[2] = tenGoi;
+    rI1[6] = '合同编号:\nMã Hợp đồng:';
+    rI1[8] = maGoiTbmt;
+    aoa.push(rI1);
+
+    // info row 2: recv/send unit
+    var rI2 = blankRow();
+    rI2[0] = isDelivery ? '收货单位:\nĐơn vị nhận hàng:' : '退货单位:\nĐơn vị trả hàng:';
+    rI2[2] = isDelivery ? tenCdt : '';
+    rI2[6] = '送货单位:\nĐơn vị giao hàng:';
+    rI2[8] = isDelivery ? '' : tenCdt;
+    aoa.push(rI2);
+
+    // info row 3: date / sender
+    var rI3 = blankRow();
+    rI3[0] = '日期:\nThời gian:';
+    rI3[6] = '送货人:\nNgười giao hàng:';
+    aoa.push(rI3);
+
+    aoa.push(blankRow()); // R_BLANK2
+
+    aoa.push(headers.slice()); // R_HDR
+
+    for (var di = 0; di < nRows; di++) aoa.push(rows[di].slice());
+
+    aoa.push(blankRow()); // R_FTR_BLK
+
+    // footer: left = signature, right = date
+    var rFtr = blankRow();
+    rFtr[0] = '收货人签字:\nNgười nhận hàng ký tên:';
+    rFtr[6] = '日期:\nThời gian:';
+    aoa.push(rFtr);
+
+    // ── Worksheet ────────────────────────────────────────────────────────────
     var ws = XLSX.utils.aoa_to_sheet(aoa);
 
+    // Force Mã vật tư as text in data rows
     textColSet.forEach(function (ci) {
-      for (var ri = DATA_START; ri < DATA_START + nRows; ri++) {
+      for (var ri = R_DATA; ri < R_DATA + nRows; ri++) {
         var addr = XLSX.utils.encode_cell({ r: ri, c: ci });
         if (ws[addr]) { ws[addr].t = 's'; ws[addr].z = '@'; }
       }
     });
 
+    // ── Merges ───────────────────────────────────────────────────────────────
     ws['!merges'] = [
-      { s: { r: COMP_ROW, c: 0 }, e: { r: COMP_ROW, c: 11 } },
-      { s: { r: COMP_VN_ROW, c: 0 }, e: { r: COMP_VN_ROW, c: 11 } },
-      { s: { r: TITLE_ROW, c: 0 }, e: { r: TITLE_ROW, c: 11 } },
-      { s: { r: INFO1, c: 0 }, e: { r: INFO1, c: 1 } },
-      { s: { r: INFO1, c: 2 }, e: { r: INFO1, c: 5 } },
-      { s: { r: INFO1, c: 6 }, e: { r: INFO1, c: 7 } },
-      { s: { r: INFO1, c: 8 }, e: { r: INFO1, c: 11 } },
-      { s: { r: INFO2, c: 0 }, e: { r: INFO2, c: 1 } },
-      { s: { r: INFO2, c: 2 }, e: { r: INFO2, c: 5 } },
-      { s: { r: INFO2, c: 6 }, e: { r: INFO2, c: 7 } },
-      { s: { r: INFO2, c: 8 }, e: { r: INFO2, c: 11 } },
-      { s: { r: INFO3, c: 0 }, e: { r: INFO3, c: 1 } },
-      { s: { r: INFO3, c: 2 }, e: { r: INFO3, c: 5 } },
-      { s: { r: INFO3, c: 6 }, e: { r: INFO3, c: 7 } },
-      { s: { r: INFO3, c: 8 }, e: { r: INFO3, c: 11 } },
+      // Company name rows: full width
+      { s: { r: R_COMP,    c: 0 }, e: { r: R_COMP,    c: 11 } },
+      { s: { r: R_COMP_VN, c: 0 }, e: { r: R_COMP_VN, c: 11 } },
+      // Document title: full width
+      { s: { r: R_TITLE, c: 0 }, e: { r: R_TITLE, c: 11 } },
+      // Info rows: [0-1] label | [2-5] value | [6-7] label | [8-11] value
+      { s: { r: R_INFO1, c: 0 }, e: { r: R_INFO1, c: 1  } },
+      { s: { r: R_INFO1, c: 2 }, e: { r: R_INFO1, c: 5  } },
+      { s: { r: R_INFO1, c: 6 }, e: { r: R_INFO1, c: 7  } },
+      { s: { r: R_INFO1, c: 8 }, e: { r: R_INFO1, c: 11 } },
+      { s: { r: R_INFO2, c: 0 }, e: { r: R_INFO2, c: 1  } },
+      { s: { r: R_INFO2, c: 2 }, e: { r: R_INFO2, c: 5  } },
+      { s: { r: R_INFO2, c: 6 }, e: { r: R_INFO2, c: 7  } },
+      { s: { r: R_INFO2, c: 8 }, e: { r: R_INFO2, c: 11 } },
+      { s: { r: R_INFO3, c: 0 }, e: { r: R_INFO3, c: 1  } },
+      { s: { r: R_INFO3, c: 2 }, e: { r: R_INFO3, c: 5  } },
+      { s: { r: R_INFO3, c: 6 }, e: { r: R_INFO3, c: 7  } },
+      { s: { r: R_INFO3, c: 8 }, e: { r: R_INFO3, c: 11 } },
+      // Footer: left signature block [0-5], right date block [6-11]
+      { s: { r: R_FTR, c: 0 }, e: { r: R_FTR, c: 5  } },
+      { s: { r: R_FTR, c: 6 }, e: { r: R_FTR, c: 11 } },
     ];
 
+    // ── Column widths (wch = average char width) ──────────────────────────────
     ws['!cols'] = [
-      { wch: 6 }, { wch: 9 }, { wch: 14 }, { wch: 28 }, { wch: 18 }, { wch: 18 },
-      { wch: 10 }, { wch: 8 }, { wch: 22 }, { wch: 15 }, { wch: 15 }, { wch: 18 },
+      { wch: 5  }, // 0  序号 STT
+      { wch: 8  }, // 1  合同序号 STT HĐ
+      { wch: 14 }, // 2  物资编号 Mã vật tư
+      { wch: 26 }, // 3  名称 Tên vật tư  (long)
+      { wch: 18 }, // 4  规格型号 Mã quy cách
+      { wch: 16 }, // 5  材质/品牌
+      { wch: 9  }, // 6  数量 Số lượng
+      { wch: 7  }, // 7  单位 Đơn vị
+      { wch: 20 }, // 8  原设备供货商 Nhà CC/NSX
+      { wch: 14 }, // 9  MIS需求单号
+      { wch: 14 }, // 10 MIS订单号
+      { wch: 16 }, // 11 备注 Ghi chú
     ];
+
+    // ── Row heights (hpt = points; 1 pt ≈ 1/72 in) ────────────────────────────
+    var rowHts = {};
+    rowHts[R_COMP]    = 24;
+    rowHts[R_COMP_VN] = 22;
+    rowHts[R_BLANK1]  = 5;
+    rowHts[R_TITLE]   = 34;
+    rowHts[R_INFO1]   = 36;
+    rowHts[R_INFO2]   = 36;
+    rowHts[R_INFO3]   = 36;
+    rowHts[R_BLANK2]  = 5;
+    rowHts[R_HDR]     = 44;
+    for (var dhi = 0; dhi < nRows; dhi++) rowHts[R_DATA + dhi] = 20;
+    rowHts[R_FTR_BLK] = 10;
+    rowHts[R_FTR]     = 34;
 
     ws['!rows'] = [];
-    for (var ir = INFO1; ir <= INFO3; ir++) ws['!rows'][ir] = { hpt: 30 };
-    ws['!rows'][HDR_ROW] = { hpt: 42 };
+    Object.keys(rowHts).forEach(function (ri) {
+      ws['!rows'][parseInt(ri, 10)] = { hpt: rowHts[ri] };
+    });
 
-    ws['!freeze'] = { xSplit: 0, ySplit: DATA_START };
+    // Freeze through column header row
+    ws['!freeze'] = { xSplit: 0, ySplit: R_DATA };
 
+    // Page setup: A4 portrait, fit to 1 page wide
+    ws['!pageSetup'] = { paperSize: 9, orientation: 'portrait', fitToWidth: 1, fitToHeight: 0, fitToPage: true };
+    ws['!margins']   = { left: 0.5, right: 0.5, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 };
+
+    // ── Styles ────────────────────────────────────────────────────────────────
     try {
-      var thin = { style: 'thin' };
+      var thin   = { style: 'thin' };
       var border = { top: thin, bottom: thin, left: thin, right: thin };
 
-      var a0 = XLSX.utils.encode_cell({ r: COMP_ROW, c: 0 });
-      if (ws[a0]) ws[a0].s = { font: { bold: true, sz: 13 }, alignment: { horizontal: 'center', vertical: 'center' } };
-      var a1 = XLSX.utils.encode_cell({ r: COMP_VN_ROW, c: 0 });
-      if (ws[a1]) ws[a1].s = { font: { bold: true, sz: 12 }, alignment: { horizontal: 'center', vertical: 'center' } };
+      // Helper: ensure cell exists, apply style
+      function cs(r, c, style) {
+        var addr = XLSX.utils.encode_cell({ r: r, c: c });
+        if (!ws[addr]) ws[addr] = { t: 's', v: '' };
+        ws[addr].s = style;
+      }
 
-      var a3 = XLSX.utils.encode_cell({ r: TITLE_ROW, c: 0 });
-      if (ws[a3]) ws[a3].s = {
-        font: { bold: true, sz: 15 },
+      // Company name rows
+      cs(R_COMP, 0, {
+        font: { bold: true, sz: 13 },
         alignment: { horizontal: 'center', vertical: 'center' },
-        fill: { patternType: 'solid', fgColor: { rgb: 'D9D9D9' } },
-      };
-
-      var lblStyle = { font: { bold: true }, alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border: border };
-      var valStyle = { alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border: border };
-      [INFO1, INFO2, INFO3].forEach(function (ir2) {
-        [0, 6].forEach(function (lc) {
-          var la = XLSX.utils.encode_cell({ r: ir2, c: lc });
-          if (!ws[la]) ws[la] = { t: 's', v: '' };
-          ws[la].s = lblStyle;
-        });
-        [2, 8].forEach(function (vc) {
-          var va = XLSX.utils.encode_cell({ r: ir2, c: vc });
-          if (!ws[va]) ws[va] = { t: 's', v: '' };
-          ws[va].s = valStyle;
-        });
+      });
+      cs(R_COMP_VN, 0, {
+        font: { bold: true, sz: 12 },
+        alignment: { horizontal: 'center', vertical: 'center' },
       });
 
-      var hdrStyle = {
-        font: { bold: true },
+      // Document title: bold, large, gray fill
+      cs(R_TITLE, 0, {
+        font: { bold: true, sz: 14 },
+        alignment: { horizontal: 'center', vertical: 'center' },
+        fill: { patternType: 'solid', fgColor: { rgb: 'D9D9D9' } },
+      });
+
+      // Info block: top-left cell of each merged region gets border + alignment
+      var lblSt = {
+        font: { bold: true, sz: 10 },
+        alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
+        border: border,
+      };
+      var valSt = {
+        font: { sz: 10 },
+        alignment: { horizontal: 'left', vertical: 'center', wrapText: true },
+        border: border,
+      };
+      [R_INFO1, R_INFO2, R_INFO3].forEach(function (r) {
+        cs(r, 0, lblSt);  // left label  [cols 0-1]
+        cs(r, 2, valSt);  // left value  [cols 2-5]
+        cs(r, 6, lblSt);  // right label [cols 6-7]
+        cs(r, 8, valSt);  // right value [cols 8-11]
+      });
+
+      // Table header row
+      var hdrSt = {
+        font: { bold: true, sz: 10 },
         alignment: { horizontal: 'center', vertical: 'center', wrapText: true },
         fill: { patternType: 'solid', fgColor: { rgb: 'BDD7EE' } },
         border: border,
       };
-      for (var hc = 0; hc < nCols; hc++) {
-        var ha = XLSX.utils.encode_cell({ r: HDR_ROW, c: hc });
-        if (ws[ha]) ws[ha].s = hdrStyle;
-      }
+      for (var hc = 0; hc < nCols; hc++) cs(R_HDR, hc, hdrSt);
 
-      for (var dr = DATA_START; dr < DATA_START + nRows; dr++) {
+      // Data rows
+      for (var dr = R_DATA; dr < R_DATA + nRows; dr++) {
         for (var dc = 0; dc < nCols; dc++) {
           var da = XLSX.utils.encode_cell({ r: dr, c: dc });
           if (ws[da]) {
             ws[da].s = leftColSet.has(dc)
-              ? { alignment: { horizontal: 'left', vertical: 'center', wrapText: true }, border: border }
-              : { alignment: { horizontal: 'center', vertical: 'center' }, border: border };
+              ? { font: { sz: 10 }, alignment: { horizontal: 'left',   vertical: 'center', wrapText: true }, border: border }
+              : { font: { sz: 10 }, alignment: { horizontal: 'center', vertical: 'center' },                  border: border };
           }
         }
       }
 
-      var footerRow = DATA_START + nRows + 1;
-      [[footerRow, 0, true], [footerRow, 1, false], [footerRow, 6, true], [footerRow, 7, false]].forEach(function (fc) {
-        var fa = XLSX.utils.encode_cell({ r: fc[0], c: fc[1] });
-        if (ws[fa]) ws[fa].s = { font: fc[2] ? { bold: true } : undefined, alignment: { horizontal: 'left', vertical: 'center' } };
-      });
+      // Footer: label + bottom border to serve as signature line
+      var ftrSt = {
+        font: { bold: true, sz: 10 },
+        alignment: { horizontal: 'left', vertical: 'bottom', wrapText: true },
+        border: { bottom: thin },
+      };
+      cs(R_FTR, 0, ftrSt); // left: 收货人签字 / Người nhận hàng ký tên
+      cs(R_FTR, 6, ftrSt); // right: 日期 / Thời gian
     } catch (e) {}
 
     var wb = XLSX.utils.book_new();
