@@ -221,6 +221,7 @@
         ['Người giao',  n.sender_name    || '—'],
         ['Trạng thái',  statusLabel(n.status)],
       ];
+      if (n.vehicle_no) kvPairs.push(['Biển số xe', n.vehicle_no]);
       if (n.ma_goi_tbmt || n.ten_goi) {
         kvPairs.push(['Mã gói', n.ma_goi_tbmt || '—']);
         kvPairs.push(['Tên gói', n.ten_goi   || '—']);
@@ -255,11 +256,13 @@
       // Action bar
       var canAct = canWrite() && n.status === 'active';
       var actionBar = canAct
-        ? '<div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap">'
+        ? '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">'
+            + '<button type="button" onclick="DeliveryNotesModule.openEditHeader()"'
+            + ' style="font-size:12px;padding:3px 10px;color:var(--text-muted)">Sửa thông tin đơn</button>'
             + '<button type="button" onclick="DeliveryNotesModule.openFastAcceptance()"'
-            + ' style="background:var(--green,#15803d);color:#fff;border-color:var(--green,#15803d);font-weight:600">✓ Đã nghiệm thu</button>'
+            + ' style="background:var(--green,#15803d);color:#fff;border-color:var(--green,#15803d);font-size:12px;padding:3px 10px">Ghi nghiệm thu</button>'
             + '<button type="button" onclick="DeliveryNotesModule.openAdvancedAcceptance()"'
-            + ' style="background:var(--white);color:var(--text-muted);border-color:var(--border);font-size:12px">NT chi tiết</button>'
+            + ' style="font-size:12px;padding:3px 10px">NT chi tiết</button>'
             + '</div>'
         : '';
 
@@ -268,10 +271,15 @@
       var html = '<div class="span-12">' + kvHtml + acceptHtml + actionBar + itemsHtml + '</div>';
       Utils.openModal('Chi tiết: ' + esc(n.delivery_note_no), html, null);
 
-      // Widen modal for the wide table
+      // Full-screen detail modal
       setTimeout(function () {
         var m = document.querySelector('#modal .modal');
-        if (m) m.style.maxWidth = '98vw';
+        if (m) {
+          m.style.width    = 'calc(100vw - 40px)';
+          m.style.maxWidth = 'none';
+          m.style.height   = 'calc(100vh - 40px)';
+          m.style.maxHeight = 'none';
+        }
       }, 0);
     } catch (e) { API.error(e); }
   }
@@ -349,7 +357,7 @@
         + '</tr>';
     }).join('') + '</tbody>';
 
-    return '<div style="overflow-x:auto;max-height:62vh;margin:0">'
+    return '<div style="overflow-x:auto;margin:0">'
       + '<table style="min-width:1800px;font-size:12px;border-collapse:collapse">'
       + thead + tbody
       + '</table></div>';
@@ -585,6 +593,53 @@
     } catch (e) { API.error(e); }
   }
 
+  // --- Edit header ---
+
+  function openEditHeader() {
+    if (!_currentDetail) return;
+    var n = _currentDetail.note;
+    var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;grid-column:span 12">'
+      + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Ngày giao hàng *</label>'
+        + '<input id="eh-date" type="date" value="' + esc(n.delivery_date || '') + '" style="width:100%"></div>'
+      + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Bên nhận</label>'
+        + '<input id="eh-receiver-unit" type="text" value="' + esc(n.receiver_unit || '') + '" placeholder="Tên đơn vị nhận" style="width:100%"></div>'
+      + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Người nhận</label>'
+        + '<input id="eh-receiver-name" type="text" value="' + esc(n.receiver_name || '') + '" placeholder="Họ tên người nhận" style="width:100%"></div>'
+      + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Bên giao</label>'
+        + '<input id="eh-sender-unit" type="text" value="' + esc(n.sender_unit || '') + '" placeholder="Tên đơn vị giao" style="width:100%"></div>'
+      + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Người giao</label>'
+        + '<input id="eh-sender-name" type="text" value="' + esc(n.sender_name || '') + '" placeholder="Họ tên người giao" style="width:100%"></div>'
+      + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Biển số xe</label>'
+        + '<input id="eh-vehicle-no" type="text" value="' + esc(n.vehicle_no || '') + '" placeholder="(tùy chọn)" style="width:100%"></div>'
+      + '<div style="grid-column:1/-1"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Ghi chú</label>'
+        + '<input id="eh-note" type="text" value="' + esc(n.note || '') + '" placeholder="(tùy chọn)" style="width:100%"></div>'
+      + '</div>';
+    Utils.openModal('Sửa thông tin đơn — ' + esc(n.delivery_note_no), html, _submitEditHeader);
+  }
+
+  async function _submitEditHeader() {
+    var n = _currentDetail && _currentDetail.note;
+    if (!n) return;
+    var date = (document.getElementById('eh-date') || {}).value || '';
+    if (!date) { API.toast('Vui lòng chọn ngày giao hàng', 'warn'); return; }
+    try {
+      await API.call('updateDeliveryNote', {
+        deliveryNoteId: n.delivery_note_id,
+        deliveryDate:   date,
+        receiverUnit:   (document.getElementById('eh-receiver-unit') || {}).value || '',
+        receiverName:   (document.getElementById('eh-receiver-name') || {}).value || '',
+        senderUnit:     (document.getElementById('eh-sender-unit')   || {}).value || '',
+        senderName:     (document.getElementById('eh-sender-name')   || {}).value || '',
+        vehicleNo:      (document.getElementById('eh-vehicle-no')    || {}).value || '',
+        note:           (document.getElementById('eh-note')          || {}).value || '',
+      });
+      API.toast('Đã cập nhật thông tin đơn', 'success');
+      Utils.closeModal();
+      await load(true);
+      await openDetail(n.delivery_note_id);
+    } catch (e) { API.error(e); }
+  }
+
   // --- Admin delete ---
 
   async function deleteDN(id, code) {
@@ -620,6 +675,7 @@
   window.DeliveryNotesModule = {
     load:                   load,
     openDetail:             openDetail,
+    openEditHeader:         openEditHeader,
     openFastAcceptance:     openFastAcceptance,
     openAdvancedAcceptance: openAdvancedAcceptance,
     _tickAllAccepted:       _tickAllAccepted,

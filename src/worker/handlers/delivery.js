@@ -152,6 +152,7 @@ async function saveNote(request, env, ctx, actor, isUpdate) {
     sender_unit:   cleanString(body.senderUnit    || body.sender_unit    || oldNote?.sender_unit    || '', 200),
     receiver_name: cleanString(body.receiverName  || body.receiver_name  || oldNote?.receiver_name  || '', 120),
     sender_name:   cleanString(body.senderName    || body.sender_name    || oldNote?.sender_name    || '', 120),
+    vehicle_no:    cleanString(body.vehicleNo     || body.vehicle_no     || oldNote?.vehicle_no     || '', 80),
     note:          cleanString(body.note          || oldNote?.note        || '', 2000),
     status:        isUpdate ? oldNote.status : 'active',
     created_by:    isUpdate ? oldNote.created_by : actor.id,

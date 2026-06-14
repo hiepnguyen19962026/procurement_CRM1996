@@ -696,12 +696,12 @@
 
   function deliveryQuantityTable(items) {
     return '<div class="span-12" style="overflow:auto;max-height:60vh">'
-      + '<table class="quotes-mini-table" style="width:100%;min-width:980px">'
+      + '<table class="quotes-mini-table" style="width:100%;min-width:1100px">'
       + '<thead><tr>'
       + '<th>Mã vật tư</th><th>Tên vật tư</th><th>Quy cách</th><th>Hãng</th><th>Đơn vị</th>'
-      + '<th>SL HĐ</th><th>Đã giao</th><th>Còn lại</th><th>SL giao lần này</th>'
+      + '<th>SL HĐ</th><th>Đã giao</th><th>Còn lại</th><th>SL giao lần này</th><th>Ghi chú dòng</th>'
       + '</tr></thead><tbody>'
-      + items.map(function (r, i) {
+      + items.map(function (r) {
           var remaining = toQty(r.remaining_quantity);
           return '<tr data-rfq-item-id="' + API.esc(r.rfq_item_id) + '">'
             + '<td>' + API.esc(r.ma_vat_tu || '') + '</td>'
@@ -712,7 +712,8 @@
             + '<td class="num">' + API.esc(formatQty(r.contract_quantity_total) || '0') + '</td>'
             + '<td class="num">' + API.esc(formatQty(r.delivered_quantity_total) || '0') + '</td>'
             + '<td class="num"><strong>' + API.esc(formatQty(remaining) || '0') + '</strong></td>'
-            + '<td><input name="delivery_qty_' + i + '" data-rfq-item-id="' + API.esc(r.rfq_item_id) + '" inputmode="decimal" value="' + API.esc(remaining) + '" style="width:110px;text-align:right"></td>'
+            + '<td><input data-qty data-rfq-item-id="' + API.esc(r.rfq_item_id) + '" inputmode="decimal" value="' + API.esc(remaining) + '" style="width:90px;text-align:right"></td>'
+            + '<td><input data-line-note type="text" placeholder="(tùy chọn)" style="width:130px;font-size:12px"></td>'
             + '</tr>';
         }).join('')
       + '</tbody></table></div>';
@@ -2959,28 +2960,19 @@
     var menu = document.createElement('div');
     menu.id = 'rfqDonTplMenu';
     menu.style.cssText = 'position:fixed;z-index:9999;background:var(--white,#fff);border:1px solid var(--border,#e5e7eb);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:200px;padding:4px 0;font-size:13px';
-    var items = [
-      { key: 'don_giao_hang', format: 'xlsx', label: 'VT1-Đơn giao hàng  XLSX' },
-      { key: 'don_tra_hang',  format: 'xlsx', label: 'VT1-Đơn trả hàng  XLSX' },
-      null,
-      { key: 'don_giao_hang', format: 'pdf',  label: 'VT1-Đơn giao hàng  PDF' },
-      { key: 'don_tra_hang',  format: 'pdf',  label: 'VT1-Đơn trả hàng  PDF' },
+    var menuItems = [
+      { key: 'don_giao_hang', label: 'Tạo đơn giao hàng' },
+      { key: 'don_tra_hang',  label: 'Tạo đơn trả hàng' },
     ];
-    items.forEach(function (item) {
-      if (!item) {
-        var sep = document.createElement('div');
-        sep.style.cssText = 'height:1px;background:var(--border,#e5e7eb);margin:4px 0';
-        menu.appendChild(sep);
-        return;
-      }
+    menuItems.forEach(function (item) {
       var div = document.createElement('div');
       div.textContent = item.label;
       div.style.cssText = 'padding:8px 16px;cursor:pointer';
       div.onmouseenter = function () { div.style.background = 'var(--bg,#f3f4f6)'; };
       div.onmouseleave = function () { div.style.background = ''; };
-      (function (k, f) {
-        div.onclick = function () { _closeDonMenu(); k === 'don_giao_hang' ? openDonWorkflow(k, f) : exportDon(k, f); };
-      }(item.key, item.format));
+      (function (k) {
+        div.onclick = function () { _closeDonMenu(); openDonWorkflow(k); };
+      }(item.key));
       menu.appendChild(div);
     });
     var rect = btn.getBoundingClientRect();
@@ -3018,32 +3010,79 @@
 
   // ---- Delivery note centered export workflow (don_giao_hang) ----
 
-  async function openDonWorkflow(type, format) {
+  async function openDonWorkflow(type) {
     var items = _getSelectedItems();
     if (!items.length) { API.toast('Chọn ít nhất 1 dòng vật tư', 'warn'); return; }
     if (!Utils.roleCanWrite()) { API.toast('Không có quyền tạo đơn giao hàng', 'error'); return; }
     var rfqIds = Array.from(new Set(items.map(function (r) { return r.rfq_id || ''; }).filter(Boolean)));
     if (rfqIds.length !== 1) { API.toast('Chỉ tạo đơn giao hàng cho các dòng trong cùng một RFQ', 'warn'); return; }
-    _donWorkflowState = { type: type, format: format, items: items, rfqId: rfqIds[0], deliveryDate: todayYmd(), inputRows: null };
+    var noteType = type === 'don_tra_hang' ? 'return' : 'delivery';
+    _donWorkflowState = {
+      type: type, noteType: noteType,
+      items: items, rfqId: rfqIds[0],
+      deliveryDate: todayYmd(),
+      receiverUnit: '', receiverName: '',
+      senderUnit: '', senderName: '',
+      vehicleNo: '', headerNote: '',
+      inputRows: null,
+    };
     _openDonWorkflowStep1();
   }
 
   function _openDonWorkflowStep1() {
-    var s = _donWorkflowState;
-    var typeLabel = s.type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng';
-    var html = '<div style="display:grid;gap:16px">'
-      + '<div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:center">'
-      + '<label style="font-weight:500">Ngày giao:</label>'
-      + '<input id="donWfDate" type="date" value="' + API.esc(s.deliveryDate) + '" style="width:160px">'
-      + '<label style="font-weight:500">Điều chỉnh SL:</label>'
-      + '<div style="display:flex;gap:6px">'
-      + '<button type="button" id="donWfQtyNo" onclick="RfqItemsModule._donStep1Qty(false)" style="padding:4px 14px;border-radius:6px;border:1px solid var(--border);background:var(--primary);color:#fff;font-weight:600;cursor:pointer">Không</button>'
-      + '<button type="button" id="donWfQtyYes" onclick="RfqItemsModule._donStep1Qty(true)" style="padding:4px 14px;border-radius:6px;border:1px solid var(--border);background:var(--white);cursor:pointer">Có</button>'
+    var s        = _donWorkflowState;
+    var typeLabel = s.type === 'don_giao_hang' ? 'Tạo đơn giao hàng' : 'Tạo đơn trả hàng';
+    var prefix    = s.type === 'don_giao_hang' ? 'DGH' : 'DTH';
+    var d         = s.deliveryDate;
+    var previewNo = prefix + '-' + d.slice(0, 4) + '-' + d.slice(5, 7) + d.slice(8, 10) + '-???';
+    var maGoi     = (s.items[0] && s.items[0].ma_goi_tbmt) || '';
+    var tenGoi    = (s.items[0] && s.items[0].ten_goi)     || '';
+    var fld = 'style="width:100%;font-size:13px"';
+    var lbl = 'style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px"';
+
+    var html = '<div style="display:grid;gap:14px">'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 20px">'
+        + '<div><label ' + lbl + '>Ngày giao *</label>'
+          + '<input id="donWfDate" type="date" value="' + API.esc(d) + '" ' + fld + '></div>'
+        + '<div><label ' + lbl + '>Mã đơn (dự kiến)</label>'
+          + '<input type="text" readonly value="' + API.esc(previewNo) + '" ' + fld
+          + ' style="width:100%;font-size:13px;color:var(--text-muted);background:var(--bg,#f9fafb)"></div>'
+        + '<div><label ' + lbl + '>Bên nhận / CĐT</label>'
+          + '<input id="donWfReceiverUnit" type="text" placeholder="Tên đơn vị nhận" ' + fld + '></div>'
+        + '<div><label ' + lbl + '>Người nhận</label>'
+          + '<input id="donWfReceiverName" type="text" placeholder="Họ tên người nhận" ' + fld + '></div>'
+        + '<div><label ' + lbl + '>Bên giao</label>'
+          + '<input id="donWfSenderUnit" type="text" placeholder="Tên đơn vị giao" ' + fld + '></div>'
+        + '<div><label ' + lbl + '>Người giao</label>'
+          + '<input id="donWfSenderName" type="text" placeholder="Họ tên người giao" ' + fld + '></div>'
+        + '<div><label ' + lbl + '>Biển số xe</label>'
+          + '<input id="donWfVehicleNo" type="text" placeholder="(tùy chọn)" ' + fld + '></div>'
+        + '<div><label ' + lbl + '>Mã gói — Tên gói</label>'
+          + '<div style="font-size:13px;padding:7px 0;color:var(--text)">'
+          + (maGoi  ? '<span style="font-family:monospace;font-size:12px">' + API.esc(maGoi) + '</span>' : '')
+          + (tenGoi ? '<span style="margin-left:8px">' + API.esc(tenGoi) + '</span>' : '')
+          + (!maGoi && !tenGoi ? '<span style="color:var(--text-faint)">—</span>' : '')
+          + '</div></div>'
+        + '<div style="grid-column:1/-1"><label ' + lbl + '>Ghi chú chung của đơn giao hàng</label>'
+          + '<input id="donWfNote" type="text" placeholder="(tùy chọn)" ' + fld + '></div>'
       + '</div>'
+      + '<div style="border-top:1px solid var(--border);padding-top:12px">'
+        + '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'
+          + '<span style="font-size:13px;font-weight:500">Có điều chỉnh số lượng giao hàng không?</span>'
+          + '<button type="button" id="donWfQtyNo" onclick="RfqItemsModule._donStep1Qty(false)"'
+            + ' style="padding:3px 14px;border-radius:6px;border:1px solid var(--border);background:var(--primary);color:#fff;font-weight:600;cursor:pointer">Không</button>'
+          + '<button type="button" id="donWfQtyYes" onclick="RfqItemsModule._donStep1Qty(true)"'
+            + ' style="padding:3px 14px;border-radius:6px;border:1px solid var(--border);background:var(--white);cursor:pointer">Có</button>'
+        + '</div>'
+        + '<div id="donWfQtyTable" style="display:none">' + deliveryQuantityTable(s.items) + '</div>'
       + '</div>'
-      + '<div id="donWfQtyTable" style="display:none">' + deliveryQuantityTable(s.items) + '</div>'
       + '</div>';
+
     Utils.openModal(typeLabel + ' — Bước 1/2', html, _donStep1Submit);
+    setTimeout(function () {
+      var m = document.querySelector('#modal .modal');
+      if (m) m.classList.add('modal--import-wide');
+    }, 0);
   }
 
   function _donStep1Qty(show) {
@@ -3062,11 +3101,16 @@
   }
 
   async function _donStep1Submit() {
-    var s = _donWorkflowState;
-    var dateEl = document.getElementById('donWfDate');
-    var dateVal = dateEl ? (dateEl.value || '') : '';
+    var s       = _donWorkflowState;
+    var dateVal = (document.getElementById('donWfDate') || {}).value || '';
     if (!dateVal) { API.toast('Vui lòng chọn ngày giao', 'warn'); return; }
-    s.deliveryDate = dateVal;
+    s.deliveryDate  = dateVal;
+    s.receiverUnit  = (document.getElementById('donWfReceiverUnit') || {}).value || '';
+    s.receiverName  = (document.getElementById('donWfReceiverName') || {}).value || '';
+    s.senderUnit    = (document.getElementById('donWfSenderUnit')   || {}).value || '';
+    s.senderName    = (document.getElementById('donWfSenderName')   || {}).value || '';
+    s.vehicleNo     = (document.getElementById('donWfVehicleNo')    || {}).value || '';
+    s.headerNote    = (document.getElementById('donWfNote')         || {}).value || '';
 
     var tableDiv = document.getElementById('donWfQtyTable');
     var useTable = tableDiv && tableDiv.style.display !== 'none';
@@ -3075,17 +3119,20 @@
     var over = false;
 
     if (useTable) {
-      Array.prototype.forEach.call(document.querySelectorAll('#donWfQtyTable input[data-rfq-item-id]'), function (inp) {
-        var id  = inp.getAttribute('data-rfq-item-id');
-        var item = s.items.find(function (r) { return r.rfq_item_id === id; });
-        var qty = toQty(inp.value);
+      var trows = document.querySelectorAll('#donWfQtyTable tbody tr[data-rfq-item-id]');
+      Array.prototype.forEach.call(trows, function (tr) {
+        var id      = tr.getAttribute('data-rfq-item-id');
+        var item    = s.items.find(function (r) { return r.rfq_item_id === id; });
+        var qtyInp  = tr.querySelector('input[data-qty]');
+        var noteInp = tr.querySelector('input[data-line-note]');
+        var qty     = toQty(qtyInp ? qtyInp.value : 0);
         if (qty < 0) invalid = true;
         if (item && qty + toQty(item.delivered_quantity_total) > toQty(item.contract_quantity_total)) over = true;
-        inputRows.push({ rfqItemId: id, deliveredQuantity: qty });
+        inputRows.push({ rfqItemId: id, deliveredQuantity: qty, note: noteInp ? (noteInp.value || '') : '' });
       });
     } else {
       inputRows = s.items.map(function (r) {
-        return { rfqItemId: r.rfq_item_id, deliveredQuantity: toQty(r.remaining_quantity) };
+        return { rfqItemId: r.rfq_item_id, deliveredQuantity: toQty(r.remaining_quantity), note: '' };
       });
     }
 
@@ -3105,26 +3152,41 @@
   }
 
   function _openDonWorkflowStep2() {
-    var s = _donWorkflowState;
-    var typeLabel  = s.type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng';
+    var s         = _donWorkflowState;
+    var typeLabel  = s.type === 'don_giao_hang' ? 'Tạo đơn giao hàng' : 'Tạo đơn trả hàng';
     var prefix     = s.type === 'don_giao_hang' ? 'DGH' : 'DTH';
-    var d          = s.deliveryDate;                      // 'YYYY-MM-DD'
+    var d          = s.deliveryDate;
     var previewNo  = prefix + '-' + d.slice(0, 4) + '-' + d.slice(5, 7) + d.slice(8, 10) + '-???';
     var totalQty   = s.inputRows.reduce(function (acc, r) { return acc + r.deliveredQuantity; }, 0);
-    var formatLabel = s.format === 'pdf' ? 'PDF' : 'XLSX';
+    var first      = s.items[0] || {};
+
+    function kv(label, value) {
+      return '<tr>'
+        + '<td style="padding:4px 8px 4px 0;color:var(--text-muted);font-size:12px;white-space:nowrap;width:160px">' + label + '</td>'
+        + '<td style="padding:4px 0;font-size:13px">' + API.esc(String(value || '—')) + '</td>'
+        + '</tr>';
+    }
 
     var html = '<div style="display:grid;gap:16px">'
       + '<table style="font-size:13px;border-collapse:collapse;width:100%">'
-      + '<tr><td style="padding:4px 8px 4px 0;color:var(--text-muted);width:160px">Loại đơn:</td><td style="padding:4px 0"><strong>' + API.esc(typeLabel) + '</strong></td></tr>'
-      + '<tr><td style="padding:4px 8px 4px 0;color:var(--text-muted)">Ngày giao:</td><td style="padding:4px 0">' + API.esc(s.deliveryDate) + '</td></tr>'
-      + '<tr><td style="padding:4px 8px 4px 0;color:var(--text-muted)">Số dòng vật tư:</td><td style="padding:4px 0">' + s.inputRows.length + ' dòng</td></tr>'
-      + '<tr><td style="padding:4px 8px 4px 0;color:var(--text-muted)">Tổng SL giao:</td><td style="padding:4px 0">' + API.esc(String(formatQty(totalQty))) + '</td></tr>'
-      + '<tr><td style="padding:4px 8px 4px 0;color:var(--text-muted)">Số đơn (dự kiến):</td><td style="padding:4px 0;font-family:monospace;color:var(--text-muted)">' + API.esc(previewNo) + '</td></tr>'
+      + kv('Loại đơn:', typeLabel)
+      + kv('Mã đơn (dự kiến):', previewNo)
+      + kv('Ngày giao:', s.deliveryDate)
+      + kv('Bên nhận / CĐT:', s.receiverUnit)
+      + kv('Người nhận:', s.receiverName)
+      + kv('Bên giao:', s.senderUnit)
+      + kv('Người giao:', s.senderName)
+      + (s.vehicleNo ? kv('Biển số xe:', s.vehicleNo) : '')
+      + kv('Mã gói:', first.ma_goi_tbmt || '')
+      + kv('Tên gói:', first.ten_goi || '')
+      + kv('Số dòng vật tư:', s.inputRows.length + ' dòng')
+      + kv('Tổng SL giao:', formatQty(totalQty))
+      + (s.headerNote ? kv('Ghi chú:', s.headerNote) : '')
       + '</table>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px">'
-      + '<button type="button" onclick="RfqItemsModule._donWorkflowAction(\'xlsx\')" style="padding:6px 18px;border-radius:6px;background:var(--primary);color:#fff;border:none;font-weight:600;cursor:pointer">Xuất XLSX</button>'
-      + '<button type="button" onclick="RfqItemsModule._donWorkflowAction(\'pdf\')" style="padding:6px 18px;border-radius:6px;background:var(--blue,#1d4ed8);color:#fff;border:none;font-weight:600;cursor:pointer">Xuất PDF</button>'
-      + '<button type="button" onclick="RfqItemsModule._donWorkflowAction(\'create\')" style="padding:6px 18px;border-radius:6px;background:var(--white);color:var(--text);border:1px solid var(--border);cursor:pointer">Chỉ tạo đơn</button>'
+      + '<button type="button" onclick="RfqItemsModule._donWorkflowAction(\'create\')" style="padding:6px 18px;border-radius:6px;background:var(--primary);color:#fff;border:none;font-weight:600;cursor:pointer">Tạo đơn</button>'
+      + '<button type="button" onclick="RfqItemsModule._donWorkflowAction(\'xlsx\')" style="padding:6px 18px;border-radius:6px;background:var(--white);color:var(--text);border:1px solid var(--border);cursor:pointer">Tạo đơn &amp; xuất XLSX</button>'
+      + '<button type="button" onclick="RfqItemsModule._donWorkflowAction(\'pdf\')" style="padding:6px 18px;border-radius:6px;background:var(--white);color:var(--text);border:1px solid var(--border);cursor:pointer">Tạo đơn &amp; xuất PDF</button>'
       + '<button type="button" onclick="Utils.closeModal()" style="padding:6px 18px;border-radius:6px;background:var(--white);color:var(--text-muted);border:1px solid var(--border);cursor:pointer">Hủy</button>'
       + '</div>'
       + '</div>';
@@ -3138,9 +3200,16 @@
     var typeLabel = s.type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng';
     try {
       var data = await API.call('createDeliveryNote', {
-        rfqId: s.rfqId,
+        rfqId:        s.rfqId,
+        noteType:     s.noteType,
         deliveryDate: s.deliveryDate,
-        items: s.inputRows,
+        receiverUnit: s.receiverUnit,
+        receiverName: s.receiverName,
+        senderUnit:   s.senderUnit,
+        senderName:   s.senderName,
+        vehicleNo:    s.vehicleNo,
+        note:         s.headerNote,
+        items:        s.inputRows,
       });
       if (!data.ok) { API.error(data.error || 'Không thể tạo đơn giao hàng'); return; }
       var note      = data.note;

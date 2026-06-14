@@ -151,13 +151,13 @@ export async function insertDeliveryNoteSQL(db, row) {
     `INSERT INTO delivery_notes (
       delivery_note_id, delivery_note_no, note_type, rfq_id, contract_id, client_id,
       delivery_date, receiver_unit, sender_unit, receiver_name, sender_name,
-      note, status, created_by, created_at, updated_at, archived_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      vehicle_no, note, status, created_by, created_at, updated_at, archived_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     row.delivery_note_id, row.delivery_note_no, row.note_type,
     row.rfq_id, row.contract_id, row.client_id,
     row.delivery_date, row.receiver_unit, row.sender_unit, row.receiver_name, row.sender_name,
-    row.note, row.status, row.created_by, row.created_at, row.updated_at, row.archived_at
+    row.vehicle_no, row.note, row.status, row.created_by, row.created_at, row.updated_at, row.archived_at
   ).run();
 }
 
@@ -166,12 +166,12 @@ export async function updateDeliveryNoteSQL(db, row) {
     `UPDATE delivery_notes SET
       rfq_id = ?, contract_id = ?, client_id = ?, delivery_date = ?,
       receiver_unit = ?, sender_unit = ?, receiver_name = ?, sender_name = ?,
-      note = ?, updated_at = ?
+      vehicle_no = ?, note = ?, updated_at = ?
      WHERE delivery_note_id = ? AND status = 'active'`
   ).bind(
     row.rfq_id, row.contract_id, row.client_id, row.delivery_date,
     row.receiver_unit, row.sender_unit, row.receiver_name, row.sender_name,
-    row.note, row.updated_at,
+    row.vehicle_no, row.note, row.updated_at,
     row.delivery_note_id
   ).run();
 }
