@@ -832,44 +832,51 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
   #modalBody textarea[name="latestNote"]   { min-height: 70px !important; }
 }
 
-/* ─── Don print modal ─────────────────────────────────────────────────────── */
+/* ─── Don print full-screen preview ──────────────────────────────────────── */
 #donPrintBackdrop {
   position: fixed; inset: 0; z-index: 9000;
-  background: rgba(0,0,0,0.55);
-  display: flex; align-items: flex-start; justify-content: center;
-  overflow-y: auto; padding: 24px 12px;
-}
-#donPrintModal {
-  background: #fff; border-radius: 6px; box-shadow: 0 8px 32px rgba(0,0,0,0.28);
-  width: 820px; max-width: 100%; padding: 0;
   display: flex; flex-direction: column;
+  background: #2b2b2b;
 }
-#donPrintModal .don-modal-head {
-  padding: 12px 18px; border-bottom: 1px solid #e5e7eb;
-  font-weight: 700; font-size: 15px; display: flex; align-items: center; justify-content: space-between;
+#donPrintToolbar {
+  flex-shrink: 0; height: 52px;
+  background: #3c3c3c; color: #fff;
+  padding: 0 16px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border-bottom: 1px solid #555;
 }
-#donPrintModal .don-modal-head button {
-  background: none; border: none; cursor: pointer; font-size: 18px; color: #6b7280; line-height: 1;
+#donPrintToolbar .dpt-title {
+  font-weight: 600; font-size: 14px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-#donPrintModal .don-modal-body {
-  padding: 14px 18px; overflow-y: auto; max-height: 70vh;
+#donPrintToolbar .dpt-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+#donPrintToolbar .dpt-close {
+  background: none; border: 1px solid #777; color: #ccc;
+  border-radius: 4px; padding: 5px 14px; cursor: pointer; font-size: 13px;
 }
-#donPrintModal .don-modal-actions {
-  padding: 10px 18px; border-top: 1px solid #e5e7eb;
-  display: flex; justify-content: flex-end; gap: 8px;
+#donPrintToolbar .dpt-close:hover { background: #555; color: #fff; }
+#donPrintToolbar .dpt-print {
+  background: #1a73e8; border: none; color: #fff;
+  border-radius: 4px; padding: 6px 16px; cursor: pointer; font-size: 13px; font-weight: 600;
+}
+#donPrintToolbar .dpt-print:hover { background: #1558b8; }
+#donPrintScroll {
+  flex: 1; overflow: auto; padding: 24px 16px;
+  display: flex; justify-content: center; align-items: flex-start;
+}
+#donPrintPaper {
+  background: #fff;
+  width: 297mm; min-height: 210mm;
+  padding: 10mm;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 @media print {
   body > *:not(#donPrintBackdrop) { display: none !important; }
-  #donPrintBackdrop {
-    position: static !important; background: none !important;
-    padding: 0 !important; display: block !important;
-  }
-  #donPrintModal {
-    box-shadow: none !important; border: none !important;
-    width: 100% !important; max-height: none !important;
-  }
-  #donPrintModal .don-modal-head,
-  #donPrintModal .don-modal-actions { display: none !important; }
-  #donPrintModal .don-modal-body { max-height: none !important; overflow: visible !important; padding: 0 !important; }
+  #donPrintBackdrop { position: static !important; background: none !important; display: block !important; }
+  #donPrintToolbar  { display: none !important; }
+  #donPrintScroll   { overflow: visible !important; padding: 0 !important; display: block !important; }
+  #donPrintPaper    { width: 100% !important; min-height: 0 !important; box-shadow: none !important; padding: 0 !important; }
 }

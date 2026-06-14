@@ -2563,11 +2563,7 @@
         _openDonPrintModal(data, label);
         API.toast('Xem trước ' + label + ' — ' + rowMsg, 'success');
       } else {
-        if (data.templateKey === 'don_giao_hang' || data.templateKey === 'don_tra_hang') {
-          await _buildDonXlsxFromTemplate(data);
-        } else {
-          _buildAndDownloadXlsx(data);
-        }
+        _buildAndDownloadXlsx(data);
         API.toast('Đã xuất ' + label + ' XLSX — ' + rowMsg, 'success');
       }
     } catch (err) {
@@ -2985,14 +2981,12 @@
     var tenGoi     = preface[1] || '';
     var tenCdt     = preface[2] || '';
     var leftColSet = new Set(data.leftAlignCols || []);
+    var titleLabel = label || (isDelivery ? 'Đơn giao hàng' : 'Đơn trả hàng');
 
     function esc(s) {
       return String(s == null ? '' : s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/\n/g, '<br>');
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/\n/g, '<br>');
     }
 
     var titleText = isDelivery ? '送货单  ĐƠN GIAO HÀNG' : '退货单  ĐƠN TRẢ HÀNG';
@@ -3000,8 +2994,8 @@
     var recvVal   = isDelivery ? esc(tenCdt) : '';
     var sendVal   = isDelivery ? '' : esc(tenCdt);
 
-    var colWidths = ['2.6%','5.3%','9.5%','18.4%','11.6%','10.5%','6.3%','5.3%','13.2%','7.9%','5.3%','4.2%'];
-
+    // A4 landscape with 12 cols — proportional widths
+    var colWidths = ['2.5%','5%','9%','18%','11%','10%','6%','5%','14%','8%','6%','5.5%'];
     var colgroupHtml = '<colgroup>';
     colWidths.forEach(function (w) { colgroupHtml += '<col style="width:' + w + '">'; });
     colgroupHtml += '</colgroup>';
@@ -3021,30 +3015,31 @@
     });
     tbodyHtml += '</tbody>';
 
+    // @page placed here (top-level in DOM) applies while this element is in the document
     var printCss = [
-      '@page{size:A4 portrait;margin:10mm}',
-      '.don-print-area *{box-sizing:border-box}',
-      '.don-print-area{font-family:Arial,sans-serif;font-size:10pt}',
-      '.don-cn{text-align:center;font-weight:bold;font-size:13pt;margin-bottom:1px}',
-      '.don-vn{text-align:center;font-weight:bold;font-size:11pt;margin-bottom:4px}',
-      '.don-ttl{text-align:center;font-weight:bold;font-size:13pt;background:#D9D9D9;padding:5px 0;margin-bottom:0}',
+      '@page{size:A4 landscape;margin:8mm}',
+      '.don-pa *{box-sizing:border-box}',
+      '.don-pa{font-family:Arial,sans-serif;font-size:9pt;color:#000}',
+      '.don-cn{text-align:center;font-weight:bold;font-size:12pt;margin-bottom:1px}',
+      '.don-vn{text-align:center;font-weight:bold;font-size:10pt;margin-bottom:3px}',
+      '.don-ttl{text-align:center;font-weight:bold;font-size:12pt;padding:4px 0;margin-bottom:0;border:1px solid #000}',
       '.don-inf{width:100%;border-collapse:collapse;margin:0}',
-      '.don-inf td{border:1px solid #000;padding:3px 5px;vertical-align:middle;font-size:9pt;line-height:1.3}',
-      '.don-inf .lb{font-weight:bold;width:17%;white-space:nowrap}',
-      '.don-inf .vl{width:33%}',
-      '.don-tbl{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:4px}',
+      '.don-inf td{border:1px solid #000;padding:3px 5px;vertical-align:middle;font-size:8.5pt;line-height:1.3}',
+      '.don-inf .lb{font-weight:bold;width:16%;white-space:nowrap}',
+      '.don-inf .vl{width:34%}',
+      '.don-tbl{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:3px}',
       '.don-tbl th,.don-tbl td{border:1px solid #000;padding:2px 3px;vertical-align:middle;word-break:break-word}',
-      '.don-tbl th{background:#BDD7EE;font-weight:bold;text-align:center;font-size:8pt;line-height:1.25}',
-      '.don-tbl td{font-size:8.5pt;text-align:center}',
+      '.don-tbl th{background:#fff;font-weight:bold;text-align:center;font-size:7.5pt;line-height:1.2}',
+      '.don-tbl td{font-size:8pt;text-align:center}',
       '.don-tbl td.l{text-align:left}',
       '.don-tbl thead{display:table-header-group}',
       '.don-tbl tr{page-break-inside:avoid}',
-      '.don-ft{margin-top:12px;display:flex;justify-content:space-between;gap:20px}',
-      '.don-fb{flex:1;padding-top:36px;border-top:1px solid #000;font-size:9pt;font-weight:bold;line-height:1.5}',
+      '.don-ft{margin-top:10px;display:flex;justify-content:space-between;gap:20px}',
+      '.don-fb{flex:1;padding-top:32px;border-top:1px solid #000;font-size:8.5pt;font-weight:bold;line-height:1.5}',
     ].join('\n');
 
-    var printAreaHtml = '<style>' + printCss + '</style>'
-      + '<div class="don-print-area">'
+    var docHtml = '<style>' + printCss + '</style>'
+      + '<div class="don-pa">'
       + '<div class="don-cn">越南永新一期电力有限公司</div>'
       + '<div class="don-vn">Công ty TNHH điện lực Vĩnh Tân 1</div>'
       + '<div class="don-ttl">' + esc(titleText) + '</div>'
@@ -3066,30 +3061,28 @@
       + '</div>'
       + '</div>';
 
-    // Remove any existing instance
     var existing = document.getElementById('donPrintBackdrop');
     if (existing) document.body.removeChild(existing);
 
     var backdrop = document.createElement('div');
     backdrop.id = 'donPrintBackdrop';
-    backdrop.innerHTML = '<div id="donPrintModal">'
-      + '<div class="don-modal-head">'
-      +   '<span>' + esc(label || (isDelivery ? 'Đơn giao hàng' : 'Đơn trả hàng')) + '</span>'
-      +   '<button type="button" id="donPrintClose" title="Đóng">&#x2715;</button>'
+    backdrop.innerHTML =
+        '<div id="donPrintToolbar">'
+      +   '<span class="dpt-title">' + esc(titleLabel) + ' — ' + rows.length + ' dòng</span>'
+      +   '<div class="dpt-actions">'
+      +     '<button type="button" class="dpt-close" id="donPrintClose">Đóng</button>'
+      +     '<button type="button" class="dpt-print" id="donPrintBtn">In đơn</button>'
+      +   '</div>'
       + '</div>'
-      + '<div class="don-modal-body">' + printAreaHtml + '</div>'
-      + '<div class="don-modal-actions">'
-      +   '<button type="button" id="donPrintCancel" class="btn-cancel">Đóng</button>'
-      +   '<button type="button" id="donPrintBtn" class="btn-green">In đơn</button>'
-      + '</div>'
+      + '<div id="donPrintScroll">'
+      +   '<div id="donPrintPaper">' + docHtml + '</div>'
       + '</div>';
 
     document.body.appendChild(backdrop);
 
-    function closeDonModal() { document.body.removeChild(backdrop); }
-    document.getElementById('donPrintClose').onclick  = closeDonModal;
-    document.getElementById('donPrintCancel').onclick = closeDonModal;
-    document.getElementById('donPrintBtn').onclick    = function () { window.print(); };
+    function closeDonPreview() { document.body.removeChild(backdrop); }
+    document.getElementById('donPrintClose').onclick = closeDonPreview;
+    document.getElementById('donPrintBtn').onclick   = function () { window.print(); };
   }
 
   function csvQuote(value) {
