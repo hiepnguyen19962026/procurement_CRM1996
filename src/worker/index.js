@@ -17,6 +17,7 @@ import { handleSupplierQuotes } from './handlers/supplier-quotes.js';
 import { handleTechnicalClarifications } from './handlers/technical-clarifications.js';
 import { handlePriceHistory } from './handlers/price-history.js';
 import { handleContracts } from './handlers/contracts.js';
+import { handleDelivery } from './handlers/delivery.js';
 import { handleDashboard } from './handlers/dashboard.js';
 import { handleOcr } from './handlers/ocr.js';
 import { handleTasks } from './handlers/tasks.js';
@@ -43,6 +44,7 @@ const IMPORT_ACTIONS = ['getImportTemplates', 'saveImportTemplate', 'checkRfqImp
 const ITEM_ACTIONS = ['searchMasterItems', 'getMasterItemDetail', 'suggestMasterItemsForRfqItem', 'createMasterItem', 'updateMasterItem', 'linkRfqItemToMaster', 'unlinkRfqItemFromMaster'];
 const PRICE_HISTORY_ACTIONS = ['searchPriceHistory', 'getPriceHistorySummary', 'exportPriceHistoryCsv'];
 const CONTRACT_ACTIONS = ['getContracts', 'getContractDetail', 'getContractItemsForRfqItem', 'createContract', 'updateContract', 'archiveContract', 'addContractItem', 'updateContractItem', 'archiveContractItem', 'createContractFromRfqItem'];
+const DELIVERY_ACTIONS = ['getDeliveryNotes', 'getDeliveryNoteDetail', 'getDeliveryItemsForRfqItem', 'createDeliveryNote', 'updateDeliveryNote', 'archiveDeliveryNote', 'addDeliveryNoteItem', 'updateDeliveryNoteItem', 'archiveDeliveryNoteItem'];
 const DASHBOARD_V2_ACTIONS = ['getDashboardV2'];
 const OCR_ACTIONS = ['ocrImage'];
 const TASK_ACTIONS = ['getTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'quickUpdateTaskStatus', 'quickUpdateTaskPriority', 'suggestTaskCompanies'];
@@ -86,6 +88,7 @@ export default {
     else if (ITEM_ACTIONS.includes(action)) res = await handleItems(action, request, env, ctx, actor);
     else if (PRICE_HISTORY_ACTIONS.includes(action)) res = await handlePriceHistory(action, request, env, ctx, actor);
     else if (CONTRACT_ACTIONS.includes(action)) res = await handleContracts(action, request, env, ctx, actor);
+    else if (DELIVERY_ACTIONS.includes(action)) res = await handleDelivery(action, request, env, ctx, actor);
     else if (DASHBOARD_V2_ACTIONS.includes(action)) res = await handleDashboard(action, request, env, ctx, actor);
     else if (OCR_ACTIONS.includes(action)) res = await handleOcr(action, request, env, ctx, actor);
     else if (TASK_ACTIONS.includes(action)) res = await handleTasks(action, request, env, ctx, actor);

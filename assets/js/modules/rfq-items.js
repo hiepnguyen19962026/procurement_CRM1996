@@ -246,7 +246,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="32" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="35" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -294,6 +294,9 @@
         + renderCell(API.money(r.thanh_tien_sau_thue), true)
         + renderCell(API.money(r.gia_hop_dong), true)
         + renderCell(r.gia_hop_dong ? API.money(r.gia_hop_dong * (parseFloat(val(r, 'quantity', 'so_luong')) || 0)) : '', true)
+        + renderCell(formatQty(r.contract_quantity_total), false)
+        + renderCell(formatQty(r.delivered_quantity_total), false)
+        + renderCell(formatQty(r.remaining_quantity), false)
         + renderCell(r.delivery_time, true)
         + renderCell(r.note, true)
         + urlCell(r.external_url, r.rfq_item_id)
@@ -318,6 +321,10 @@
     if (delSelBtn) delSelBtn.classList.add('hidden');
     var delCnt = document.getElementById('itemDeleteCount');
     if (delCnt) delCnt.textContent = '0';
+    var deliveryBtn = document.getElementById('itemCreateDeliverySelected');
+    if (deliveryBtn) deliveryBtn.classList.add('hidden');
+    var deliveryCnt = document.getElementById('itemDeliveryCount');
+    if (deliveryCnt) deliveryCnt.textContent = '0';
     updateCountInfo();
     syncTopScroll();
   }
@@ -457,6 +464,144 @@
       document.querySelectorAll('#itemRows .item-check'),
       function (cb) { return cb.checked; }
     ).map(function (cb) { return cb.value; });
+  }
+
+  function _getSelectedItems() {
+    var ids = _getSelectedItemIds();
+    return ids.map(function (id) {
+      return (state.rows || []).find(function (r) { return r.rfq_item_id === id; });
+    }).filter(Boolean);
+  }
+
+  function todayYmd() {
+    return new Date(Date.now() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  }
+
+  function toQty(value) {
+    var n = Number(String(value == null ? '' : value).replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function formatQty(value) {
+    var n = toQty(value);
+    if (!n) return '';
+    return n.toLocaleString('vi-VN', { maximumFractionDigits: 3 });
+  }
+
+  function confirmDeliveryChoice(title, message, yesLabel, noLabel) {
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'confirm-overlay';
+      overlay.innerHTML = '<div class="confirm-box">'
+        + '<div class="confirm-title">' + API.esc(title) + '</div>'
+        + '<p class="confirm-desc">' + API.esc(message) + '</p>'
+        + '<div class="confirm-actions">'
+        + '<button type="button" class="btn-cancel">' + API.esc(noLabel || 'Không') + '</button>'
+        + '<button type="button" class="primary">' + API.esc(yesLabel || 'Có') + '</button>'
+        + '</div></div>';
+      document.body.appendChild(overlay);
+      function done(result) { document.body.removeChild(overlay); resolve(result); }
+      overlay.querySelector('.primary').onclick = function () { done(true); };
+      overlay.querySelector('.btn-cancel').onclick = function () { done(false); };
+    });
+  }
+
+  async function openCreateDeliveryForSelected() {
+    var items = _getSelectedItems();
+    if (!items.length) { API.toast('Chọn ít nhất 1 dòng vật tư để tạo đơn giao hàng', 'warn'); return; }
+    if (!Utils.roleCanWrite()) { API.toast('Không có quyền tạo đơn giao hàng', 'error'); return; }
+    var rfqIds = Array.from(new Set(items.map(function (r) { return r.rfq_id || ''; }).filter(Boolean)));
+    if (rfqIds.length !== 1) {
+      API.toast('Chỉ tạo đơn giao hàng cho các dòng trong cùng một RFQ', 'warn');
+      return;
+    }
+    var edit = await confirmDeliveryChoice(
+      'Tạo đơn giao hàng',
+      'Có thay đổi số lượng giao hàng không?',
+      'Có',
+      'Không'
+    );
+    if (!edit) {
+      await submitDeliveryNote(items, items.map(function (r) {
+        return { rfqItemId: r.rfq_item_id, deliveredQuantity: toQty(r.remaining_quantity) };
+      }));
+      return;
+    }
+    openDeliveryQuantityModal(items);
+  }
+
+  function deliveryQuantityTable(items) {
+    return '<div class="span-12" style="overflow:auto;max-height:60vh">'
+      + '<table class="quotes-mini-table" style="width:100%;min-width:980px">'
+      + '<thead><tr>'
+      + '<th>Mã vật tư</th><th>Tên vật tư</th><th>Quy cách</th><th>Hãng</th><th>Đơn vị</th>'
+      + '<th>SL HĐ</th><th>Đã giao</th><th>Còn lại</th><th>SL giao lần này</th>'
+      + '</tr></thead><tbody>'
+      + items.map(function (r, i) {
+          var remaining = toQty(r.remaining_quantity);
+          return '<tr data-rfq-item-id="' + API.esc(r.rfq_item_id) + '">'
+            + '<td>' + API.esc(r.ma_vat_tu || '') + '</td>'
+            + '<td>' + API.esc(r.ten_vat_tu || '') + '</td>'
+            + '<td>' + API.esc(r.quy_cach_final || val(r, 'required_model', 'quy_cach_model_yeu_cau') || '') + '</td>'
+            + '<td>' + API.esc(r.hang_final || val(r, 'manufacturer', 'hang_goc_nsx_goc') || '') + '</td>'
+            + '<td>' + API.esc(val(r, 'unit', 'don_vi') || '') + '</td>'
+            + '<td class="num">' + API.esc(formatQty(r.contract_quantity_total) || '0') + '</td>'
+            + '<td class="num">' + API.esc(formatQty(r.delivered_quantity_total) || '0') + '</td>'
+            + '<td class="num"><strong>' + API.esc(formatQty(remaining) || '0') + '</strong></td>'
+            + '<td><input name="delivery_qty_' + i + '" data-rfq-item-id="' + API.esc(r.rfq_item_id) + '" inputmode="decimal" value="' + API.esc(remaining) + '" style="width:110px;text-align:right"></td>'
+            + '</tr>';
+        }).join('')
+      + '</tbody></table></div>';
+  }
+
+  function openDeliveryQuantityModal(items) {
+    var html = '<div class="span-12" style="font-size:13px;color:var(--text-muted);margin-bottom:4px">'
+      + 'Nhập số lượng giao cho từng dòng vật tư. Có thể để 0 nếu chưa giao dòng đó.'
+      + '</div>' + deliveryQuantityTable(items);
+    Utils.openModal('Tạo đơn giao hàng', html, async function () {
+      var rows = [];
+      var invalid = false;
+      var over = false;
+      Array.prototype.forEach.call(document.querySelectorAll('#modalBody input[data-rfq-item-id]'), function (inp) {
+        var id = inp.getAttribute('data-rfq-item-id');
+        var item = items.find(function (r) { return r.rfq_item_id === id; });
+        var qty = toQty(inp.value);
+        if (qty < 0) invalid = true;
+        if (item && qty + toQty(item.delivered_quantity_total) > toQty(item.contract_quantity_total)) over = true;
+        rows.push({ rfqItemId: id, deliveredQuantity: qty });
+      });
+      if (invalid) {
+        API.toast('Số lượng giao phải lớn hơn hoặc bằng 0', 'warn');
+        return;
+      }
+      if (over) {
+        var ok = await confirmDeliveryChoice(
+          'Cảnh báo số lượng giao hàng',
+          'Số lượng giao vượt số lượng hợp đồng. Bạn có muốn tiếp tục?',
+          'Có',
+          'Không'
+        );
+        if (!ok) return;
+      }
+      await submitDeliveryNote(items, rows);
+    });
+  }
+
+  async function submitDeliveryNote(items, rows) {
+    if (!items.length) return;
+    var rfqId = items[0].rfq_id || '';
+    try {
+      await API.call('createDeliveryNote', {
+        rfqId: rfqId,
+        deliveryDate: todayYmd(),
+        items: rows,
+      });
+      Utils.closeModal();
+      API.toast('Đã tạo đơn giao hàng cho ' + rows.length + ' dòng vật tư', 'success');
+      await load(true);
+    } catch (err) {
+      API.error(err);
+    }
   }
 
   // --- Revision history ---
@@ -1623,8 +1768,13 @@
     );
     var btn = document.getElementById('itemDeleteSelected');
     var cnt = document.getElementById('itemDeleteCount');
+    var deliveryBtn = document.getElementById('itemCreateDeliverySelected');
+    var deliveryCnt = document.getElementById('itemDeliveryCount');
+    var canWrite = Utils.roleCanWrite();
     if (btn) btn.classList.toggle('hidden', !checked.length);
     if (cnt) cnt.textContent = checked.length;
+    if (deliveryBtn) deliveryBtn.classList.toggle('hidden', !checked.length || !canWrite);
+    if (deliveryCnt) deliveryCnt.textContent = checked.length;
   }
 
   async function deleteSelected() {
@@ -2994,113 +3144,133 @@
     var recvVal   = isDelivery ? esc(tenCdt) : '';
     var sendVal   = isDelivery ? '' : esc(tenCdt);
 
-    // SVG grid: vector lines drawn once, cell text overlaid with abs-positioned divs.
-    // No table/CSS-grid borders — SVG <line> and <rect> cannot have rounding gaps.
-    var COL_W = [3, 5, 9, 16, 14, 10, 6, 5, 14, 8, 6, 4]; // % — total 100
-    var HDR_H = 12;  // mm
-    var ROW_H = 16;  // mm (fixed height — text clips, no layout shift)
-    var nRows  = rows.length;
-    var gridH  = HDR_H + nRows * ROW_H; // mm
+    // ── Unified SVG layout — all borders are SVG vectors, zero CSS borders ──────
+    // Layout constants (mm)
+    var TTL_H     = 10;   // title bar
+    var INF_ROW_H = 10;   // info block row height (3 rows)
+    var HDR_H     = 16;   // item header
+    var ROW_H     = 14;   // item data row (fixed — text clips, no layout shift)
+    var FTR_H     = 22;   // footer area
+    var nRows     = rows.length;
 
-    function escPlain(s) {
+    var INF_Y  = TTL_H;
+    var ITEM_Y = INF_Y + 3 * INF_ROW_H;
+    var FTR_Y  = ITEM_Y + HDR_H + nRows * ROW_H;
+    var DOC_H  = FTR_Y + FTR_H;
+
+    // Column % widths
+    var INF_W = [15, 35, 15, 35];  // info block: lb|val|lb|val
+    var infL  = [0]; INF_W.forEach(function (w) { infL.push(infL[infL.length - 1] + w); });
+
+    var ITEM_W = [3, 5, 9, 16, 14, 10, 6, 5, 14, 8, 6, 4];  // 12 item cols
+    var itemL  = [0]; ITEM_W.forEach(function (w) { itemL.push(itemL[itemL.length - 1] + w); });
+
+    // SVG drawing helpers — stroke-width 0.6 for all lines
+    var SK = 'stroke="#000" stroke-width="0.6"';
+    function epln(s) {  // plain HTML escape (no \n conversion)
       return String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
+    function vl(xp, y1, y2) { return '<line x1="'+xp+'%" y1="'+y1+'mm" x2="'+xp+'%" y2="'+y2+'mm" '+SK+'/>'; }
+    function hl(y, x1, x2)  { return '<line x1="'+x1+'" y1="'+y+'mm" x2="'+x2+'" y2="'+y+'mm" '+SK+'/>'; }
+    function sr(y, h)        { return '<rect x="0" y="'+y+'mm" width="100%" height="'+h+'mm" fill="none" '+SK+'/>'; }
 
-    // Cumulative left positions (%)
-    var cumL = [0];
-    COL_W.forEach(function (w) { cumL.push(cumL[cumL.length - 1] + w); });
+    var sp = ['<svg width="100%" height="'+DOC_H+'mm" style="position:absolute;top:0;left:0;overflow:visible;display:block">'];
+    // Title bar
+    sp.push(sr(0, TTL_H));
+    // Info block: outer rect + 3 vertical + 2 horizontal dividers
+    sp.push(sr(INF_Y, 3 * INF_ROW_H));
+    [1, 2, 3].forEach(function (ci) { sp.push(vl(infL[ci], INF_Y, INF_Y + 3 * INF_ROW_H)); });
+    sp.push(hl(INF_Y + INF_ROW_H,     '0', '100%'));
+    sp.push(hl(INF_Y + 2 * INF_ROW_H, '0', '100%'));
+    // Item grid: outer rect + 11 vertical + header separator + row separators
+    var itemH = HDR_H + nRows * ROW_H;
+    sp.push(sr(ITEM_Y, itemH));
+    for (var ci = 1; ci <= 11; ci++) sp.push(vl(itemL[ci], ITEM_Y, ITEM_Y + itemH));
+    sp.push(hl(ITEM_Y + HDR_H, '0', '100%'));
+    for (var ri = 1; ri < nRows; ri++) sp.push(hl(ITEM_Y + HDR_H + ri * ROW_H, '0', '100%'));
+    // Footer: two separate signature lines (horizontal only, no box)
+    var sigY = FTR_Y + 6;
+    sp.push(hl(sigY, '2%',  '47%'));
+    sp.push(hl(sigY, '53%', '98%'));
+    sp.push('</svg>');
+    var svgHtml = sp.join('');
 
-    // ── SVG border lines ──────────────────────────────────────────────────────
-    var SK = 'stroke="#000" stroke-width="1"';
-    var svgParts = [
-      '<svg width="100%" height="' + gridH + 'mm"',
-      '  style="position:absolute;top:0;left:0;overflow:visible;display:block">',
-      // Outer rectangle
-      '<rect x="0" y="0" width="100%" height="' + gridH + 'mm" fill="none" ' + SK + '/>',
-      // Internal vertical lines — one per column boundary (ci = 1..11)
+    // Overlay helper: abs-positioned div that sits above the SVG for text content
+    function od(lp, tm, wp, hm, html, styl) {
+      return '<div style="position:absolute;left:'+lp+'%;top:'+tm+'mm;'
+        +'width:'+wp+'%;height:'+hm+'mm;overflow:hidden;box-sizing:border-box;'+styl+'">'+html+'</div>';
+    }
+    var FC  = 'display:flex;align-items:center;justify-content:center;text-align:center;';
+    var FL  = 'display:flex;align-items:center;justify-content:flex-start;text-align:left;';
+    var P2  = 'padding:1mm 2mm;';
+    var P15 = 'padding:1mm 1.5mm;';
+    var F12B = 'font-size:12pt;font-weight:bold;line-height:1.2;'+P2;
+    var F8B  = 'font-size:8pt;font-weight:bold;line-height:1.25;'+P2;
+    var F8   = 'font-size:8pt;line-height:1.25;'+P2;
+    var F7B  = 'font-size:7pt;font-weight:bold;line-height:1.15;padding:1mm 1mm;';
+
+    var ovs = [];
+
+    // Title bar (centered bold text)
+    ovs.push(od(0, 0, 100, TTL_H, epln(titleText), FC + F12B));
+
+    // Info block (3 rows × 4 cols)
+    var infoRows = [
+      [ { h: '合同名称:<br>Tên Hợp đồng:', v: esc(tenGoi)    },
+        { h: '合同编号:<br>Mã Hợp đồng:',  v: esc(maGoiTbmt) } ],
+      [ { h: recvLabel,                     v: recvVal         },
+        { h: '送货单位:<br>Đơn vị giao hàng:', v: sendVal     } ],
+      [ { h: '日期:<br>Thời gian:',         v: ''              },
+        { h: '送货人:<br>Người giao hàng:', v: ''              } ],
     ];
-    for (var ci = 1; ci <= 11; ci++) {
-      svgParts.push('<line x1="' + cumL[ci] + '%" y1="0" x2="' + cumL[ci] + '%" y2="' + gridH + 'mm" ' + SK + '/>');
-    }
-    // Horizontal line after header
-    svgParts.push('<line x1="0" y1="' + HDR_H + 'mm" x2="100%" y2="' + HDR_H + 'mm" ' + SK + '/>');
-    // Horizontal lines between data rows (not after the last — rect bottom covers it)
-    for (var ri = 1; ri < nRows; ri++) {
-      var yMm = HDR_H + ri * ROW_H;
-      svgParts.push('<line x1="0" y1="' + yMm + 'mm" x2="100%" y2="' + yMm + 'mm" ' + SK + '/>');
-    }
-    svgParts.push('</svg>');
-    var svgHtml = svgParts.join('');
-
-    // ── Header cell text overlays ─────────────────────────────────────────────
-    var hdrHtml = '';
-    headers.forEach(function (h, ci) {
-      var lines = String(h == null ? '' : h).split('\n');
-      hdrHtml += '<div style="position:absolute;left:' + cumL[ci] + '%;top:0;'
-        + 'width:' + COL_W[ci] + '%;height:' + HDR_H + 'mm;'
-        + 'display:flex;flex-direction:column;align-items:center;justify-content:center;'
-        + 'padding:1px 2px;overflow:hidden;font-weight:700;font-size:7.5pt;line-height:1.15;text-align:center">'
-        + lines.map(function (l) { return '<span style="display:block">' + escPlain(l) + '</span>'; }).join('')
-        + '</div>';
+    infoRows.forEach(function (row, ir) {
+      var tm = INF_Y + ir * INF_ROW_H;
+      ovs.push(od(infL[0], tm, INF_W[0], INF_ROW_H, row[0].h, FL + F8B));
+      ovs.push(od(infL[1], tm, INF_W[1], INF_ROW_H, row[0].v, FL + F8 ));
+      ovs.push(od(infL[2], tm, INF_W[2], INF_ROW_H, row[1].h, FL + F8B));
+      ovs.push(od(infL[3], tm, INF_W[3], INF_ROW_H, row[1].v, FL + F8 ));
     });
 
-    // ── Data cell text overlays ───────────────────────────────────────────────
-    var dataHtml = '';
+    // Item header (bilingual, two <span> lines, centered)
+    var FHDR = 'display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;' + F7B;
+    headers.forEach(function (h, ci) {
+      var lines = String(h == null ? '' : h).split('\n');
+      var html = lines.map(function (l) { return '<span style="display:block">'+epln(l)+'</span>'; }).join('');
+      ovs.push(od(itemL[ci], ITEM_Y, ITEM_W[ci], HDR_H, html, FHDR));
+    });
+
+    // Item data rows
     rows.forEach(function (row, ri) {
-      var topMm = HDR_H + ri * ROW_H;
-      row.forEach(function (cell, ci) {
-        var isLeft = leftColSet.has(ci);
-        dataHtml += '<div style="position:absolute;left:' + cumL[ci] + '%;top:' + topMm + 'mm;'
-          + 'width:' + COL_W[ci] + '%;height:' + ROW_H + 'mm;'
-          + 'display:flex;align-items:center;'
-          + (isLeft ? 'justify-content:flex-start;text-align:left' : 'justify-content:center;text-align:center') + ';'
-          + 'padding:2px 3px;overflow:hidden;font-size:8pt;line-height:1.2;word-break:break-word">'
-          + esc(String(cell == null ? '' : cell))
-          + '</div>';
+      var tm = ITEM_Y + HDR_H + ri * ROW_H;
+      row.forEach(function (v, ci) {
+        var isL = leftColSet.has(ci);
+        ovs.push(od(itemL[ci], tm, ITEM_W[ci], ROW_H,
+          esc(String(v == null ? '' : v)),
+          (isL ? FL : FC) + 'font-size:8pt;line-height:1.2;' + (isL ? P15 : P2)));
       });
     });
 
-    // @page placed here (top-level in DOM) applies while this element is in the document
+    // Footer text (below signature lines)
+    ovs.push(od(2,  sigY, 45, FTR_H - 6, '收货人签字:<br>Người nhận hàng ký tên:', FL + F8B));
+    ovs.push(od(53, sigY, 45, FTR_H - 6, '日期:<br>Thời gian:', FL + F8B));
+
+    // @page lives here (top-level in DOM) — applies while element is in document
     var printCss = [
       '@page{size:A4 landscape;margin:8mm}',
       '.don-pa *{box-sizing:border-box}',
       '.don-pa{font-family:Arial,sans-serif;font-size:9pt;color:#000}',
       '.don-cn{text-align:center;font-weight:bold;font-size:12pt;margin-bottom:1px}',
-      '.don-vn{text-align:center;font-weight:bold;font-size:10pt;margin-bottom:3px}',
-      '.don-ttl{text-align:center;font-weight:bold;font-size:12pt;padding:4px 0;margin-bottom:0;border:1px solid #000}',
-      '.don-inf{width:100%;border-collapse:collapse;margin:0}',
-      '.don-inf td{border:1px solid #000;padding:3px 5px;vertical-align:middle;font-size:8.5pt;line-height:1.3}',
-      '.don-inf .lb{font-weight:bold;width:16%;white-space:nowrap}',
-      '.don-inf .vl{width:34%}',
-      '.don-ft{width:100%;border-collapse:collapse;margin-top:14px}',
-      '.don-ft td{width:50%;padding-top:28px;border-top:1px solid #000;' +
-        'font-size:8.5pt;font-weight:bold;line-height:1.5;padding-left:4px;vertical-align:top}',
+      '.don-vn{text-align:center;font-weight:bold;font-size:10pt;margin-bottom:4px}',
     ].join('\n');
 
     var docHtml = '<style>' + printCss + '</style>'
       + '<div class="don-pa">'
       + '<div class="don-cn">越南永新一期电力有限公司</div>'
       + '<div class="don-vn">Công ty TNHH điện lực Vĩnh Tân 1</div>'
-      + '<div class="don-ttl">' + esc(titleText) + '</div>'
-      + '<table class="don-inf"><tbody>'
-      + '<tr>'
-      +   '<td class="lb">合同名称:<br>Tên Hợp đồng:</td><td class="vl">' + esc(tenGoi) + '</td>'
-      +   '<td class="lb">合同编号:<br>Mã Hợp đồng:</td><td class="vl">' + esc(maGoiTbmt) + '</td>'
-      + '</tr><tr>'
-      +   '<td class="lb">' + recvLabel + '</td><td class="vl">' + recvVal + '</td>'
-      +   '<td class="lb">送货单位:<br>Đơn vị giao hàng:</td><td class="vl">' + sendVal + '</td>'
-      + '</tr><tr>'
-      +   '<td class="lb">日期:<br>Thời gian:</td><td class="vl"></td>'
-      +   '<td class="lb">送货人:<br>Người giao hàng:</td><td class="vl"></td>'
-      + '</tr></tbody></table>'
-      + '<div style="position:relative;width:100%;height:' + gridH + 'mm;margin-top:3px">'
-      +   svgHtml + hdrHtml + dataHtml
+      + '<div style="position:relative;width:100%;height:' + DOC_H + 'mm">'
+      +   svgHtml + ovs.join('')
       + '</div>'
-      + '<table class="don-ft"><tr>'
-      +   '<td>收货人签字:<br>Người nhận hàng ký tên:</td>'
-      +   '<td>日期:<br>Thời gian:</td>'
-      + '</tr></table>'
       + '</div>';
 
     var existing = document.getElementById('donPrintBackdrop');
@@ -4090,6 +4260,7 @@
     openContractFromRfqItemModal: openContractFromRfqItemModal,
     openRevisionHistory: openRevisionHistory,
     archiveRfqItem: archiveRfqItem,
+    openCreateDeliveryForSelected: openCreateDeliveryForSelected,
     toggleSelectAll: toggleSelectAll,
     onCheckChange: onCheckChange,
     deleteSelected: deleteSelected,

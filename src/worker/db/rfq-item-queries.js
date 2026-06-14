@@ -112,11 +112,38 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
          FROM technical_clarifications tc
          WHERE tc.deleted_at IS NULL
            AND tc.rfq_item_id IN (SELECT rfq_item_id FROM page)
+       ),
+       contract_totals AS (
+         SELECT
+           ci.rfq_item_id,
+           COALESCE(SUM(ci.contract_quantity), 0) AS contract_quantity_total
+         FROM contract_items ci
+         WHERE ci.status = 'active'
+           AND ci.rfq_item_id IN (SELECT rfq_item_id FROM page)
+         GROUP BY ci.rfq_item_id
+       ),
+       delivery_totals AS (
+         SELECT
+           dni.rfq_item_id,
+           COALESCE(SUM(dni.delivered_quantity), 0) AS delivered_quantity_total
+         FROM delivery_note_items dni
+         JOIN delivery_notes dn ON dn.delivery_note_id = dni.delivery_note_id
+         WHERE dni.status = 'active'
+           AND dn.status = 'active'
+           AND dni.rfq_item_id IN (SELECT rfq_item_id FROM page)
+         GROUP BY dni.rfq_item_id
        )
        SELECT page.*,
          COALESCE(ltc.clarification_count, 0) AS clarification_count,
          ltc.status_after AS clarification_status,
          ltc.title AS latest_clarification_title,
+         COALESCE(ct.contract_quantity_total, 0) AS contract_quantity_total,
+         COALESCE(dt.delivered_quantity_total, 0) AS delivered_quantity_total,
+         CASE
+           WHEN COALESCE(ct.contract_quantity_total, 0) - COALESCE(dt.delivered_quantity_total, 0) > 0
+           THEN COALESCE(ct.contract_quantity_total, 0) - COALESCE(dt.delivered_quantity_total, 0)
+           ELSE 0
+         END AS remaining_quantity,
          (SELECT COUNT(*) FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived') AS quote_count,
          (SELECT MIN(sq.price_vnd_incl_tax) FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived' AND sq.price_vnd_incl_tax > 0) AS min_price_vnd_incl_tax,
          (SELECT JSON_GROUP_ARRAY(JSON_OBJECT('p', sub.p, 'n', sub.n)) FROM (SELECT sq.price_vnd_incl_tax AS p, COALESCE(sq.supplier_name,'') AS n FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived' AND sq.price_vnd_incl_tax > 0 ORDER BY sq.price_vnd_incl_tax ASC LIMIT 6) sub) AS quote_prices_json,
@@ -124,6 +151,8 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
          (SELECT COUNT(*) FROM media_files mf WHERE mf.owner_type = 'rfq_item' AND mf.owner_id = page.rfq_item_id AND mf.file_kind = 'document_pdf') AS file_count
        FROM page
        LEFT JOIN tc_latest ltc ON ltc.rfq_item_id = page.rfq_item_id AND ltc.rn = 1
+       LEFT JOIN contract_totals ct ON ct.rfq_item_id = page.rfq_item_id
+       LEFT JOIN delivery_totals dt ON dt.rfq_item_id = page.rfq_item_id
        ORDER BY ${outerOrderBy}`
     ).bind(...binds, limit + 1).all(),
   ]);
