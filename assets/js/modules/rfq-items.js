@@ -16,6 +16,7 @@
   var _exportColPanelInit = false;
   var _lastFilterParams = {};
   var deliveryStatusFilters = {};
+  var deadlineStatusFilters = {};
   var DELIVERY_SORT_KEYS = {
     delivered_quantity_total: true,
     remaining_quantity: true,
@@ -44,6 +45,8 @@
       if (wrap && !wrap.contains(e.target)) _hideRfqSuggestions();
       var deliveryWrap = document.querySelector('#screen-items .delivery-filter-wrap');
       if (deliveryWrap && !deliveryWrap.contains(e.target)) closeDeliveryFilterMenu();
+      var deadlineWrap = document.querySelector('#screen-items .deadline-filter-wrap');
+      if (deadlineWrap && !deadlineWrap.contains(e.target)) closeDeadlineFilterMenu();
     });
     window.addEventListener('resize', syncTopScroll);
   }
@@ -174,6 +177,35 @@
     render();
   }
 
+  function selectedDeadlineStatuses() {
+    return Object.keys(deadlineStatusFilters).filter(function (key) { return deadlineStatusFilters[key]; });
+  }
+
+  function syncDeadlineFilterLabel() {
+    var btn = document.getElementById('itemDeadlineFilterBtn');
+    if (!btn) return;
+    var count = selectedDeadlineStatuses().length;
+    btn.textContent = count ? ('Deadline (' + count + ') ▼') : 'Deadline ▼';
+  }
+
+  function toggleDeadlineFilterMenu() {
+    var menu = document.getElementById('itemDeadlineFilterMenu');
+    if (!menu) return;
+    menu.classList.toggle('hidden');
+  }
+
+  function closeDeadlineFilterMenu() {
+    var menu = document.getElementById('itemDeadlineFilterMenu');
+    if (menu) menu.classList.add('hidden');
+  }
+
+  function onDeadlineFilterChange(cb) {
+    if (!cb) return;
+    deadlineStatusFilters[cb.value] = !!cb.checked;
+    syncDeadlineFilterLabel();
+    render();
+  }
+
   async function load(reset) {
     setupOnce();
     await initRfqAutocomplete();
@@ -277,8 +309,9 @@
   function render() {
     syncSort();
     syncDeliveryFilterLabel();
+    syncDeadlineFilterLabel();
     var baseRows = state.rows || [];
-    var rows = sortDeliveryRows(filterDeliveryRows(baseRows));
+    var rows = sortDeliveryRows(filterDeadlineRows(filterDeliveryRows(baseRows)));
     var rfqFilter = _selectedRfqId;
     if (!baseRows.length && rfqFilter) {
       var rfqMeta = (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === rfqFilter; }) || null;
@@ -289,7 +322,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="37" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="38" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -304,7 +337,7 @@
       return;
     }
     if (baseRows.length && !rows.length) {
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="37" style="text-align:center;color:var(--text-muted);padding:18px">Không có dòng vật tư phù hợp bộ lọc giao hàng.</td></tr>';
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="38" style="text-align:center;color:var(--text-muted);padding:18px">Không có dòng vật tư phù hợp bộ lọc.</td></tr>';
       document.getElementById('itemMore').classList.toggle('hidden', !state.hasMore);
       Auth.applyRoleUI();
       var noMatchSelectAll = document.getElementById('itemSelectAll');
@@ -371,6 +404,7 @@
           + '</td>'
         + renderCell(formatQty(r.delivered_quantity_total), false)
         + renderCell(formatQty(r.remaining_quantity), false)
+        + deadlineCell(r)
         + '</tr>';
     }).join('');
     document.getElementById('itemMore').classList.toggle('hidden', !state.hasMore);
@@ -551,6 +585,22 @@
     return n.toLocaleString('vi-VN', { maximumFractionDigits: 3 });
   }
 
+  function deadlineCell(row) {
+    if (toQty(row.remaining_quantity) <= 0) return '<td class="muted-cell" style="text-align:center">-</td>';
+    var date = row.delivery_deadline_date || '';
+    if (!date || row.delivery_deadline_status === 'no_deadline') {
+      return '<td class="muted-cell" style="text-align:center">chưa có</td>';
+    }
+    var days = Number(row.delivery_deadline_days_left);
+    var note = '';
+    if (Number.isFinite(days)) {
+      note = days < 0
+        ? '<div class="muted" style="font-size:11px;color:var(--red)">trễ ' + Math.abs(days) + ' ngày</div>'
+        : '<div class="muted" style="font-size:11px">còn ' + days + ' ngày</div>';
+    }
+    return '<td style="text-align:center;white-space:nowrap">' + API.esc(date) + note + '</td>';
+  }
+
   function matchesDeliveryStatus(row, key) {
     var contractQty = toQty(row.contract_quantity_total);
     var deliveredQty = toQty(row.delivered_quantity_total);
@@ -562,11 +612,30 @@
     return false;
   }
 
+  function matchesDeadlineStatus(row, key) {
+    if (toQty(row.remaining_quantity) <= 0) return false;
+    var status = row.delivery_deadline_status || '';
+    if (key === 'due_7') return status === 'due_7';
+    if (key === 'due_15') return status === 'due_7' || status === 'due_15';
+    if (key === 'due_30') return status === 'due_7' || status === 'due_15' || status === 'due_30';
+    if (key === 'overdue') return status === 'overdue';
+    if (key === 'no_deadline') return status === 'no_deadline';
+    return false;
+  }
+
   function filterDeliveryRows(rows) {
     var filters = selectedDeliveryStatuses();
     if (!filters.length) return rows;
     return rows.filter(function (row) {
       return filters.some(function (key) { return matchesDeliveryStatus(row, key); });
+    });
+  }
+
+  function filterDeadlineRows(rows) {
+    var filters = selectedDeadlineStatuses();
+    if (!filters.length) return rows;
+    return rows.filter(function (row) {
+      return filters.some(function (key) { return matchesDeadlineStatus(row, key); });
     });
   }
 
@@ -4356,6 +4425,8 @@
     openCreateDeliveryForSelected: openCreateDeliveryForSelected,
     toggleDeliveryFilterMenu: toggleDeliveryFilterMenu,
     onDeliveryFilterChange: onDeliveryFilterChange,
+    toggleDeadlineFilterMenu: toggleDeadlineFilterMenu,
+    onDeadlineFilterChange: onDeadlineFilterChange,
     toggleSelectAll: toggleSelectAll,
     onCheckChange: onCheckChange,
     deleteSelected: deleteSelected,
