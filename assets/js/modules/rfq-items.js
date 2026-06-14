@@ -2513,18 +2513,29 @@
     _closeDonMenu();
     var menu = document.createElement('div');
     menu.id = 'rfqDonTplMenu';
-    menu.style.cssText = 'position:fixed;z-index:9999;background:var(--white,#fff);border:1px solid var(--border,#e5e7eb);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:180px;padding:4px 0;font-size:13px';
+    menu.style.cssText = 'position:fixed;z-index:9999;background:var(--white,#fff);border:1px solid var(--border,#e5e7eb);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:200px;padding:4px 0;font-size:13px';
     var items = [
-      { key: 'don_giao_hang', label: 'VT1-Đơn giao hàng' },
-      { key: 'don_tra_hang', label: 'VT1-Đơn trả hàng' },
+      { key: 'don_giao_hang', format: 'xlsx', label: 'VT1-Đơn giao hàng  XLSX' },
+      { key: 'don_tra_hang',  format: 'xlsx', label: 'VT1-Đơn trả hàng  XLSX' },
+      null,
+      { key: 'don_giao_hang', format: 'pdf',  label: 'VT1-Đơn giao hàng  PDF' },
+      { key: 'don_tra_hang',  format: 'pdf',  label: 'VT1-Đơn trả hàng  PDF' },
     ];
     items.forEach(function (item) {
+      if (!item) {
+        var sep = document.createElement('div');
+        sep.style.cssText = 'height:1px;background:var(--border,#e5e7eb);margin:4px 0';
+        menu.appendChild(sep);
+        return;
+      }
       var div = document.createElement('div');
       div.textContent = item.label;
       div.style.cssText = 'padding:8px 16px;cursor:pointer';
       div.onmouseenter = function () { div.style.background = 'var(--bg,#f3f4f6)'; };
       div.onmouseleave = function () { div.style.background = ''; };
-      div.onclick = function () { _closeDonMenu(); exportDon(item.key); };
+      (function (k, f) {
+        div.onclick = function () { _closeDonMenu(); exportDon(k, f); };
+      }(item.key, item.format));
       menu.appendChild(div);
     });
     var rect = btn.getBoundingClientRect();
@@ -2536,7 +2547,7 @@
     }, 0);
   }
 
-  async function exportDon(type) {
+  async function exportDon(type, format) {
     var selectedIds = _getSelectedItemIds();
     var params = Object.assign({}, getCurrentFilterParams(), { exportTemplate: type });
     if (selectedIds.length) params.selectedIds = selectedIds;
@@ -2545,10 +2556,15 @@
       if (!data.ok) { API.error(data.error || 'Không thể xuất đơn'); return; }
       if (!data.row_count) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
       if (data.capped) API.toast('⚠ Kết quả bị giới hạn tối đa 5.000 dòng', 'warn');
-      _buildAndDownloadXlsx(data);
       var rowMsg = selectedIds.length ? selectedIds.length + ' dòng đã chọn' : data.row_count + ' dòng';
       var label = type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng';
-      API.toast('Đã xuất ' + label + ' ' + rowMsg, 'success');
+      if (format === 'pdf') {
+        _buildDonPdf(data);
+        API.toast('Đang mở ' + label + ' để in PDF — ' + rowMsg, 'success');
+      } else {
+        _buildAndDownloadXlsx(data);
+        API.toast('Đã xuất ' + label + ' XLSX — ' + rowMsg, 'success');
+      }
     } catch (err) {
       API.error(err);
     }
@@ -2871,6 +2887,112 @@
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
     XLSX.writeFile(wb, data.filename);
+  }
+
+  function _buildDonPdf(data) {
+    var isDelivery = data.templateKey === 'don_giao_hang';
+    var headers    = data.headers;
+    var rows       = data.rows;
+    var preface    = data.preface || ['', '', ''];
+    var maGoiTbmt  = preface[0] || '';
+    var tenGoi     = preface[1] || '';
+    var tenCdt     = preface[2] || '';
+    var leftColSet = new Set(data.leftAlignCols || []);
+
+    function esc(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/\n/g, '<br>');
+    }
+
+    var docTitle  = isDelivery ? '&#x9001;&#x8D27;&#x5355;&nbsp;&nbsp;&#x110;&#x1a0;N GIAO H&#xc0;NG' : '&#x9000;&#x8D27;&#x5355;&nbsp;&nbsp;&#x110;&#x1a0;N TR&#x1ea2; H&#xc0;NG';
+    // use literal strings — safer than numeric entities for non-BMP
+    var titleText = isDelivery ? '送货单  ĐƠN GIAO HÀNG' : '退货单  ĐƠN TRẢ HÀNG';
+    var pageTitle = isDelivery ? 'Đơn giao hàng' : 'Đơn trả hàng';
+
+    var recvLabel = isDelivery ? '收货单位:<br>Đơn vị nhận hàng:' : '退货单位:<br>Đơn vị trả hàng:';
+    var recvVal   = isDelivery ? esc(tenCdt) : '';
+    var sendVal   = isDelivery ? '' : esc(tenCdt);
+
+    // Column widths in % for A4 portrait ~190mm usable (12 cols)
+    var colWidths = ['2.6%','5.3%','9.5%','18.4%','11.6%','10.5%','6.3%','5.3%','13.2%','7.9%','5.3%','4.2%'];
+
+    var colgroupHtml = '<colgroup>';
+    colWidths.forEach(function (w) { colgroupHtml += '<col style="width:' + w + '">'; });
+    colgroupHtml += '</colgroup>';
+
+    var theadHtml = '<thead><tr>';
+    headers.forEach(function (h) { theadHtml += '<th>' + esc(h) + '</th>'; });
+    theadHtml += '</tr></thead>';
+
+    var tbodyHtml = '<tbody>';
+    rows.forEach(function (row) {
+      tbodyHtml += '<tr>';
+      row.forEach(function (cell, ci) {
+        var cls = leftColSet.has(ci) ? ' class="l"' : '';
+        tbodyHtml += '<td' + cls + '>' + esc(String(cell == null ? '' : cell)) + '</td>';
+      });
+      tbodyHtml += '</tr>';
+    });
+    tbodyHtml += '</tbody>';
+
+    var css = [
+      '@page{size:A4 portrait;margin:10mm}',
+      '*{box-sizing:border-box;margin:0;padding:0}',
+      'body{font-family:Arial,sans-serif;font-size:10pt}',
+      '.cn{text-align:center;font-weight:bold;font-size:13pt;margin-bottom:1px}',
+      '.vn{text-align:center;font-weight:bold;font-size:11pt;margin-bottom:4px}',
+      '.ttl{text-align:center;font-weight:bold;font-size:13pt;background:#D9D9D9;padding:5px 0;margin-bottom:0}',
+      '.inf{width:100%;border-collapse:collapse;margin:0}',
+      '.inf td{border:1px solid #000;padding:3px 5px;vertical-align:middle;font-size:9pt;line-height:1.3}',
+      '.inf .lb{font-weight:bold;width:17%;white-space:nowrap}',
+      '.inf .vl{width:33%}',
+      '.tbl{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:4px}',
+      '.tbl th,.tbl td{border:1px solid #000;padding:2px 3px;vertical-align:middle;word-break:break-word}',
+      '.tbl th{background:#BDD7EE;font-weight:bold;text-align:center;font-size:8pt;line-height:1.25}',
+      '.tbl td{font-size:8.5pt;text-align:center}',
+      '.tbl td.l{text-align:left}',
+      'thead{display:table-header-group}',
+      'tr{page-break-inside:avoid}',
+      '.ft{margin-top:12px;display:flex;justify-content:space-between;gap:20px}',
+      '.fb{flex:1;padding-top:36px;border-top:1px solid #000;font-size:9pt;font-weight:bold;line-height:1.5}',
+    ].join('');
+
+    var html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' + esc(pageTitle) + '</title>'
+      + '<style>' + css + '</style></head><body>'
+      + '<div class="cn">越南永新一期电力有限公司</div>'
+      + '<div class="vn">Công ty TNHH điện lực Vĩnh Tân 1</div>'
+      + '<div class="ttl">' + esc(titleText) + '</div>'
+      + '<table class="inf"><tbody>'
+      + '<tr>'
+      +   '<td class="lb">合同名称:<br>Tên Hợp đồng:</td><td class="vl">' + esc(tenGoi) + '</td>'
+      +   '<td class="lb">合同编号:<br>Mã Hợp đồng:</td><td class="vl">' + esc(maGoiTbmt) + '</td>'
+      + '</tr><tr>'
+      +   '<td class="lb">' + recvLabel + '</td><td class="vl">' + recvVal + '</td>'
+      +   '<td class="lb">送货单位:<br>Đơn vị giao hàng:</td><td class="vl">' + sendVal + '</td>'
+      + '</tr><tr>'
+      +   '<td class="lb">日期:<br>Thời gian:</td><td class="vl"></td>'
+      +   '<td class="lb">送货人:<br>Người giao hàng:</td><td class="vl"></td>'
+      + '</tr></tbody></table>'
+      + '<table class="tbl">' + colgroupHtml + theadHtml + tbodyHtml + '</table>'
+      + '<div class="ft">'
+      +   '<div class="fb">收货人签字:<br>Người nhận hàng ký tên:</div>'
+      +   '<div class="fb">日期:<br>Thời gian:</div>'
+      + '</div>'
+      + '<script>window.onload=function(){window.print();}<\/script>'
+      + '</body></html>';
+
+    var w = window.open('', '_blank', 'width=850,height=960,scrollbars=yes');
+    if (!w) {
+      API.toast('Trình duyệt chặn popup. Cho phép popup để xuất PDF.', 'warn');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
   }
 
   function csvQuote(value) {
