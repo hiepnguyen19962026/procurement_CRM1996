@@ -439,11 +439,11 @@ const CHUNG_LEFT_ALIGN_HEADERS = new Set([
 
 function buildExportPreface(rows) {
   if (!rows.length) return ['', '', ''];
-  const firstId = rows[0].rfq_id;
-  const singleRfq = rows.every(r => r.rfq_id === firstId);
-  if (!singleRfq) return ['', '', ''];
+  const key = r => r.rfq_id || r.ma_goi_tbmt || '';
+  const firstKey = key(rows[0]);
+  if (!firstKey || !rows.every(r => key(r) === firstKey)) return ['', '', ''];
   const r = rows[0];
-  return [r.ten_cdt || '', r.ma_goi_tbmt || '', r.ten_goi || ''];
+  return [r.ma_goi_tbmt || '', r.ten_goi || '', r.ten_cdt || ''];
 }
 
 function prefaceCsvLines(rows) {
