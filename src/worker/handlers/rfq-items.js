@@ -250,7 +250,7 @@ const EXPORT_COL_HEADERS = [
   'Năm sản xuất', 'Xuất xứ', 'Hãng sản xuất', 'Quy cách / thông số kỹ thuật',
   'Vật liệu', 'Phụ tùng chuyên dụng', 'Yêu cầu kỹ thuật bổ sung',
   'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền', 'Đơn giá HĐ', 'Thành tiền HĐ',
-  'Thời gian giao hàng', 'Ghi chú', 'rfqItemId (Không sửa)',
+  'Thời gian giao hàng', 'Ghi chú', 'Làm rõ',
 ];
 
 function maVatTuExcel(v) {
@@ -279,9 +279,66 @@ function rowToExportCsv(r) {
     r.gia_hop_dong || '',
     r.gia_hop_dong ? r.gia_hop_dong * (parseFloat(r.quantity ?? r.so_luong ?? 0) || 0) : '',
     r.delivery_time || '', r.note || '',
-    r.rfq_item_id,
+    r.latest_clarification_title || '',
   ];
 }
+
+const EXPORT_TEMPLATES = {
+  vt1_lam_ro_1: {
+    headers: ['编号','需求计划编号','物资编码','物资名称','规格型号','原设备制造商生产厂','投标设备品牌/生产厂','订购单位','订购数量','交货时间','备注','问题'],
+    row: r => [
+      r.stt_goc, r.ma_mua_sam, maVatTuExcel(r.ma_vat_tu),
+      r.ten_vat_tu,
+      r.required_model || r.quy_cach_model_yeu_cau || '',
+      r.brand || r.nhan_hieu || '',
+      r.technical_params || r.thong_so_ky_thuat || '',
+      r.unit || r.don_vi || '',
+      r.quantity ?? r.so_luong ?? '',
+      r.delivery_time || '',
+      r.note || '',
+      r.latest_clarification_title || '',
+    ],
+  },
+  vt1_lam_ro_2: {
+    headers: ['编号','需求计划编号','物资编码','物资名称','图片','规格型号','图号','材质','原设备制造商生产厂','是否专用件','是否停产件','订购数量','订购单位','技术参数、安装尺寸及特殊要求','投标设备品牌/生产厂','问题','回答'],
+    row: r => [
+      r.stt_goc, r.ma_mua_sam, maVatTuExcel(r.ma_vat_tu),
+      r.ten_vat_tu,
+      '',
+      r.required_model || r.quy_cach_model_yeu_cau || '',
+      '',
+      r.vat_lieu || '',
+      r.brand || r.nhan_hieu || '',
+      r.phu_tung_chuyen_dung || '',
+      '',
+      r.quantity ?? r.so_luong ?? '',
+      r.unit || r.don_vi || '',
+      r.yeu_cau_ky_thuat_bo_sung || '',
+      r.technical_params || r.thong_so_ky_thuat || '',
+      r.latest_clarification_title || '',
+      '',
+    ],
+  },
+  kq_muasamcong: {
+    headers: ['STT','Danh mục hàng hóa','Ký mã hiệu','Nhãn hiệu','Năm sản xuất','Xuất xứ (quốc gia, vùng lãnh thổ sản xuất)','Hãng sản xuất','Cấu hình, tính năng kỹ thuật cơ bản','Đơn vị tính','Khối lượng','Mã HS','Đơn giá trúng thầu','Thành tiền đã bao gồm thuế, phí, lệ phí (nếu có)','Thời gian giao hàng (ngày)/ Tiến độ cung cấp'],
+    row: r => [
+      r.stt_goc,
+      r.ten_vat_tu,
+      r.required_model || r.quy_cach_model_yeu_cau || '',
+      r.brand || r.nhan_hieu || '',
+      r.manufacture_year || r.nam_san_xuat || '',
+      r.origin_country || r.xuat_xu || '',
+      r.manufacturer || r.hang_goc_nsx_goc || '',
+      r.technical_params || r.thong_so_ky_thuat || '',
+      r.unit || r.don_vi || '',
+      r.quantity ?? r.so_luong ?? '',
+      '',
+      r.don_gia_truoc_thue || r.don_gia_sau_thue || '',
+      r.thanh_tien_sau_thue || '',
+      r.delivery_time || '',
+    ],
+  },
+};
 
 function csvQ(value) {
   const s = String(value == null ? '' : value);
@@ -291,10 +348,18 @@ function csvQ(value) {
   return s;
 }
 
-function buildExportCsv(rows, colMask) {
+function buildExportCsv(rows, opts) {
+  const template = (opts && opts.template) || 'chung';
+  const colMask = (opts && opts.colMask) || [];
+  if (template !== 'chung' && EXPORT_TEMPLATES[template]) {
+    const tpl = EXPORT_TEMPLATES[template];
+    const lines = [tpl.headers.map(csvQ).join(',')];
+    for (const r of rows) lines.push(tpl.row(r).map(csvQ).join(','));
+    return '﻿' + lines.join('\r\n') + '\r\n';
+  }
+  // Chung: apply optional column mask
   const headers = EXPORT_COL_HEADERS;
-  // Build index list: colMask = subset of header names; empty/missing = all columns
-  const indices = (colMask && colMask.length)
+  const indices = colMask.length
     ? colMask.map(c => headers.indexOf(c)).filter(i => i >= 0)
     : headers.map((_, i) => i);
   const activeIndices = indices.length ? indices : headers.map((_, i) => i);
@@ -304,7 +369,7 @@ function buildExportCsv(rows, colMask) {
     const vals = rowToExportCsv(r);
     lines.push(activeIndices.map(i => csvQ(vals[i])).join(','));
   }
-  return '﻿' + lines.join('\r\n') + '\r\n'; // UTF-8 BOM
+  return '﻿' + lines.join('\r\n') + '\r\n';
 }
 
 async function exportItems(request, env, actor) {
@@ -312,11 +377,14 @@ async function exportItems(request, env, actor) {
   if (denied) return denied;
   const p = await readJson(request);
   const VALID_TECH_FILTERS = new Set(['has_clarification','no_clarification','khong_can','dang_hoi','da_xac_nhan','bi_tu_choi']);
+  const VALID_TEMPLATES = new Set(['chung', 'vt1_lam_ro_1', 'vt1_lam_ro_2', 'kq_muasamcong']);
+  const rawTemplate = cleanString(p.exportTemplate || 'chung', 40);
+  const template = VALID_TEMPLATES.has(rawTemplate) ? rawTemplate : 'chung';
   // selectedIds: export only these rows (if provided); else export all matching filter
   const rawIds = Array.isArray(p.selectedIds) ? p.selectedIds : [];
   const selectedIds = rawIds.map(s => cleanString(String(s), 80)).filter(Boolean).slice(0, 500);
-  // cols: export only these column headers (if provided); else export all columns
-  const rawCols = Array.isArray(p.cols) ? p.cols : [];
+  // cols: column mask only applies to 'chung' template
+  const rawCols = template === 'chung' && Array.isArray(p.cols) ? p.cols : [];
   const colMask = rawCols.map(s => cleanString(String(s), 120)).filter(Boolean);
   const rows = await exportRfqItemsSQL(env.DB, {
     q: normalizeText(p.q),
@@ -331,10 +399,11 @@ async function exportItems(request, env, actor) {
   });
   const rfqId = cleanString(p.rfqId || p.rfq_id || 'all', 80);
   const today = nowIso().slice(0, 10);
+  const tplSuffix = template === 'chung' ? '' : '-' + template.replace(/_/g, '-');
   return json({
     ok: true,
-    filename: `rfq-items-${rfqId}-${today}.csv`,
-    csv: buildExportCsv(rows, colMask),
+    filename: `rfq-items${tplSuffix}-${rfqId}-${today}.csv`,
+    csv: buildExportCsv(rows, { template, colMask }),
     row_count: rows.length,
     capped: rows.length >= EXPORT_MAX_ROWS,
   });

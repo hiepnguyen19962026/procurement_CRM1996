@@ -23,7 +23,7 @@
     'Năm sản xuất', 'Xuất xứ', 'Hãng sản xuất', 'Quy cách / thông số kỹ thuật',
     'Vật liệu', 'Phụ tùng chuyên dụng', 'Yêu cầu kỹ thuật bổ sung',
     'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền', 'Đơn giá HĐ', 'Thành tiền HĐ',
-    'Thời gian giao hàng', 'Ghi chú', 'rfqItemId (Không sửa)',
+    'Thời gian giao hàng', 'Ghi chú', 'Làm rõ',
   ];
 
   function setupOnce() {
@@ -2377,11 +2377,12 @@
     ];
   }
 
-  async function exportCsv() {
+  async function exportCsv(template) {
+    var tpl = template || 'chung';
     var statusEl = document.getElementById('itemStatus');
     var techEl = document.getElementById('itemTechFilter');
     var selectedIds = _getSelectedItemIds();
-    var cols = _getExportCols();
+    var cols = tpl === 'chung' ? _getExportCols() : [];
     var params = {
       rfqId: _selectedRfqId,
       q: state.q || '',
@@ -2391,6 +2392,7 @@
       techFilter: techEl ? techEl.value : '',
       sortBy: sort.by || '',
       sortDir: sort.dir || '',
+      exportTemplate: tpl,
     };
     if (selectedIds.length) params.selectedIds = selectedIds;
     if (cols.length) params.cols = cols;
@@ -2405,6 +2407,40 @@
     } catch (err) {
       API.error(err);
     }
+  }
+
+  function _closeExportMenu() {
+    var m = document.getElementById('rfqExportTplMenu');
+    if (m) m.remove();
+  }
+
+  function openExportMenu(btn) {
+    _closeExportMenu();
+    var menu = document.createElement('div');
+    menu.id = 'rfqExportTplMenu';
+    menu.style.cssText = 'position:fixed;z-index:9999;background:var(--white,#fff);border:1px solid var(--border,#e5e7eb);border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:170px;padding:4px 0;font-size:13px';
+    var items = [
+      { key: 'chung', label: 'Chung' },
+      { key: 'vt1_lam_ro_1', label: 'VT1-Làm rõ 1' },
+      { key: 'vt1_lam_ro_2', label: 'VT1-Làm rõ 2' },
+      { key: 'kq_muasamcong', label: 'Kq Muasamcong' },
+    ];
+    items.forEach(function (item) {
+      var div = document.createElement('div');
+      div.textContent = item.label;
+      div.style.cssText = 'padding:8px 16px;cursor:pointer';
+      div.onmouseenter = function () { div.style.background = 'var(--bg,#f3f4f6)'; };
+      div.onmouseleave = function () { div.style.background = ''; };
+      div.onclick = function () { _closeExportMenu(); exportCsv(item.key); };
+      menu.appendChild(div);
+    });
+    var rect = btn.getBoundingClientRect();
+    menu.style.left = rect.left + 'px';
+    menu.style.top = (rect.bottom + 4) + 'px';
+    document.body.appendChild(menu);
+    setTimeout(function () {
+      document.addEventListener('click', _closeExportMenu, { once: true });
+    }, 0);
   }
 
   function csvQuote(value) {
@@ -3344,6 +3380,7 @@
     _nextImage: _nextImage,
     downloadTemplate: downloadTemplate,
     exportCsv: exportCsv,
+    openExportMenu: openExportMenu,
     toggleExportColPanel: toggleExportColPanel,
     _exportColAll: _exportColAll,
     importCsv: importCsv,

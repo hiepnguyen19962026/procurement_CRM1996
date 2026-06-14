@@ -234,7 +234,8 @@ export async function exportRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilt
     : `COALESCE(i.source_row_number, 0) ASC, i.rfq_item_id ASC`;
 
   const res = await db.prepare(
-    `SELECT i.*, r.ten_goi, r.ma_goi_tbmt
+    `SELECT i.*, r.ten_goi, r.ma_goi_tbmt,
+     (SELECT tc.title FROM technical_clarifications tc WHERE tc.rfq_item_id = i.rfq_item_id AND tc.deleted_at IS NULL ORDER BY tc.created_at DESC, tc.sequence_no DESC LIMIT 1) AS latest_clarification_title
      FROM rfq_items i LEFT JOIN rfqs r ON r.rfq_id = i.rfq_id
      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
      ORDER BY ${orderBy} LIMIT 5000`
