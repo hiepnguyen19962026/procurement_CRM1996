@@ -15,6 +15,10 @@
   var _rfqAutocompleteInit = false;
   var _exportColPanelInit = false;
   var _lastFilterParams = {};
+  var DELIVERY_SORT_KEYS = {
+    delivered_quantity_total: true,
+    remaining_quantity: true,
+  };
 
   // Must mirror EXPORT_COL_HEADERS in src/worker/handlers/rfq-items.js
   var EXPORT_ALL_COLS = [
@@ -133,6 +137,10 @@
     });
   }
 
+  function isDeliverySortKey(key) {
+    return !!DELIVERY_SORT_KEYS[key];
+  }
+
   async function load(reset) {
     setupOnce();
     await initRfqAutocomplete();
@@ -169,11 +177,11 @@
         cursor: state.cursor,
         limit: limit,
       };
-      if (sort.by) { params.sortBy = sort.by; params.sortDir = sort.dir; }
+      if (sort.by && !isDeliverySortKey(sort.by)) { params.sortBy = sort.by; params.sortDir = sort.dir; }
       _lastFilterParams = {
         q: params.q, q2: params.q2, q3: params.q3,
         rfqId: params.rfqId, status: params.status, techFilter: params.techFilter,
-        sortBy: sort.by || '', sortDir: sort.dir || '',
+        sortBy: isDeliverySortKey(sort.by) ? '' : (sort.by || ''), sortDir: sort.dir || '',
       };
       var data = await API.get('getRfqItems', params);
       state.rows = reset ? data.rows : state.rows.concat(data.rows || []);
@@ -235,7 +243,7 @@
 
   function render() {
     syncSort();
-    var rows = state.rows || [];
+    var rows = sortDeliveryRows(state.rows || []);
     var rfqFilter = _selectedRfqId;
     if (!rows.length && rfqFilter) {
       var rfqMeta = (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === rfqFilter; }) || null;
@@ -246,7 +254,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="35" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="37" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -308,6 +316,8 @@
         + '<td data-role-only="admin,manager" style="text-align:center;padding:0 4px">'
           + '<button type="button" class="btn-x-archive" title="Lưu trữ dòng vật tư" onclick="RfqItemsModule.archiveRfqItem(\'' + API.esc(r.rfq_item_id) + '\')">✕</button>'
           + '</td>'
+        + renderCell(formatQty(r.delivered_quantity_total), false)
+        + renderCell(formatQty(r.remaining_quantity), false)
         + '</tr>';
     }).join('');
     document.getElementById('itemMore').classList.toggle('hidden', !state.hasMore);
@@ -486,6 +496,17 @@
     var n = toQty(value);
     if (!n) return '';
     return n.toLocaleString('vi-VN', { maximumFractionDigits: 3 });
+  }
+
+  function sortDeliveryRows(rows) {
+    if (!isDeliverySortKey(sort.by)) return rows;
+    var dir = sort.dir === 'asc' ? 1 : -1;
+    return rows.slice().sort(function (a, b) {
+      var av = toQty(a[sort.by]);
+      var bv = toQty(b[sort.by]);
+      if (av === bv) return String(a.rfq_item_id || '').localeCompare(String(b.rfq_item_id || ''));
+      return (av - bv) * dir;
+    });
   }
 
   function confirmDeliveryChoice(title, message, yesLabel, noLabel) {
