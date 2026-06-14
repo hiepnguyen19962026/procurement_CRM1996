@@ -3324,7 +3324,7 @@
         + '</tr>';
     }).join('');
 
-    var html = '<div style="display:grid;gap:16px">'
+    var html = '<div class="span-12" style="display:grid;gap:16px">'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 32px">'
         + '<table style="font-size:13px;border-collapse:collapse">'
         + kv('Loại đơn:', typeLabel)
@@ -3369,10 +3369,6 @@
       + '</div>';
 
     Utils.openModal(typeLabel + ' — Bước 2/2', html, null);
-    setTimeout(function () {
-      var m = document.querySelector('#modal .modal');
-      if (m) { m.classList.add('modal--import-wide'); }
-    }, 0);
   }
 
   async function _donWorkflowAction(action) {
