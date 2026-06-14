@@ -18,6 +18,7 @@
   var contractItemRowCache = {};
   var deliveryStatusFilters = {};
   var deadlineStatusFilters = {};
+  var _donWorkflowState = null;
   var DELIVERY_SORT_KEYS = {
     delivered_quantity_total: true,
     remaining_quantity: true,
@@ -2978,7 +2979,7 @@
       div.onmouseenter = function () { div.style.background = 'var(--bg,#f3f4f6)'; };
       div.onmouseleave = function () { div.style.background = ''; };
       (function (k, f) {
-        div.onclick = function () { _closeDonMenu(); exportDon(k, f); };
+        div.onclick = function () { _closeDonMenu(); k === 'don_giao_hang' ? openDonWorkflow(k, f) : exportDon(k, f); };
       }(item.key, item.format));
       menu.appendChild(div);
     });
@@ -3014,6 +3015,195 @@
       API.error(err);
     }
   }
+
+  // ---- Delivery note centered export workflow (don_giao_hang) ----
+
+  async function openDonWorkflow(type, format) {
+    var items = _getSelectedItems();
+    if (!items.length) { API.toast('Chọn ít nhất 1 dòng vật tư', 'warn'); return; }
+    if (!Utils.roleCanWrite()) { API.toast('Không có quyền tạo đơn giao hàng', 'error'); return; }
+    var rfqIds = Array.from(new Set(items.map(function (r) { return r.rfq_id || ''; }).filter(Boolean)));
+    if (rfqIds.length !== 1) { API.toast('Chỉ tạo đơn giao hàng cho các dòng trong cùng một RFQ', 'warn'); return; }
+    _donWorkflowState = { type: type, format: format, items: items, rfqId: rfqIds[0], deliveryDate: todayYmd(), inputRows: null };
+    _openDonWorkflowStep1();
+  }
+
+  function _openDonWorkflowStep1() {
+    var s = _donWorkflowState;
+    var typeLabel = s.type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng';
+    var html = '<div style="display:grid;gap:16px">'
+      + '<div style="display:grid;grid-template-columns:140px 1fr;gap:10px 12px;align-items:center">'
+      + '<label style="font-weight:500">Ngày giao:</label>'
+      + '<input id="donWfDate" type="date" value="' + API.esc(s.deliveryDate) + '" style="width:160px">'
+      + '<label style="font-weight:500">Điều chỉnh SL:</label>'
+      + '<div style="display:flex;gap:6px">'
+      + '<button type="button" id="donWfQtyNo" onclick="RfqItemsModule._donStep1Qty(false)" style="padding:4px 14px;border-radius:6px;border:1px solid var(--border);background:var(--primary);color:#fff;font-weight:600;cursor:pointer">Không</button>'
+      + '<button type="button" id="donWfQtyYes" onclick="RfqItemsModule._donStep1Qty(true)" style="padding:4px 14px;border-radius:6px;border:1px solid var(--border);background:var(--white);cursor:pointer">Có</button>'
+      + '</div>'
+      + '</div>'
+      + '<div id="donWfQtyTable" style="display:none">' + deliveryQuantityTable(s.items) + '</div>'
+      + '</div>';
+    Utils.openModal(typeLabel + ' — Bước 1/2', html, _donStep1Submit);
+  }
+
+  function _donStep1Qty(show) {
+    var table = document.getElementById('donWfQtyTable');
+    var btnNo  = document.getElementById('donWfQtyNo');
+    var btnYes = document.getElementById('donWfQtyYes');
+    if (!table) return;
+    table.style.display = show ? '' : 'none';
+    if (show) {
+      btnYes.style.background = 'var(--primary)'; btnYes.style.color = '#fff'; btnYes.style.fontWeight = '600';
+      btnNo.style.background  = 'var(--white)';   btnNo.style.color  = '';     btnNo.style.fontWeight  = '';
+    } else {
+      btnNo.style.background  = 'var(--primary)'; btnNo.style.color  = '#fff'; btnNo.style.fontWeight  = '600';
+      btnYes.style.background = 'var(--white)';   btnYes.style.color = '';     btnYes.style.fontWeight = '';
+    }
+  }
+
+  async function _donStep1Submit() {
+    var s = _donWorkflowState;
+    var dateEl = document.getElementById('donWfDate');
+    var dateVal = dateEl ? (dateEl.value || '') : '';
+    if (!dateVal) { API.toast('Vui lòng chọn ngày giao', 'warn'); return; }
+    s.deliveryDate = dateVal;
+
+    var tableDiv = document.getElementById('donWfQtyTable');
+    var useTable = tableDiv && tableDiv.style.display !== 'none';
+    var inputRows = [];
+    var invalid = false;
+    var over = false;
+
+    if (useTable) {
+      Array.prototype.forEach.call(document.querySelectorAll('#donWfQtyTable input[data-rfq-item-id]'), function (inp) {
+        var id  = inp.getAttribute('data-rfq-item-id');
+        var item = s.items.find(function (r) { return r.rfq_item_id === id; });
+        var qty = toQty(inp.value);
+        if (qty < 0) invalid = true;
+        if (item && qty + toQty(item.delivered_quantity_total) > toQty(item.contract_quantity_total)) over = true;
+        inputRows.push({ rfqItemId: id, deliveredQuantity: qty });
+      });
+    } else {
+      inputRows = s.items.map(function (r) {
+        return { rfqItemId: r.rfq_item_id, deliveredQuantity: toQty(r.remaining_quantity) };
+      });
+    }
+
+    if (invalid) { API.toast('Số lượng giao phải lớn hơn hoặc bằng 0', 'warn'); return; }
+    if (over) {
+      var ok = await confirmDeliveryChoice(
+        'Cảnh báo số lượng',
+        'Số lượng giao vượt số lượng hợp đồng. Bạn có muốn tiếp tục?',
+        'Có', 'Không'
+      );
+      if (!ok) return;
+    }
+
+    s.inputRows = inputRows;
+    Utils.closeModal();
+    _openDonWorkflowStep2();
+  }
+
+  function _openDonWorkflowStep2() {
+    var s = _donWorkflowState;
+    var typeLabel  = s.type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng';
+    var prefix     = s.type === 'don_giao_hang' ? 'DGH' : 'DTH';
+    var d          = s.deliveryDate;                      // 'YYYY-MM-DD'
+    var previewNo  = prefix + '-' + d.slice(0, 4) + '-' + d.slice(5, 7) + d.slice(8, 10) + '-???';
+    var totalQty   = s.inputRows.reduce(function (acc, r) { return acc + r.deliveredQuantity; }, 0);
+    var formatLabel = s.format === 'pdf' ? 'PDF' : 'XLSX';
+
+    var html = '<div style="display:grid;gap:16px">'
+      + '<table style="font-size:13px;border-collapse:collapse;width:100%">'
+      + '<tr><td style="padding:4px 8px 4px 0;color:var(--text-muted);width:160px">Loại đơn:</td><td style="padding:4px 0"><strong>' + API.esc(typeLabel) + '</strong></td></tr>'
+      + '<tr><td style="padding:4px 8px 4px 0;color:var(--text-muted)">Ngày giao:</td><td style="padding:4px 0">' + API.esc(s.deliveryDate) + '</td></tr>'
+      + '<tr><td style="padding:4px 8px 4px 0;color:var(--text-muted)">Số dòng vật tư:</td><td style="padding:4px 0">' + s.inputRows.length + ' dòng</td></tr>'
+      + '<tr><td style="padding:4px 8px 4px 0;color:var(--text-muted)">Tổng SL giao:</td><td style="padding:4px 0">' + API.esc(String(formatQty(totalQty))) + '</td></tr>'
+      + '<tr><td style="padding:4px 8px 4px 0;color:var(--text-muted)">Số đơn (dự kiến):</td><td style="padding:4px 0;font-family:monospace;color:var(--text-muted)">' + API.esc(previewNo) + '</td></tr>'
+      + '</table>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;padding-top:4px">'
+      + '<button type="button" onclick="RfqItemsModule._donWorkflowAction(\'xlsx\')" style="padding:6px 18px;border-radius:6px;background:var(--primary);color:#fff;border:none;font-weight:600;cursor:pointer">Xuất XLSX</button>'
+      + '<button type="button" onclick="RfqItemsModule._donWorkflowAction(\'pdf\')" style="padding:6px 18px;border-radius:6px;background:var(--blue,#1d4ed8);color:#fff;border:none;font-weight:600;cursor:pointer">Xuất PDF</button>'
+      + '<button type="button" onclick="RfqItemsModule._donWorkflowAction(\'create\')" style="padding:6px 18px;border-radius:6px;background:var(--white);color:var(--text);border:1px solid var(--border);cursor:pointer">Chỉ tạo đơn</button>'
+      + '<button type="button" onclick="Utils.closeModal()" style="padding:6px 18px;border-radius:6px;background:var(--white);color:var(--text-muted);border:1px solid var(--border);cursor:pointer">Hủy</button>'
+      + '</div>'
+      + '</div>';
+
+    Utils.openModal(typeLabel + ' — Bước 2/2', html, null);
+  }
+
+  async function _donWorkflowAction(action) {
+    var s = _donWorkflowState;
+    if (!s) return;
+    var typeLabel = s.type === 'don_giao_hang' ? 'Đơn giao hàng' : 'Đơn trả hàng';
+    try {
+      var data = await API.call('createDeliveryNote', {
+        rfqId: s.rfqId,
+        deliveryDate: s.deliveryDate,
+        items: s.inputRows,
+      });
+      if (!data.ok) { API.error(data.error || 'Không thể tạo đơn giao hàng'); return; }
+      var note      = data.note;
+      var noteItems = data.items || [];
+      Utils.closeModal();
+      API.toast('Đã tạo ' + typeLabel + ' ' + (note.delivery_note_no || ''), 'success');
+      await load(true);
+      if (action === 'xlsx' || action === 'pdf') {
+        var exportData = _buildExportDataFromRows(s.items, s.inputRows, s.type, note);
+        if (!exportData || !exportData.rows.length) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
+        if (action === 'pdf') {
+          _openDonPrintModal(exportData, typeLabel);
+        } else {
+          _buildDonXlsxFromTemplate(exportData);
+        }
+      }
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  function _buildExportDataFromRows(rfqItems, inputRows, noteType, note) {
+    var isDelivery = noteType === 'don_giao_hang';
+    var first      = rfqItems[0] || {};
+    var preface    = [first.ma_goi_tbmt || '', first.ten_goi || '', first.ten_cdt || ''];
+    var noteNo     = (note && note.delivery_note_no) || '';
+    var prefix     = isDelivery ? 'DGH' : 'DTH';
+    var filename   = prefix + (noteNo ? '-' + noteNo : '') + '.xlsx';
+    var stt = 0;
+    var rows = [];
+    inputRows.forEach(function (inp) {
+      var r = rfqItems.find(function (x) { return x.rfq_item_id === inp.rfqItemId; });
+      if (!r) return;
+      stt++;
+      rows.push([
+        stt,
+        r.stt_goc || '',
+        r.ma_vat_tu || '',
+        r.ten_vat_tu || '',
+        r.required_model || r.quy_cach_model_yeu_cau || r.quy_cach_final || '',
+        r.vat_lieu || r.nhan_hieu || r.hang_final || r.brand || '',
+        inp.deliveredQuantity,
+        r.unit || r.don_vi || '',
+        r.manufacturer || r.hang_goc_nsx_goc || r.hang_final || r.nhan_hieu || r.brand || '',
+        r.ma_mua_sam || '',
+        '',
+        r.note || r.ghi_chu || '',
+      ]);
+    });
+    return {
+      templateKey:   noteType,
+      headers:       ['序号\nSTT','合同序号\nSTT hợp đồng','物资编号\nMã vật tư','名称\nTên vật tư','规格型号\nMã quy cách','材质/品牌\nChất liệu/Thương hiệu','数量\nSố lượng','单位\nĐơn vị','原设备供货商/生产厂/品牌\nNhà CC/NSX/Thương hiệu','MIS需求单号\nMã yêu cầu MIS','MIS订单号\nMã đơn hàng MIS','备注\nGhi chú'],
+      rows:          rows,
+      preface:       preface,
+      textCols:      [2],
+      longTextCols:  [3, 4, 5, 8, 11],
+      leftAlignCols: [3, 4, 5, 8, 11],
+      filename:      filename,
+      row_count:     rows.length,
+    };
+  }
+
+  // ---- End delivery note centered export workflow ----
 
   function _buildAndDownloadXlsx(data) {
     if (data.templateKey === 'don_giao_hang' || data.templateKey === 'don_tra_hang') {
@@ -4531,6 +4721,8 @@
     openExportMenu: openExportMenu,
     openExcelMenu: openExcelMenu,
     openDonMenu: openDonMenu,
+    _donStep1Qty: _donStep1Qty,
+    _donWorkflowAction: _donWorkflowAction,
     toggleExportColPanel: toggleExportColPanel,
     _exportColAll: _exportColAll,
     importCsv: importCsv,
