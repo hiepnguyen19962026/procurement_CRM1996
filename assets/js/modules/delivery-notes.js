@@ -145,27 +145,16 @@
       var adm = isAdmin();
       var mgr = isManager();
 
-      // Action buttons
+      // Action dropdown — single "Thao tác ▾" button; Chi tiết removed (delivery_note_no is clickable)
       var canDel = adm && r.status === 'active'
         && (!r.acceptance_status || r.acceptance_status === 'pending')
         && (!r.payment_request_status || r.payment_request_status === 'not_ready');
       var canArchive = mgr && !adm && r.status === 'active';
       var eid = esc(r.delivery_note_id);
       var eno = esc(r.delivery_note_no);
-      var actionBtns = '<button type="button" onclick="DeliveryNotesModule.openDetail(\'' + eid + '\')"'
-        + ' style="font-size:11px;padding:2px 7px">Chi tiết</button>'
-        + '<button type="button" onclick="DeliveryNotesModule.exportFromList(\'' + eid + '\',\'xlsx\')"'
-        + ' style="font-size:11px;padding:2px 7px;margin-left:2px">VT1 XLSX</button>'
-        + '<button type="button" onclick="DeliveryNotesModule.exportFromList(\'' + eid + '\',\'pdf\')"'
-        + ' style="font-size:11px;padding:2px 7px;margin-left:2px">VT1 PDF</button>';
-      if (canDel) {
-        actionBtns += '<button type="button" onclick="DeliveryNotesModule.deleteDN(\'' + eid + '\',\'' + eno + '\')"'
-          + ' style="color:var(--red);border-color:var(--red);background:#fff;font-size:11px;padding:2px 7px;margin-left:2px">Xóa</button>';
-      }
-      if (canArchive) {
-        actionBtns += '<button type="button" onclick="DeliveryNotesModule.archive(\'' + eid + '\',\'' + eno + '\')"'
-          + ' style="color:var(--text-muted);border-color:var(--border);background:#fff;font-size:11px;padding:2px 7px;margin-left:2px">Lưu trữ</button>';
-      }
+      var act = canDel ? 'del' : canArchive ? 'arch' : '';
+      var actionBtns = '<button type="button" onclick="DeliveryNotesModule._openActionMenu(this,\'' + eid + '\',\'' + eno + '\',\'' + act + '\')"'
+        + ' style="font-size:11px;padding:2px 9px;white-space:nowrap">Thao tác ▾</button>';
 
       // Mã đơn cell — clickable
       var noteNoCell = '<td>'
@@ -173,10 +162,13 @@
         + esc(r.delivery_note_no || '—') + '</span>'
         + '</td>';
 
-      // Tên gói — drilldown via RfqsModule if available
-      var tenGoiCell = r.rfq_id && r.ten_goi
+      // Tên gói — drilldown, with CĐT muted sub-line
+      var tenGoiText = r.rfq_id && r.ten_goi
         ? '<span class="link-edit" onclick="if(typeof RfqsModule!==\'undefined\')RfqsModule.drillDown(\'' + esc(r.rfq_id) + '\')">' + esc(r.ten_goi) + '</span>'
         : esc(r.ten_goi || '—');
+      var tenGoiCell = '<div>' + tenGoiText
+        + (r.client_name ? '<div style="font-size:11px;color:var(--text-muted);margin-top:1px">CĐT: ' + esc(r.client_name) + '</div>' : '')
+        + '</div>';
 
       return '<tr>'
         + noteNoCell
@@ -229,6 +221,8 @@
         kvPairs.push(['Mã gói', n.ma_goi_tbmt || '—']);
         kvPairs.push(['Tên gói', n.ten_goi   || '—']);
       }
+      if (n.client_name) kvPairs.push(['CĐT', n.client_name]);
+      if (n.contract_no) kvPairs.push(['Số HĐ', n.contract_no]);
       if (n.note) kvPairs.push(['Ghi chú', n.note]);
 
       var kvHtml = '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px;margin-bottom:8px">'
@@ -698,6 +692,59 @@
     } catch (e) { API.error(e); }
   }
 
+  // --- List row action dropdown ---
+
+  function _openActionMenu(btn, id, no, act) {
+    _closeActionMenu();
+    var rect = btn.getBoundingClientRect();
+    var menu = document.createElement('div');
+    menu.id = 'dn-act-menu';
+    menu.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid var(--border-mid,#d1d5db);'
+      + 'border-radius:6px;box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:140px;padding:4px 0';
+    menu.style.top  = (rect.bottom + 2) + 'px';
+    menu.style.left = Math.max(4, rect.right - 150) + 'px';
+
+    function mi(label, cb, color) {
+      var el = document.createElement('button');
+      el.type = 'button';
+      el.textContent = label;
+      el.style.cssText = 'display:block;width:100%;text-align:left;padding:6px 14px;background:none;'
+        + 'border:none;font-size:13px;cursor:pointer;line-height:1.4'
+        + (color ? ';color:' + color : '');
+      el.onmouseenter = function () { el.style.background = 'var(--bg,#f9fafb)'; };
+      el.onmouseleave = function () { el.style.background = 'none'; };
+      el.onclick = function (e) { e.stopPropagation(); _closeActionMenu(); cb(); };
+      return el;
+    }
+
+    function sep() {
+      var el = document.createElement('div');
+      el.style.cssText = 'height:1px;background:var(--border,#e5e7eb);margin:4px 0';
+      return el;
+    }
+
+    menu.appendChild(mi('VT1 XLSX', function () { DeliveryNotesModule.exportFromList(id, 'xlsx'); }));
+    menu.appendChild(mi('VT1 PDF',  function () { DeliveryNotesModule.exportFromList(id, 'pdf');  }));
+    if (act) {
+      menu.appendChild(sep());
+      if (act === 'del') {
+        menu.appendChild(mi('Xóa đơn', function () { DeliveryNotesModule.deleteDN(id, no); }, 'var(--red,#dc2626)'));
+      } else {
+        menu.appendChild(mi('Lưu trữ', function () { DeliveryNotesModule.archive(id, no); }, 'var(--text-muted,#6b7280)'));
+      }
+    }
+
+    document.body.appendChild(menu);
+    setTimeout(function () {
+      document.addEventListener('click', _closeActionMenu, { once: true });
+    }, 10);
+  }
+
+  function _closeActionMenu() {
+    var m = document.getElementById('dn-act-menu');
+    if (m && m.parentNode) m.parentNode.removeChild(m);
+  }
+
   window.DeliveryNotesModule = {
     load:                   load,
     openDetail:             openDetail,
@@ -711,5 +758,7 @@
     exportDetail:           exportDetail,
     archive:                archive,
     deleteDN:               deleteDN,
+    _openActionMenu:        _openActionMenu,
+    _closeActionMenu:       _closeActionMenu,
   };
 })();
