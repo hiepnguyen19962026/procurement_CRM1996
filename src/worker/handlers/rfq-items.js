@@ -301,6 +301,7 @@ const EXPORT_TEMPLATES = {
     ],
     textCols: [2],
     longTextCols: [3, 4, 6, 10, 11],
+    leftAlignCols: [3, 4, 6, 11],
   },
   vt1_lam_ro_2: {
     headers: ['编号','需求计划编号','物资编码','物资名称','图片','规格型号','图号','材质','原设备制造商生产厂','是否专用件','是否停产件','订购数量','订购单位','技术参数、安装尺寸及特殊要求','投标设备品牌/生产厂','问题','回答'],
@@ -323,6 +324,7 @@ const EXPORT_TEMPLATES = {
     ],
     textCols: [2],
     longTextCols: [3, 5, 13, 14, 15, 16],
+    leftAlignCols: [3, 5, 13, 14, 15],
   },
   kq_muasamcong: {
     headers: ['STT','Danh mục hàng hóa','Ký mã hiệu','Nhãn hiệu','Năm sản xuất','Xuất xứ (quốc gia, vùng lãnh thổ sản xuất)','Hãng sản xuất','Cấu hình, tính năng kỹ thuật cơ bản','Đơn vị tính','Khối lượng','Mã HS','Đơn giá trúng thầu','Thành tiền đã bao gồm thuế, phí, lệ phí (nếu có)','Thời gian giao hàng (ngày)/ Tiến độ cung cấp'],
@@ -344,6 +346,7 @@ const EXPORT_TEMPLATES = {
     ],
     textCols: [],
     longTextCols: [1, 2, 7],
+    leftAlignCols: [1, 2, 7],
   },
 };
 
@@ -358,9 +361,10 @@ function csvQ(value) {
 function buildExportCsv(rows, opts) {
   const template = (opts && opts.template) || 'chung';
   const colMask = (opts && opts.colMask) || [];
+  const prefix = prefaceCsvLines(rows);
   if (template !== 'chung' && EXPORT_TEMPLATES[template]) {
     const tpl = EXPORT_TEMPLATES[template];
-    const lines = [tpl.headers.map(csvQ).join(',')];
+    const lines = [...prefix, tpl.headers.map(csvQ).join(',')];
     for (const r of rows) lines.push(tpl.row(r).map(csvQ).join(','));
     return '﻿' + lines.join('\r\n') + '\r\n';
   }
@@ -371,7 +375,7 @@ function buildExportCsv(rows, opts) {
     : headers.map((_, i) => i);
   const activeIndices = indices.length ? indices : headers.map((_, i) => i);
   const filteredHeaders = activeIndices.map(i => headers[i]);
-  const lines = [filteredHeaders.map(csvQ).join(',')];
+  const lines = [...prefix, filteredHeaders.map(csvQ).join(',')];
   for (const r of rows) {
     const vals = rowToExportCsv(r);
     lines.push(activeIndices.map(i => csvQ(vals[i])).join(','));
@@ -428,10 +432,25 @@ const CHUNG_LONG_HEADERS = new Set([
   'Tên gói', 'Tên vật tư / Danh mục hàng hóa', 'Ký mã hiệu / Model',
   'Quy cách / thông số kỹ thuật', 'Yêu cầu kỹ thuật bổ sung', 'Ghi chú', 'Làm rõ',
 ]);
+const CHUNG_LEFT_ALIGN_HEADERS = new Set([
+  'Tên vật tư / Danh mục hàng hóa', 'Ký mã hiệu / Model',
+  'Quy cách / thông số kỹ thuật', 'Yêu cầu kỹ thuật bổ sung', 'Làm rõ',
+]);
+
+function prefaceCsvLines(rows) {
+  const first = rows[0] || {};
+  return [
+    csvQ(first.ten_cdt || ''),
+    csvQ(first.ma_goi_tbmt || ''),
+    csvQ(first.ten_goi || ''),
+  ];
+}
 
 function buildExportJson(rows, opts) {
   const template = (opts && opts.template) || 'chung';
   const colMask = (opts && opts.colMask) || [];
+  const first = rows[0] || {};
+  const preface = [first.ten_cdt || '', first.ma_goi_tbmt || '', first.ten_goi || ''];
 
   if (template !== 'chung' && EXPORT_TEMPLATES[template]) {
     const tpl = EXPORT_TEMPLATES[template];
@@ -440,6 +459,8 @@ function buildExportJson(rows, opts) {
       rows: rows.map(r => tpl.row(r).map(rawMaVatTu)),
       textCols: tpl.textCols,
       longTextCols: tpl.longTextCols,
+      leftAlignCols: tpl.leftAlignCols,
+      preface,
     };
   }
 
@@ -458,6 +479,8 @@ function buildExportJson(rows, opts) {
     }),
     textCols: headers.reduce((acc, h, i) => { if (h === 'Mã vật tư') acc.push(i); return acc; }, []),
     longTextCols: headers.reduce((acc, h, i) => { if (CHUNG_LONG_HEADERS.has(h)) acc.push(i); return acc; }, []),
+    leftAlignCols: headers.reduce((acc, h, i) => { if (CHUNG_LEFT_ALIGN_HEADERS.has(h)) acc.push(i); return acc; }, []),
+    preface,
   };
 }
 

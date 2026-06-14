@@ -2510,19 +2510,30 @@
   }
 
   function _buildAndDownloadXlsx(data) {
+    var preface = data.preface || [];
     var headers = data.headers;
     var rows = data.rows;
     var textColSet = new Set(data.textCols || []);
     var longColSet = new Set(data.longTextCols || []);
+    var leftColSet = new Set(data.leftAlignCols != null ? data.leftAlignCols : (data.longTextCols || []));
     var nCols = headers.length;
     var nRows = rows.length;
+    var PREFACE_COUNT = 3;
+    var HEADER_ROW = PREFACE_COUNT;      // 0-based: row index 3
+    var DATA_START = HEADER_ROW + 1;     // 0-based: row index 4
 
-    var aoa = [headers].concat(rows);
+    // AoA: 3 preface rows + 1 header row + data rows
+    var aoa = [
+      [preface[0] || ''],
+      [preface[1] || ''],
+      [preface[2] || ''],
+      headers,
+    ].concat(rows);
     var ws = XLSX.utils.aoa_to_sheet(aoa);
 
-    // Force text type on numeric-looking columns (prevent scientific notation for Mã vật tư / 物资编码)
+    // Force text type on numeric-looking columns in data rows only
     textColSet.forEach(function (ci) {
-      for (var ri = 1; ri <= nRows; ri++) {
+      for (var ri = DATA_START; ri < DATA_START + nRows; ri++) {
         var addr = XLSX.utils.encode_cell({ r: ri, c: ci });
         if (ws[addr]) { ws[addr].t = 's'; ws[addr].z = '@'; }
       }
@@ -2533,22 +2544,26 @@
       return { wch: longColSet.has(ci) ? 35 : 14 };
     });
 
-    // Freeze first row
-    ws['!freeze'] = { xSplit: 0, ySplit: 1 };
+    // Freeze rows 1–4 (preface + header stay pinned while scrolling data)
+    ws['!freeze'] = { xSplit: 0, ySplit: DATA_START };
 
-    // Cell styles (xlsx >= 0.20 supports .s; silently skipped if not available)
     try {
-      for (var c = 0; c < nCols; c++) {
-        var hAddr = XLSX.utils.encode_cell({ r: 0, c: c });
-        if (ws[hAddr]) {
-          ws[hAddr].s = { font: { bold: true }, alignment: { horizontal: 'center', vertical: 'center' } };
-        }
+      // Preface rows: bold, left
+      for (var pr = 0; pr < PREFACE_COUNT; pr++) {
+        var pAddr = XLSX.utils.encode_cell({ r: pr, c: 0 });
+        if (ws[pAddr]) ws[pAddr].s = { font: { bold: true }, alignment: { horizontal: 'left', vertical: 'center' } };
       }
-      for (var r = 1; r <= nRows; r++) {
+      // Header row: bold + center
+      for (var c = 0; c < nCols; c++) {
+        var hAddr = XLSX.utils.encode_cell({ r: HEADER_ROW, c: c });
+        if (ws[hAddr]) ws[hAddr].s = { font: { bold: true }, alignment: { horizontal: 'center', vertical: 'center' } };
+      }
+      // Data rows: left+wrap for semantic long-text cols, center for everything else
+      for (var r = DATA_START; r < DATA_START + nRows; r++) {
         for (var c = 0; c < nCols; c++) {
           var addr = XLSX.utils.encode_cell({ r: r, c: c });
           if (ws[addr]) {
-            ws[addr].s = longColSet.has(c)
+            ws[addr].s = leftColSet.has(c)
               ? { alignment: { horizontal: 'left', vertical: 'center', wrapText: true } }
               : { alignment: { horizontal: 'center', vertical: 'center' } };
           }
