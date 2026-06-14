@@ -244,6 +244,7 @@ async function hardDelete(request, env, ctx, actor) {
 const EXPORT_MAX_ROWS = 5000;
 
 const EXPORT_COL_HEADERS = [
+  'Mã gói', 'Tên gói',
   'STT', 'Mã mua sắm', 'Mã vật tư',
   'Tên vật tư / Danh mục hàng hóa', 'Ký mã hiệu / Model', 'Nhãn hiệu',
   'Năm sản xuất', 'Xuất xứ', 'Hãng sản xuất', 'Quy cách / thông số kỹ thuật',
@@ -252,9 +253,16 @@ const EXPORT_COL_HEADERS = [
   'Thời gian giao hàng', 'Ghi chú', 'rfqItemId (Không sửa)',
 ];
 
+function maVatTuExcel(v) {
+  // Force Excel to treat numeric-looking material codes as text (prevents 1E+ scientific notation)
+  if (v == null || v === '') return '';
+  return '="' + String(v).replace(/"/g, '""') + '"';
+}
+
 function rowToExportCsv(r) {
   return [
-    r.stt_goc, r.ma_mua_sam, r.ma_vat_tu,
+    r.ma_goi_tbmt, r.ten_goi,
+    r.stt_goc, r.ma_mua_sam, maVatTuExcel(r.ma_vat_tu),
     r.ten_vat_tu,
     r.required_model || r.quy_cach_model_yeu_cau || '',
     r.brand || r.nhan_hieu || '',
@@ -283,9 +291,19 @@ function csvQ(value) {
   return s;
 }
 
-function buildExportCsv(rows) {
-  const lines = [EXPORT_COL_HEADERS.map(csvQ).join(',')];
-  for (const r of rows) lines.push(rowToExportCsv(r).map(csvQ).join(','));
+function buildExportCsv(rows, colMask) {
+  const headers = EXPORT_COL_HEADERS;
+  // Build index list: colMask = subset of header names; empty/missing = all columns
+  const indices = (colMask && colMask.length)
+    ? colMask.map(c => headers.indexOf(c)).filter(i => i >= 0)
+    : headers.map((_, i) => i);
+  const activeIndices = indices.length ? indices : headers.map((_, i) => i);
+  const filteredHeaders = activeIndices.map(i => headers[i]);
+  const lines = [filteredHeaders.map(csvQ).join(',')];
+  for (const r of rows) {
+    const vals = rowToExportCsv(r);
+    lines.push(activeIndices.map(i => csvQ(vals[i])).join(','));
+  }
   return '﻿' + lines.join('\r\n') + '\r\n'; // UTF-8 BOM
 }
 
@@ -294,6 +312,12 @@ async function exportItems(request, env, actor) {
   if (denied) return denied;
   const p = await readJson(request);
   const VALID_TECH_FILTERS = new Set(['has_clarification','no_clarification','khong_can','dang_hoi','da_xac_nhan','bi_tu_choi']);
+  // selectedIds: export only these rows (if provided); else export all matching filter
+  const rawIds = Array.isArray(p.selectedIds) ? p.selectedIds : [];
+  const selectedIds = rawIds.map(s => cleanString(String(s), 80)).filter(Boolean).slice(0, 500);
+  // cols: export only these column headers (if provided); else export all columns
+  const rawCols = Array.isArray(p.cols) ? p.cols : [];
+  const colMask = rawCols.map(s => cleanString(String(s), 120)).filter(Boolean);
   const rows = await exportRfqItemsSQL(env.DB, {
     q: normalizeText(p.q),
     q2: normalizeText(p.q2),
@@ -303,13 +327,14 @@ async function exportItems(request, env, actor) {
     techFilter: VALID_TECH_FILTERS.has(p.techFilter) ? p.techFilter : '',
     sortBy: p.sortBy || '',
     sortDir: p.sortDir || '',
+    selectedIds,
   });
   const rfqId = cleanString(p.rfqId || p.rfq_id || 'all', 80);
   const today = nowIso().slice(0, 10);
   return json({
     ok: true,
     filename: `rfq-items-${rfqId}-${today}.csv`,
-    csv: buildExportCsv(rows),
+    csv: buildExportCsv(rows, colMask),
     row_count: rows.length,
     capped: rows.length >= EXPORT_MAX_ROWS,
   });

@@ -105,6 +105,7 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
        SELECT page.*,
          (SELECT COUNT(*) FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL) AS clarification_count,
          (SELECT tc.status_after FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL ORDER BY tc.created_at DESC, tc.sequence_no DESC LIMIT 1) AS clarification_status,
+         (SELECT tc.title FROM technical_clarifications tc WHERE tc.rfq_item_id = page.rfq_item_id AND tc.deleted_at IS NULL ORDER BY tc.created_at DESC, tc.sequence_no DESC LIMIT 1) AS latest_clarification_title,
          (SELECT COUNT(*) FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived') AS quote_count,
          (SELECT MIN(sq.price_vnd_incl_tax) FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived' AND sq.price_vnd_incl_tax > 0) AS min_price_vnd_incl_tax,
          (SELECT JSON_GROUP_ARRAY(JSON_OBJECT('p', sub.p, 'n', sub.n)) FROM (SELECT sq.price_vnd_incl_tax AS p, COALESCE(sq.supplier_name,'') AS n FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived' AND sq.price_vnd_incl_tax > 0 ORDER BY sq.price_vnd_incl_tax ASC LIMIT 6) sub) AS quote_prices_json,
@@ -191,7 +192,7 @@ export async function updateRfqItemSQL(db, row) {
   ).run();
 }
 
-export async function exportRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter, sortBy, sortDir }) {
+export async function exportRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter, sortBy, sortDir, selectedIds }) {
   const sort = ITEM_SORT[sortBy] || null;
   const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
 
@@ -221,6 +222,11 @@ export async function exportRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilt
     where.push("i.trang_thai_ky_thuat IN ('da_xac_nhan','final_confirmed')");
   } else if (techFilter === 'bi_tu_choi') {
     where.push("i.trang_thai_ky_thuat IN ('bi_tu_choi','rejected','thay_the')");
+  }
+
+  if (Array.isArray(selectedIds) && selectedIds.length) {
+    where.push(`i.rfq_item_id IN (${selectedIds.map(() => '?').join(',')})`);
+    binds.push(...selectedIds);
   }
 
   const orderBy = sort

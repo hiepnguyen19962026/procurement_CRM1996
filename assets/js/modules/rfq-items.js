@@ -13,6 +13,18 @@
   var _selectedRfqId = '';
   var _rfqListCache = [];
   var _rfqAutocompleteInit = false;
+  var _exportColPanelInit = false;
+
+  // Must mirror EXPORT_COL_HEADERS in src/worker/handlers/rfq-items.js
+  var EXPORT_ALL_COLS = [
+    'Mã gói', 'Tên gói',
+    'STT', 'Mã mua sắm', 'Mã vật tư',
+    'Tên vật tư / Danh mục hàng hóa', 'Ký mã hiệu / Model', 'Nhãn hiệu',
+    'Năm sản xuất', 'Xuất xứ', 'Hãng sản xuất', 'Quy cách / thông số kỹ thuật',
+    'Vật liệu', 'Phụ tùng chuyên dụng', 'Yêu cầu kỹ thuật bổ sung',
+    'Đơn vị tính', 'Khối lượng', 'Thuế suất', 'Đơn giá', 'Thành tiền', 'Đơn giá HĐ', 'Thành tiền HĐ',
+    'Thời gian giao hàng', 'Ghi chú', 'rfqItemId (Không sửa)',
+  ];
 
   function setupOnce() {
     if (_setupDone) return;
@@ -228,7 +240,7 @@
           + ((rfqMeta.client_name || rfqMeta.nha_may_cdt) ? '<div style="color:var(--text-muted)">CĐT: <span style="color:var(--text)">' + API.esc(rfqMeta.client_name || rfqMeta.nha_may_cdt) + '</span></div>' : '')
           + '</div>'
         : '<div style="margin-bottom:10px;font-size:13px;color:var(--text-muted);text-align:left">RFQ: <strong>' + API.esc(rfqFilter) + '</strong></div>';
-      document.getElementById('itemRows').innerHTML = '<tr><td colspan="31" style="padding:0;border:0">'
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="32" style="padding:0;border:0">'
         + '<div class="empty-state" style="margin:8px;border-radius:8px">'
         + '<div style="width:100%">'
         + rfqInfo
@@ -280,6 +292,7 @@
         + renderCell(r.note, true)
         + urlCell(r.external_url, r.rfq_item_id)
         + quotesSummaryCell(r)
+        + lamRoCell(r)
         + '<td>' + technicalSummary(r) + '</td>'
         + '<td><span class="badge">' + API.esc(statusLabel(r.trang_thai_dong)) + '</span></td>'
         + '<td class="muted-cell" style="text-align:center">' + revisionBadge(r) + '</td>'
@@ -372,6 +385,72 @@
       + badge
       + '<span>' + API.esc(count + ' lần trao đổi') + '</span>'
       + '</div>';
+  }
+
+  function lamRoCell(r) {
+    var title = r.latest_clarification_title || '';
+    var count = Number(r.clarification_count || 0);
+    if (!title) {
+      return '<td class="muted-cell" style="font-size:11px;color:var(--text-faint);text-align:center">—</td>';
+    }
+    var escaped = API.esc(title);
+    if (count > 1) {
+      // Multiple clarifications — clicking opens the existing clarification timeline
+      return '<td style="font-size:11px;cursor:pointer;color:var(--blue)" title="' + escaped + ' (click để xem tất cả làm rõ)" onclick="RfqItemsModule.openClarificationTimeline(\'' + API.esc(r.rfq_item_id) + '\')">'
+        + escaped + '</td>';
+    }
+    return '<td style="font-size:11px" title="' + escaped + '">' + escaped + '</td>';
+  }
+
+  // --- Export column panel (req 4) ---
+
+  function initExportColPanel() {
+    if (_exportColPanelInit) return;
+    _exportColPanelInit = true;
+    var panel = document.getElementById('itemExportColPanel');
+    if (!panel) return;
+    var html = '<span style="font-weight:600;margin-right:6px;white-space:nowrap">Cột xuất CSV:</span>';
+    EXPORT_ALL_COLS.forEach(function (col, i) {
+      html += '<label style="display:inline-flex;align-items:center;gap:3px;cursor:pointer;white-space:nowrap">'
+        + '<input type="checkbox" id="xkCol_' + i + '" value="' + API.esc(col) + '" checked> '
+        + API.esc(col) + '</label>';
+    });
+    html += '<button style="margin-left:8px;font-size:11px;padding:3px 8px;min-height:unset" onclick="RfqItemsModule._exportColAll(true)">Tất cả</button>'
+      + '<button style="margin-left:4px;font-size:11px;padding:3px 8px;min-height:unset" onclick="RfqItemsModule._exportColAll(false)">Bỏ tất cả</button>';
+    panel.innerHTML = html;
+  }
+
+  function toggleExportColPanel() {
+    var panel = document.getElementById('itemExportColPanel');
+    if (!panel) return;
+    initExportColPanel();
+    panel.classList.toggle('hidden');
+  }
+
+  function _exportColAll(checked) {
+    var panel = document.getElementById('itemExportColPanel');
+    if (!panel) return;
+    Array.prototype.forEach.call(panel.querySelectorAll('input[type=checkbox]'), function (cb) {
+      cb.checked = checked;
+    });
+  }
+
+  function _getExportCols() {
+    var panel = document.getElementById('itemExportColPanel');
+    // Panel hidden or not initialized = export all columns (send empty array to backend)
+    if (!panel || panel.classList.contains('hidden') || !_exportColPanelInit) return [];
+    var all = Array.prototype.slice.call(panel.querySelectorAll('input[type=checkbox]'));
+    var checked = all.filter(function (cb) { return cb.checked; });
+    // All checked or none checked = all columns (send empty = backend default)
+    if (!checked.length || checked.length === all.length) return [];
+    return checked.map(function (cb) { return cb.value; });
+  }
+
+  function _getSelectedItemIds() {
+    return Array.prototype.filter.call(
+      document.querySelectorAll('#itemRows .item-check'),
+      function (cb) { return cb.checked; }
+    ).map(function (cb) { return cb.value; });
   }
 
   // --- Revision history ---
@@ -2301,6 +2380,8 @@
   async function exportCsv() {
     var statusEl = document.getElementById('itemStatus');
     var techEl = document.getElementById('itemTechFilter');
+    var selectedIds = _getSelectedItemIds();
+    var cols = _getExportCols();
     var params = {
       rfqId: _selectedRfqId,
       q: state.q || '',
@@ -2311,13 +2392,16 @@
       sortBy: sort.by || '',
       sortDir: sort.dir || '',
     };
+    if (selectedIds.length) params.selectedIds = selectedIds;
+    if (cols.length) params.cols = cols;
     try {
       var data = await API.call('exportRfqItemsCsv', params);
       if (!data.ok) { API.error(data.error || 'Không thể xuất CSV'); return; }
       if (!data.row_count) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
       if (data.capped) API.toast('⚠ Kết quả bị giới hạn tối đa 5.000 dòng', 'warn');
+      var rowMsg = selectedIds.length ? selectedIds.length + ' dòng đã chọn' : data.row_count + ' dòng';
       downloadCsvBlob(data.csv, data.filename);
-      API.toast('Đã xuất ' + data.row_count + ' dòng', 'success');
+      API.toast('Đã xuất ' + rowMsg, 'success');
     } catch (err) {
       API.error(err);
     }
@@ -3260,6 +3344,8 @@
     _nextImage: _nextImage,
     downloadTemplate: downloadTemplate,
     exportCsv: exportCsv,
+    toggleExportColPanel: toggleExportColPanel,
+    _exportColAll: _exportColAll,
     importCsv: importCsv,
     openImportMapping: openImportMapping,
     _onCsvFileChange: _onCsvFileChange,
