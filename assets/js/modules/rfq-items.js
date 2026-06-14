@@ -3272,6 +3272,42 @@
     };
   }
 
+  // ---- Export from existing Delivery Note (called by DeliveryNotesModule) ----
+
+  function exportDeliveryNoteDoc(note, items, format) {
+    var noteType  = note.note_type === 'return' ? 'don_tra_hang' : 'don_giao_hang';
+    var typeLabel = note.note_type === 'return' ? 'Đơn trả hàng' : 'Đơn giao hàng';
+    var rfqItems  = items.map(function (it) {
+      return {
+        rfq_item_id:    it.rfq_item_id,
+        stt_goc:        it.stt_goc,
+        ma_vat_tu:      it.ma_vat_tu,
+        ten_vat_tu:     it.ten_vat_tu,
+        required_model: it.required_model || it.quy_cach_final || '',
+        quy_cach_final: it.quy_cach_final,
+        vat_lieu:       it.vat_lieu,
+        hang_final:     it.hang_final,
+        brand:          it.brand,
+        manufacturer:   it.manufacturer,
+        unit:           it.unit,
+        note:           it.note,
+        ma_goi_tbmt:    note.ma_goi_tbmt || '',
+        ten_goi:        note.ten_goi || '',
+        ten_cdt:        note.client_name || '',
+      };
+    });
+    var inputRows = items.map(function (it) {
+      return { rfqItemId: it.rfq_item_id, deliveredQuantity: it.delivered_quantity };
+    });
+    var data = _buildExportDataFromRows(rfqItems, inputRows, noteType, note);
+    if (!data || !data.rows.length) { API.toast('Không có dữ liệu để xuất', 'warn'); return; }
+    if (format === 'pdf') {
+      _openDonPrintModal(data, typeLabel);
+    } else {
+      _buildDonXlsxFromTemplate(data);
+    }
+  }
+
   // ---- End delivery note centered export workflow ----
 
   function _buildAndDownloadXlsx(data) {
@@ -4816,6 +4852,7 @@
     openContractItemDeadlineModal: openContractItemDeadlineModal,
     openRevisionHistory: openRevisionHistory,
     archiveRfqItem: archiveRfqItem,
+    exportDeliveryNoteDoc: exportDeliveryNoteDoc,
     openCreateDeliveryForSelected: openCreateDeliveryForSelected,
     toggleDeliveryFilterMenu: toggleDeliveryFilterMenu,
     onDeliveryFilterChange: onDeliveryFilterChange,

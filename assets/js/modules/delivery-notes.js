@@ -253,18 +253,22 @@
           }).join('')
         + '</div>';
 
-      // Action bar
+      // Action bar — write actions (canAct) + always-visible export
       var canAct = canWrite() && n.status === 'active';
-      var actionBar = canAct
-        ? '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">'
-            + '<button type="button" onclick="DeliveryNotesModule.openEditHeader()"'
-            + ' style="font-size:12px;padding:3px 10px;color:var(--text-muted)">Sửa thông tin đơn</button>'
-            + '<button type="button" onclick="DeliveryNotesModule.openFastAcceptance()"'
-            + ' style="background:var(--green,#15803d);color:#fff;border-color:var(--green,#15803d);font-size:12px;padding:3px 10px">Ghi nghiệm thu</button>'
-            + '<button type="button" onclick="DeliveryNotesModule.openAdvancedAcceptance()"'
-            + ' style="font-size:12px;padding:3px 10px">NT chi tiết</button>'
-            + '</div>'
-        : '';
+      var actionBar = '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">'
+        + (canAct
+            ? '<button type="button" onclick="DeliveryNotesModule.openEditHeader()"'
+              + ' style="font-size:12px;padding:3px 10px;color:var(--text-muted)">Sửa thông tin đơn</button>'
+              + '<button type="button" onclick="DeliveryNotesModule.openFastAcceptance()"'
+              + ' style="background:var(--green,#15803d);color:#fff;border-color:var(--green,#15803d);font-size:12px;padding:3px 10px">Ghi nghiệm thu</button>'
+              + '<button type="button" onclick="DeliveryNotesModule.openAdvancedAcceptance()"'
+              + ' style="font-size:12px;padding:3px 10px">NT chi tiết</button>'
+            : '')
+        + '<button type="button" onclick="DeliveryNotesModule.exportDetail(\'xlsx\')"'
+        + ' style="font-size:12px;padding:3px 10px">Xuất XLSX</button>'
+        + '<button type="button" onclick="DeliveryNotesModule.exportDetail(\'pdf\')"'
+        + ' style="font-size:12px;padding:3px 10px">Xuất PDF</button>'
+        + '</div>';
 
       var itemsHtml = _renderDetailItems(items, n);
 
@@ -640,6 +644,14 @@
     } catch (e) { API.error(e); }
   }
 
+  // --- Export from detail ---
+
+  function exportDetail(format) {
+    if (!_currentDetail) return;
+    if (typeof RfqItemsModule === 'undefined') { API.toast('Module xuất chưa sẵn sàng', 'warn'); return; }
+    RfqItemsModule.exportDeliveryNoteDoc(_currentDetail.note, _currentDetail.items, format);
+  }
+
   // --- Admin delete ---
 
   async function deleteDN(id, code) {
@@ -681,6 +693,7 @@
     _tickAllAccepted:       _tickAllAccepted,
     _toggleSelectAllDetail: _toggleSelectAllDetail,
     _onDetailItemCheck:     _onDetailItemCheck,
+    exportDetail:           exportDetail,
     archive:                archive,
     deleteDN:               deleteDN,
   };
