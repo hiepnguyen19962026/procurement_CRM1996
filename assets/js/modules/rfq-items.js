@@ -3329,8 +3329,8 @@
     }).join('');
 
     var html = '<div class="span-12" style="display:grid;gap:16px">'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:0 32px">'
-        + '<table style="font-size:13px;border-collapse:collapse">'
+      + '<div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:0 32px">'
+        + '<table style="width:100%;min-width:0;font-size:13px;border-collapse:collapse">'
         + kv('Loại đơn:', typeLabel)
         + kv('Mã đơn (dự kiến):', previewNo)
         + kv('Mã gói:', first.ma_goi_tbmt || '')
@@ -3338,7 +3338,7 @@
         + ((first.ten_cdt || first.client_name || first.nha_may_cdt) ? kv('CĐT:', first.ten_cdt || first.client_name || first.nha_may_cdt) : '')
         + (first.contract_no ? kv('Số HĐ:', first.contract_no) : '')
         + '</table>'
-        + '<table style="font-size:13px;border-collapse:collapse">'
+        + '<table style="width:100%;min-width:0;font-size:13px;border-collapse:collapse">'
         + kv('Ngày giao:', s.deliveryDate)
         + kv('Bên nhận:', s.receiverUnit)
         + kv('Người nhận:', s.receiverName)
