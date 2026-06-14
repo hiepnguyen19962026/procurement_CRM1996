@@ -15,6 +15,7 @@
   var _rfqAutocompleteInit = false;
   var _exportColPanelInit = false;
   var _lastFilterParams = {};
+  var contractItemRowCache = {};
   var deliveryStatusFilters = {};
   var deadlineStatusFilters = {};
   var DELIVERY_SORT_KEYS = {
@@ -2514,16 +2515,22 @@
   }
 
   function contractItemsTable(rows) {
+    rows.forEach(function (r) {
+      if (r.contract_item_id) contractItemRowCache[r.contract_item_id] = r;
+    });
     return '<div class="quotes-table-wrap">'
       + '<table class="quotes-mini-table">'
       + '<thead><tr>'
       + '<th>S&#7889; H&#272;</th><th>T&#234;n H&#272;</th><th>Ng&#224;y k&#253;</th>'
-      + '<th>Nh&#224; CC</th><th>SL H&#272;</th><th>&#272;&#417;n gi&#225; H&#272;</th><th>Th&#224;nh ti&#7873;n H&#272;</th><th>T.t&#7879;</th><th>Tr&#7841;ng th&#225;i</th>'
+      + '<th>Nh&#224; CC</th><th>SL H&#272;</th><th>&#272;&#417;n gi&#225; H&#272;</th><th>Th&#224;nh ti&#7873;n H&#272;</th><th>H&#7841;n giao</th><th>T.t&#7879;</th><th>Tr&#7841;ng th&#225;i</th><th></th>'
       + '</tr></thead><tbody>'
       + rows.map(function (r) {
           var statusBadge = r.contract_status === 'archived'
             ? '<span class="badge" style="opacity:0.6">L&#432;u tr&#7919;</span>'
             : '<span class="badge" style="background:var(--green-bg);border-color:#86efac;color:var(--green)">Hi&#7879;u l&#7921;c</span>';
+          var editBtn = r.contract_status === 'archived'
+            ? ''
+            : '<button type="button" class="btn btn-sm" data-write onclick="RfqItemsModule.openContractItemDeadlineModal(\'' + API.esc(r.contract_item_id || '') + '\')">S&#7917;a</button>';
           return '<tr>'
             + '<td><strong>' + API.esc(r.contract_no || '-') + '</strong>'
               + (r.contract_id ? '<div class="muted" style="font-size:11px">' + API.esc(r.contract_id) + '</div>' : '')
@@ -2534,11 +2541,103 @@
             + '<td class="num">' + API.esc(r.contract_quantity != null ? Number(r.contract_quantity).toLocaleString('vi-VN') : '-') + (r.unit ? ' ' + API.esc(r.unit) : '') + '</td>'
             + '<td class="num">' + API.esc(r.contract_unit_price ? API.money(r.contract_unit_price) : '-') + '</td>'
             + '<td class="num"><strong>' + API.esc(r.contract_line_total ? API.money(r.contract_line_total) : '-') + '</strong></td>'
+            + '<td>' + contractDeadlineDisplay(r) + '</td>'
             + '<td>' + API.esc(r.contract_currency || 'VND') + '</td>'
             + '<td>' + statusBadge + '</td>'
+            + '<td style="text-align:center">' + editBtn + '</td>'
             + '</tr>';
         }).join('')
       + '</tbody></table></div>';
+  }
+
+  function contractDeadlineDisplay(row) {
+    var date = row.delivery_deadline_date || '';
+    if (!date) return '<span class="muted-cell">chưa có</span>';
+    var days = daysBetweenYmd(todayYmdVN(), date);
+    var note = '';
+    if (days !== null) {
+      note = days < 0
+        ? '<div class="muted" style="font-size:11px;color:var(--red)">trễ ' + Math.abs(days) + ' ngày</div>'
+        : '<div class="muted" style="font-size:11px">còn ' + days + ' ngày</div>';
+    }
+    return '<strong>' + API.esc(date) + '</strong>' + note;
+  }
+
+  function todayYmdVN(date) {
+    var vn = new Date((date || new Date()).toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+    return vn.getFullYear() + '-' + String(vn.getMonth() + 1).padStart(2, '0') + '-' + String(vn.getDate()).padStart(2, '0');
+  }
+
+  function daysBetweenYmd(fromYmd, toYmd) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fromYmd || '') || !/^\d{4}-\d{2}-\d{2}$/.test(toYmd || '')) return null;
+    var from = new Date(fromYmd + 'T00:00:00Z');
+    var to = new Date(toYmd + 'T00:00:00Z');
+    if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime())) return null;
+    return Math.round((to.getTime() - from.getTime()) / 86400000);
+  }
+
+  function contractDeadlineSection(row) {
+    row = row || {};
+    var type = row.delivery_trigger_type || 'contract_sign';
+    return '<div class="span-12" style="border-top:1px solid var(--border);margin-top:4px;padding-top:12px">'
+      + '<div style="font-weight:600;margin-bottom:8px">Thời hạn giao hàng</div>'
+      + '<div class="form-grid" style="grid-template-columns:repeat(12,1fr);gap:10px">'
+      + '<label class="span-4">Cách tính hạn giao<select name="deliveryTriggerType" onchange="RfqItemsModule._syncContractDeadlineFields()">'
+      + option('contract_sign', 'Theo ngày ký HĐ', type)
+      + option('award_notice', 'Theo thông báo trúng thầu', type)
+      + option('delivery_notice', 'Theo lệnh giao hàng', type)
+      + option('po_date', 'Theo PO', type)
+      + option('manual', 'Nhập hạn giao thủ công', type)
+      + '</select></label>'
+      + input('deliveryLeadDays', 'Số ngày giao', row.delivery_lead_days ?? '', 'type="number" min="0" step="1" placeholder="ví dụ 45"', 'span-2 deadline-lead-field')
+      + input('deliveryTriggerDate', 'Ngày bắt đầu tính', row.delivery_trigger_date || '', 'type="date"', 'span-3 deadline-trigger-date-field')
+      + input('deliveryDeadlineDate', 'Hạn giao thủ công', row.delivery_deadline_date || '', 'type="date"', 'span-3 deadline-manual-date-field')
+      + '</div>'
+      + '</div>';
+  }
+
+  function _syncContractDeadlineFields() {
+    var modal = document.getElementById('modalBody') || document;
+    var typeEl = modal.querySelector('[name="deliveryTriggerType"]');
+    if (!typeEl) return;
+    var type = typeEl.value || 'contract_sign';
+    var signedDateEl = modal.querySelector('[name="signedDate"]');
+    var hasSignedDate = !!(signedDateEl && signedDateEl.value);
+    var triggerWrap = modal.querySelector('.deadline-trigger-date-field');
+    var manualWrap = modal.querySelector('.deadline-manual-date-field');
+    var leadWrap = modal.querySelector('.deadline-lead-field');
+    if (manualWrap) manualWrap.classList.toggle('hidden', type !== 'manual');
+    if (leadWrap) leadWrap.classList.toggle('hidden', false);
+    if (triggerWrap) {
+      triggerWrap.classList.toggle('hidden', type === 'manual' || (type === 'contract_sign' && hasSignedDate));
+    }
+  }
+
+  function validateContractDeadlinePayload(form) {
+    var type = form.deliveryTriggerType || 'contract_sign';
+    if (type === 'manual') {
+      if (!form.deliveryDeadlineDate) {
+        API.toast('Vui lòng nhập hạn giao thủ công', 'warn');
+        return false;
+      }
+      form.deliveryTriggerDate = form.deliveryTriggerDate || '';
+      return true;
+    }
+    form.deliveryDeadlineDate = '';
+    if (type === 'contract_sign' && form.signedDate) {
+      form.deliveryTriggerDate = '';
+    }
+    if (type === 'award_notice' || type === 'delivery_notice' || type === 'po_date') {
+      if (!form.deliveryTriggerDate) {
+        API.toast('Vui lòng nhập ngày bắt đầu tính', 'warn');
+        return false;
+      }
+      if (form.deliveryLeadDays === '' || form.deliveryLeadDays == null) {
+        API.toast('Vui lòng nhập số ngày giao', 'warn');
+        return false;
+      }
+    }
+    return true;
   }
 
   function openContractFromRfqItemModal(rfqItemId) {
@@ -2556,7 +2655,7 @@
       + option('SGD', 'SGD', currency)
       + option('KRW', 'KRW', currency)
       + '</select></label>'
-      + input('signedDate', 'Ngày ký', '', 'type="date"', 'span-3')
+      + input('signedDate', 'Ngày ký', '', 'type="date" onchange="RfqItemsModule._syncContractDeadlineFields()"', 'span-3')
       + input('effectiveDate', 'Ngày có hiệu lực', '', 'type="date"', 'span-3')
       + input('expiryDate', 'Ngày hết hạn', '', 'type="date"', 'span-3')
       + '<div class="span-3" style="background:var(--primary-bg);border:1px solid var(--primary-border);border-radius:9px;padding:8px 12px;font-size:13px">'
@@ -2565,9 +2664,11 @@
       + '</div>'
       + input('contractQuantity', 'Số lượng HĐ', val(item, 'quantity', 'so_luong') || '', 'inputmode="decimal" placeholder="0"', 'span-3')
       + input('contractUnitPrice', 'Đơn giá HĐ (VND)', '', 'inputmode="numeric" placeholder="0"', 'span-3')
+      + contractDeadlineSection({})
       + textarea('note', 'Ghi chú', '', '', 'span-12 compact-ta');
     Utils.openModal('Tạo hợp đồng từ dòng vật tư', html, async function (form) {
       try {
+        if (!validateContractDeadlinePayload(form)) return;
         form.rfqItemId = rfqItemId;
         var data = await API.call('createContractFromRfqItem', form);
         Utils.closeModal();
@@ -2579,6 +2680,37 @@
         API.error(err);
       }
     });
+    setTimeout(_syncContractDeadlineFields, 0);
+    Auth.applyRoleUI();
+  }
+
+  function openContractItemDeadlineModal(contractItemId) {
+    var row = contractItemRowCache[contractItemId];
+    if (!row) {
+      API.toast('Không tìm thấy dòng hợp đồng', 'warn');
+      return;
+    }
+    var html = ''
+      + '<input type="hidden" name="signedDate" value="' + API.esc(row.signed_date || '') + '">'
+      + '<div class="span-12" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px">'
+      + '<strong>' + API.esc(row.ten_vat_tu || row.contract_item_id || '') + '</strong>'
+      + (row.contract_no ? '<div class="muted">HĐ: ' + API.esc(row.contract_no) + '</div>' : '')
+      + '</div>'
+      + contractDeadlineSection(row);
+    Utils.openModal('Sửa thời hạn giao hàng', html, async function (form) {
+      try {
+        if (!validateContractDeadlinePayload(form)) return;
+        form.contractItemId = contractItemId;
+        await API.call('updateContractItem', form);
+        Utils.closeModal();
+        API.toast('Đã lưu thời hạn giao hàng', 'success');
+        if (row.rfq_item_id) await loadContractItems(row.rfq_item_id);
+        await load(true);
+      } catch (err) {
+        API.error(err);
+      }
+    });
+    setTimeout(_syncContractDeadlineFields, 0);
     Auth.applyRoleUI();
   }
 
@@ -4420,6 +4552,7 @@
     exportPriceHistory: exportPriceHistory,
     loadContractItems: loadContractItems,
     openContractFromRfqItemModal: openContractFromRfqItemModal,
+    openContractItemDeadlineModal: openContractItemDeadlineModal,
     openRevisionHistory: openRevisionHistory,
     archiveRfqItem: archiveRfqItem,
     openCreateDeliveryForSelected: openCreateDeliveryForSelected,
@@ -4427,6 +4560,7 @@
     onDeliveryFilterChange: onDeliveryFilterChange,
     toggleDeadlineFilterMenu: toggleDeadlineFilterMenu,
     onDeadlineFilterChange: onDeadlineFilterChange,
+    _syncContractDeadlineFields: _syncContractDeadlineFields,
     toggleSelectAll: toggleSelectAll,
     onCheckChange: onCheckChange,
     deleteSelected: deleteSelected,
