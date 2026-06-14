@@ -45,6 +45,12 @@
   function noteTypeLabel(v)  { return NOTE_TYPE_LABEL[v] || v || '—'; }
   function statusLabel(v)    { return v === 'active' ? 'Hoạt động' : v === 'archived' ? 'Lưu trữ' : (v || '—'); }
   function fmtDate(iso)      { return iso ? iso.slice(0, 10) : '—'; }
+  function normDnDate(v) {
+    if (!v) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((v + '').trim());
+    return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : '';
+  }
   function fmtNum(n)         { return (n != null && n !== '') ? String(Number(n)) : '0'; }
   function esc(v)            { return API.esc(v); }
   function fmtMoney(n) {
@@ -252,14 +258,17 @@
 
       // Action bar — write actions (canAct) + always-visible export
       var canAct = canWrite() && n.status === 'active';
+      var isReturn = n.note_type === 'return';
       var actionBar = '<div style="display:flex;gap:6px;align-items:center;margin-bottom:8px;flex-wrap:wrap">'
         + (canAct
             ? '<button type="button" onclick="DeliveryNotesModule.openEditHeader()"'
               + ' style="font-size:12px;padding:3px 10px;color:var(--text-muted)">Sửa thông tin đơn</button>'
-              + '<button type="button" onclick="DeliveryNotesModule.openFastAcceptance()"'
-              + ' style="background:var(--green,#15803d);color:#fff;border-color:var(--green,#15803d);font-size:12px;padding:3px 10px">Ghi nghiệm thu</button>'
-              + '<button type="button" onclick="DeliveryNotesModule.openAdvancedAcceptance()"'
-              + ' style="font-size:12px;padding:3px 10px">NT chi tiết</button>'
+              + (!isReturn
+                  ? '<button type="button" onclick="DeliveryNotesModule.openFastAcceptance()"'
+                    + ' style="background:var(--green,#15803d);color:#fff;border-color:var(--green,#15803d);font-size:12px;padding:3px 10px">Ghi nghiệm thu</button>'
+                    + '<button type="button" onclick="DeliveryNotesModule.openAdvancedAcceptance()"'
+                    + ' style="font-size:12px;padding:3px 10px">NT chi tiết</button>'
+                  : '')
             : '')
         + '<button type="button" onclick="DeliveryNotesModule.exportDetail(\'xlsx\')"'
         + ' style="font-size:12px;padding:3px 10px">Xuất XLSX</button>'
@@ -412,7 +421,7 @@
     var html = '<div style="display:grid;gap:14px">'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px">'
       + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Ngày nghiệm thu *</label>'
-        + '<input id="fnt-date" type="date" value="' + today + '" style="width:100%"></div>'
+        + '<input id="fnt-date" name="fnt-date" type="date" value="' + today + '" style="width:100%"></div>'
       + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Số ngày bảo hành</label>'
         + '<input id="fnt-warranty" type="text" inputmode="numeric" placeholder="(tùy chọn)" style="width:100%"></div>'
       + '<div style="grid-column:1/-1"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Ghi chú nghiệm thu</label>'
@@ -437,7 +446,7 @@
     var detail = _currentDetail;
     if (!detail || !_selectedDetailIds.size) return;
 
-    var dateVal = (document.getElementById('fnt-date')    || {}).value || '';
+    var dateVal = normDnDate((document.querySelector('[name="fnt-date"]') || {}).value || '');
     var wDaysRaw = (document.getElementById('fnt-warranty') || {}).value || '';
     var ntNote   = (document.getElementById('fnt-note')    || {}).value || '';
 
@@ -494,7 +503,7 @@
     var formHtml = '<div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;margin-bottom:12px">'
       + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Ngày nghiệm thu</label>'
-        + '<input id="nt-date" type="date" value="' + today + '" style="width:100%"></div>'
+        + '<input id="nt-date" name="nt-date" type="date" value="' + today + '" style="width:100%"></div>'
       + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Ghi chú nghiệm thu</label>'
         + '<input id="nt-note" type="text" placeholder="(tùy chọn)" style="width:100%"></div>'
       + '</div>'
@@ -556,7 +565,7 @@
     var n     = _currentDetail.note;
     var items = _currentDetail.items;
 
-    var date = (document.getElementById('nt-date') || {}).value || '';
+    var date = normDnDate((document.querySelector('[name="nt-date"]') || {}).value || '');
     var note = (document.getElementById('nt-note') || {}).value || '';
 
     var itemRows = [];
@@ -601,7 +610,7 @@
     var n = _currentDetail.note;
     var html = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;grid-column:span 12">'
       + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Ngày giao hàng *</label>'
-        + '<input id="eh-date" type="date" value="' + esc(n.delivery_date || '') + '" style="width:100%"></div>'
+        + '<input id="eh-date" name="eh-date" type="date" value="' + esc(n.delivery_date || '') + '" style="width:100%"></div>'
       + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Bên nhận</label>'
         + '<input id="eh-receiver-unit" type="text" value="' + esc(n.receiver_unit || '') + '" placeholder="Tên đơn vị nhận" style="width:100%"></div>'
       + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Người nhận</label>'
@@ -621,7 +630,7 @@
   async function _submitEditHeader() {
     var n = _currentDetail && _currentDetail.note;
     if (!n) return;
-    var date = (document.getElementById('eh-date') || {}).value || '';
+    var date = normDnDate((document.querySelector('[name="eh-date"]') || {}).value || '');
     if (!date) { API.toast('Vui lòng chọn ngày giao hàng', 'warn'); return; }
     try {
       await API.call('updateDeliveryNote', {
