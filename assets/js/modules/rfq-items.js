@@ -3074,7 +3074,7 @@
     var first     = s.items[0] || {};
     var maGoi     = first.ma_goi_tbmt || '';
     var tenGoi    = first.ten_goi     || '';
-    var cdt       = first.client_name  || '';
+    var cdt       = first.ten_cdt || '';
     var contractNo = first.contract_no || '';
     var fld = 'style="width:100%;font-size:13px"';
     var lbl = 'style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px"';
@@ -3306,7 +3306,7 @@
         + kv('Mã đơn (dự kiến):', previewNo)
         + kv('Mã gói:', first.ma_goi_tbmt || '')
         + kv('Tên gói:', first.ten_goi || '')
-        + (first.client_name ? kv('CĐT:', first.client_name) : '')
+        + (first.ten_cdt ? kv('CĐT:', first.ten_cdt) : '')
         + (first.contract_no ? kv('Số HĐ:', first.contract_no) : '')
         + '</table>'
         + '<table style="font-size:13px;border-collapse:collapse">'
@@ -4993,6 +4993,7 @@
     openExportMenu: openExportMenu,
     openExcelMenu: openExcelMenu,
     openDonMenu: openDonMenu,
+    openDonWorkflow: openDonWorkflow,
     _donStep1Qty: _donStep1Qty,
     _updateDonPreviewNo: _updateDonPreviewNo,
     _donSenderAc: _donSenderAc,
