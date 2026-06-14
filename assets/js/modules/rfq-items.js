@@ -3072,6 +3072,8 @@
     _openDonWorkflowStep1();
   }
 
+  // Step 1: wide modal (modal--import-wide) — optional 16-column quantity adjustment table
+  // needs horizontal space. Compact when "Không" is selected (table hidden).
   function _openDonWorkflowStep1() {
     var s         = _donWorkflowState;
     var typeLabel = s.type === 'don_giao_hang' ? 'Tạo đơn giao hàng' : 'Tạo đơn trả hàng';
@@ -3288,6 +3290,8 @@
     _openDonWorkflowStep2();
   }
 
+  // Step 2: compact confirmation modal — no modal--import-wide, span-12 outer wrapper,
+  // table-layout:fixed so all columns fit without horizontal scroll.
   function _openDonWorkflowStep2() {
     var s         = _donWorkflowState;
     var typeLabel  = s.type === 'don_giao_hang' ? 'Tạo đơn giao hàng' : 'Tạo đơn trả hàng';
@@ -3318,7 +3322,7 @@
       return '<tr>'
         + '<td style="padding:3px 8px;font-size:11px;font-family:monospace">' + API.esc(it.ma_vat_tu || '') + '</td>'
         + '<td style="padding:3px 8px;font-size:12px">' + API.esc(it.ten_vat_tu || '') + '</td>'
-        + '<td style="padding:3px 8px;font-size:11px;white-space:nowrap">' + dlHtml + '</td>'
+        + '<td style="padding:3px 8px;font-size:11px">' + dlHtml + '</td>'
         + '<td style="padding:3px 8px;text-align:right;font-weight:600">' + API.esc(String(inp.deliveredQuantity)) + '</td>'
         + '<td style="padding:3px 8px;font-size:11px;color:var(--text-muted)">' + API.esc(inp.note || '') + '</td>'
         + '</tr>';
@@ -3348,12 +3352,19 @@
       + '</div>'
       + '<div>'
         + '<div style="font-size:12px;color:var(--text-muted);margin-bottom:6px;font-weight:500">Danh sách vật tư (' + s.inputRows.length + ' dòng)</div>'
-        + '<div style="overflow-x:auto;max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:4px">'
-        + '<table style="width:100%;font-size:12px;border-collapse:collapse">'
+        + '<div style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:4px">'
+        + '<table style="width:100%;table-layout:fixed;font-size:12px;border-collapse:collapse">'
+        + '<colgroup>'
+          + '<col style="width:90px">'
+          + '<col>'
+          + '<col style="width:88px">'
+          + '<col style="width:64px">'
+          + '<col style="width:110px">'
+        + '</colgroup>'
         + '<thead><tr style="background:var(--bg)">'
-          + '<th style="padding:4px 8px;text-align:left;font-size:11px;white-space:nowrap">Mã vật tư</th>'
+          + '<th style="padding:4px 8px;text-align:left;font-size:11px">Mã vật tư</th>'
           + '<th style="padding:4px 8px;text-align:left;font-size:11px">Tên vật tư</th>'
-          + '<th style="padding:4px 8px;font-size:11px;white-space:nowrap">Deadline</th>'
+          + '<th style="padding:4px 8px;font-size:11px">Deadline</th>'
           + '<th style="padding:4px 8px;text-align:right;font-size:11px">SL giao</th>'
           + '<th style="padding:4px 8px;text-align:left;font-size:11px">Ghi chú</th>'
         + '</tr></thead>'
