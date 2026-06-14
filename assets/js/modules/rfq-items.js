@@ -392,7 +392,6 @@
         + renderCell(API.money(r.thanh_tien_sau_thue), true)
         + renderCell(API.money(r.gia_hop_dong), true)
         + renderCell(r.gia_hop_dong ? API.money(r.gia_hop_dong * (parseFloat(val(r, 'quantity', 'so_luong')) || 0)) : '', true)
-        + renderCell(formatQty(_baseQty), false)
         + renderCell(formatQty(r.delivered_quantity_total), false)
         + renderCell(formatQty(_itemRemaining), false)
         + renderCell(r.delivery_time, true)
