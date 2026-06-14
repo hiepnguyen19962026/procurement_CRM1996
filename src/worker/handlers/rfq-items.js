@@ -437,20 +437,23 @@ const CHUNG_LEFT_ALIGN_HEADERS = new Set([
   'Quy cách / thông số kỹ thuật', 'Yêu cầu kỹ thuật bổ sung', 'Làm rõ',
 ]);
 
+function buildExportPreface(rows) {
+  if (!rows.length) return ['', '', ''];
+  const firstId = rows[0].rfq_id;
+  const singleRfq = rows.every(r => r.rfq_id === firstId);
+  if (!singleRfq) return ['', '', ''];
+  const r = rows[0];
+  return [r.ten_cdt || '', r.ma_goi_tbmt || '', r.ten_goi || ''];
+}
+
 function prefaceCsvLines(rows) {
-  const first = rows[0] || {};
-  return [
-    csvQ(first.ten_cdt || ''),
-    csvQ(first.ma_goi_tbmt || ''),
-    csvQ(first.ten_goi || ''),
-  ];
+  return buildExportPreface(rows).map(csvQ);
 }
 
 function buildExportJson(rows, opts) {
   const template = (opts && opts.template) || 'chung';
   const colMask = (opts && opts.colMask) || [];
-  const first = rows[0] || {};
-  const preface = [first.ten_cdt || '', first.ma_goi_tbmt || '', first.ten_goi || ''];
+  const preface = buildExportPreface(rows);
 
   if (template !== 'chung' && EXPORT_TEMPLATES[template]) {
     const tpl = EXPORT_TEMPLATES[template];
