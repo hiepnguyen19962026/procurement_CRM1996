@@ -3099,8 +3099,7 @@
     // 3-column logistics form
     var formHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 20px">'
       + '<div><label ' + lbl + '>Ngày giao *</label>'
-        + '<input id="donWfDate" type="date" value="' + API.esc(d) + '"'
-        + ' oninput="RfqItemsModule._updateDonPreviewNo()" ' + fld + '></div>'
+        + '<input id="donWfDate" name="donWfDate" type="date" value="' + API.esc(d) + '" ' + fld + '></div>'
       + '<div><label ' + lbl + '>Mã đơn (dự kiến)</label>'
         + '<input id="donWfPreviewNo" type="text" readonly value="..."'
         + ' style="width:100%;font-size:13px;color:var(--text-muted);background:var(--bg,#f9fafb)"></div>'
@@ -3144,11 +3143,18 @@
     }, 0);
   }
 
+  function normDateVal(v) {
+    if (!v) return '';
+    if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+    var m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec((v + '').trim());
+    return m ? m[3] + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0') : '';
+  }
+
   async function _updateDonPreviewNo() {
     var s = _donWorkflowState;
     var inp = document.getElementById('donWfPreviewNo');
     if (!inp) return;
-    var d = (document.getElementById('donWfDate') || {}).value || s.deliveryDate;
+    var d = normDateVal((document.querySelector('[name="donWfDate"]') || {}).value || '') || s.deliveryDate;
     inp.value = '...';
     try {
       var res = await API.call('previewDeliveryNoteNo', { deliveryDate: d, noteType: s.noteType });
@@ -3216,7 +3222,7 @@
 
   async function _donStep1Submit() {
     var s       = _donWorkflowState;
-    var dateVal = (document.getElementById('donWfDate') || {}).value || '';
+    var dateVal = normDateVal((document.querySelector('[name="donWfDate"]') || {}).value || '');
     if (!dateVal) { API.toast('Vui lòng chọn ngày giao', 'warn'); return; }
     s.deliveryDate  = dateVal;
     s.receiverUnit  = (document.getElementById('donWfReceiverUnit') || {}).value || '';
