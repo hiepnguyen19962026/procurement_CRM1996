@@ -2994,34 +2994,36 @@
     var recvVal   = isDelivery ? esc(tenCdt) : '';
     var sendVal   = isDelivery ? '' : esc(tenCdt);
 
-    // 12 cols, A4 landscape — total 100%: 3+5+9+16+14+10+6+5+14+8+6+4
-    var colWidths = ['3%','5%','9%','16%','14%','10%','6%','5%','14%','8%','6%','4%'];
-    var colgroupHtml = '<colgroup>';
-    colWidths.forEach(function (w) { colgroupHtml += '<col style="width:' + w + '">'; });
-    colgroupHtml += '</colgroup>';
+    // Grid column template — 12 cols, total 100%, A4 landscape
+    var GCOLS = '3% 5% 9% 16% 14% 10% 6% 5% 14% 8% 6% 4%';
 
-    // Each bilingual header line wrapped in <div> — avoids <br> height/alignment issues
     function escPlain(s) {
       return String(s == null ? '' : s)
         .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
-    var theadHtml = '<thead><tr>';
+
+    // Header row: each bilingual header split into two <div> lines
+    var gridHeadHtml = '<div class="don-grid-row don-grid-head">';
     headers.forEach(function (h) {
       var lines = String(h == null ? '' : h).split('\n');
-      theadHtml += '<th>' + lines.map(function (l) { return '<div>' + escPlain(l) + '</div>'; }).join('') + '</th>';
+      gridHeadHtml += '<div class="don-grid-cell">'
+        + lines.map(function (l) { return '<div>' + escPlain(l) + '</div>'; }).join('')
+        + '</div>';
     });
-    theadHtml += '</tr></thead>';
+    gridHeadHtml += '</div>';
 
-    var tbodyHtml = '<tbody>';
+    // Data rows
+    var gridBodyHtml = '';
     rows.forEach(function (row) {
-      tbodyHtml += '<tr>';
+      gridBodyHtml += '<div class="don-grid-row">';
       row.forEach(function (cell, ci) {
-        var cls = leftColSet.has(ci) ? ' class="l"' : '';
-        tbodyHtml += '<td' + cls + '>' + esc(String(cell == null ? '' : cell)) + '</td>';
+        var cls = leftColSet.has(ci) ? ' left' : '';
+        gridBodyHtml += '<div class="don-grid-cell' + cls + '">'
+          + esc(String(cell == null ? '' : cell))
+          + '</div>';
       });
-      tbodyHtml += '</tr>';
+      gridBodyHtml += '</div>';
     });
-    tbodyHtml += '</tbody>';
 
     // @page placed here (top-level in DOM) applies while this element is in the document
     var printCss = [
@@ -3035,17 +3037,17 @@
       '.don-inf td{border:1px solid #000;padding:3px 5px;vertical-align:middle;font-size:8.5pt;line-height:1.3}',
       '.don-inf .lb{font-weight:bold;width:16%;white-space:nowrap}',
       '.don-inf .vl{width:34%}',
-      // Item table: fixed layout + collapse, uniform 1px borders on every cell
-      '.don-tbl{width:100%;border-collapse:collapse;table-layout:fixed;margin-top:3px}',
-      '.don-tbl th,.don-tbl td{border:1px solid #000;padding:3px 2px;vertical-align:middle}',
-      '.don-tbl th{background:#fff;font-weight:bold;text-align:center;font-size:7.5pt;' +
-        'white-space:normal;word-break:keep-all;overflow-wrap:anywhere;line-height:1.15;height:34px}',
-      '.don-tbl th div{display:block;line-height:1.15}',
-      '.don-tbl td{font-size:8pt;text-align:center;line-height:1.2}',
-      '.don-tbl td.l{text-align:left;word-break:break-word}',
-      '.don-tbl thead{display:table-header-group}',
-      '.don-tbl tr{page-break-inside:avoid}',
-      // Footer: 2-col table, top-border signature lines only, no side/bottom borders
+      // Grid item section — individual row grids guarantee column alignment across rows
+      '.don-grid{width:100%;margin-top:3px}',
+      '.don-grid-row{display:grid;grid-template-columns:' + GCOLS + ';border-left:1px solid #000}',
+      '.don-grid-head{border-top:1px solid #000}',
+      '.don-grid-cell{border-right:1px solid #000;border-bottom:1px solid #000;' +
+        'padding:3px 2px;display:flex;align-items:center;justify-content:center;' +
+        'text-align:center;overflow-wrap:anywhere;word-break:normal;line-height:1.15;font-size:8pt}',
+      '.don-grid-head .don-grid-cell{min-height:40px;font-weight:700;font-size:7.5pt;align-items:center}',
+      '.don-grid-head .don-grid-cell div{display:block;line-height:1.15}',
+      '.don-grid-cell.left{justify-content:flex-start;text-align:left}',
+      // Footer: 2-col table, top-border signature lines only
       '.don-ft{width:100%;border-collapse:collapse;margin-top:14px}',
       '.don-ft td{width:50%;padding-top:28px;border-top:1px solid #000;' +
         'font-size:8.5pt;font-weight:bold;line-height:1.5;padding-left:4px;vertical-align:top}',
@@ -3067,7 +3069,7 @@
       +   '<td class="lb">日期:<br>Thời gian:</td><td class="vl"></td>'
       +   '<td class="lb">送货人:<br>Người giao hàng:</td><td class="vl"></td>'
       + '</tr></tbody></table>'
-      + '<table class="don-tbl">' + colgroupHtml + theadHtml + tbodyHtml + '</table>'
+      + '<div class="don-grid">' + gridHeadHtml + gridBodyHtml + '</div>'
       + '<table class="don-ft"><tr>'
       +   '<td>收货人签字:<br>Người nhận hàng ký tên:</td>'
       +   '<td>日期:<br>Thời gian:</td>'
