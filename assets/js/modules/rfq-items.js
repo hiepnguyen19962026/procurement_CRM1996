@@ -366,6 +366,8 @@
           + '<div class="muted">' + hlEsc(val(r, 'technical_params', 'thong_so_ky_thuat'), state.q) + '</div>'
           + mediaBadges(r) + '</td>'
         : '<td>' + nameInner + mediaBadges(r) + '</td>';
+      var _baseQty = toQty(r.contract_quantity_total) || toQty(r.so_luong) || toQty(r.quantity) || 0;
+      var _itemRemaining = Math.max(_baseQty - (toQty(r.delivered_quantity_total) || 0), 0);
       return '<tr>'
         + '<td style="padding:0 4px;text-align:center;width:28px"><input type="checkbox" class="item-check" value="' + API.esc(r.rfq_item_id) + '" onchange="RfqItemsModule.onCheckChange()"></td>'
         + renderCell(r.ma_goi_tbmt, true)
@@ -390,9 +392,9 @@
         + renderCell(API.money(r.thanh_tien_sau_thue), true)
         + renderCell(API.money(r.gia_hop_dong), true)
         + renderCell(r.gia_hop_dong ? API.money(r.gia_hop_dong * (parseFloat(val(r, 'quantity', 'so_luong')) || 0)) : '', true)
-        + renderCell(formatQty(r.contract_quantity_total), false)
+        + renderCell(formatQty(_baseQty), false)
         + renderCell(formatQty(r.delivered_quantity_total), false)
-        + renderCell(formatQty(r.remaining_quantity), false)
+        + renderCell(formatQty(_itemRemaining), false)
         + renderCell(r.delivery_time, true)
         + renderCell(r.note, true)
         + urlCell(r.external_url, r.rfq_item_id)
@@ -405,7 +407,7 @@
           + '<button type="button" class="btn-x-archive" title="Lưu trữ dòng vật tư" onclick="RfqItemsModule.archiveRfqItem(\'' + API.esc(r.rfq_item_id) + '\')">✕</button>'
           + '</td>'
         + renderCell(formatQty(r.delivered_quantity_total), false)
-        + renderCell(formatQty(r.remaining_quantity), false)
+        + renderCell(formatQty(_itemRemaining), false)
         + deadlineCell(r)
         + '</tr>';
     }).join('');
@@ -728,7 +730,8 @@
     var tbody = '<tbody>'
       + items.map(function (r) {
           stt++;
-          var remaining = toQty(r.remaining_quantity);
+          var _baseQty = toQty(r.contract_quantity_total) || toQty(r.so_luong) || toQty(r.quantity) || 0;
+          var remaining = Math.max(_baseQty - (toQty(r.delivered_quantity_total) || 0), 0);
           var td  = 'style="font-size:12px;padding:3px 6px;vertical-align:middle"';
           var tdr = 'style="font-size:12px;padding:3px 6px;vertical-align:middle;text-align:right"';
           var tdc = 'style="font-size:12px;padding:3px 6px;vertical-align:middle;text-align:center"';
@@ -742,7 +745,7 @@
             + '<td ' + td  + ' style="font-size:11px;padding:3px 6px;vertical-align:middle">' + API.esc(r.thong_so_ky_thuat || '') + '</td>'
             + '<td ' + td  + ' style="font-size:11px;padding:3px 6px;vertical-align:middle">' + API.esc(r.vat_lieu || '') + '</td>'
             + '<td ' + tdc + '>' + API.esc(val(r, 'unit', 'don_vi') || '') + '</td>'
-            + '<td ' + tdr + '>' + API.esc(formatQty(r.contract_quantity_total) || '0') + '</td>'
+            + '<td ' + tdr + '>' + API.esc(formatQty(_baseQty) || '0') + '</td>'
             + '<td ' + tdr + ' style="font-size:11px;text-align:right;padding:3px 6px;vertical-align:middle">' + price + '</td>'
             + '<td ' + tdc + '>' + dlCell(r.delivery_deadline_date) + '</td>'
             + '<td ' + tdr + '>' + API.esc(formatQty(r.delivered_quantity_total) || '0') + '</td>'
