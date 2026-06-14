@@ -4,6 +4,20 @@ function parseCursor(cursor) {
   return idx === -1 ? { pk: cursor, sortVal: undefined } : { pk: cursor.slice(idx + 3), sortVal: cursor.slice(0, idx) };
 }
 
+function addDaysYmd(dateStr, days) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+function todayYmdVN(date = new Date()) {
+  const vn = new Date(date.toLocaleString('en-US', { timeZone: 'Asia/Ho_Chi_Minh' }));
+  const y = vn.getFullYear();
+  const m = String(vn.getMonth() + 1).padStart(2, '0');
+  const d = String(vn.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 const ITEM_SORT = {
   stt:                      { col: 'i.stt_goc',                    rowKey: 'stt_goc',                    type: 'text' },
   ten_goi:                  { col: 'r.ten_goi',                    rowKey: 'ten_goi',                    type: 'text' },
@@ -39,6 +53,15 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
   const sort = ITEM_SORT[sortBy] || null;
   const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
   const op  = dir === 'ASC' ? '>' : '<';
+  const today = todayYmdVN();
+  const due7 = addDaysYmd(today, 7);
+  const due15 = addDaysYmd(today, 15);
+  const due30 = addDaysYmd(today, 30);
+  const remainingExpr = `CASE
+           WHEN COALESCE(ct.contract_quantity_total, 0) - COALESCE(dt.delivered_quantity_total, 0) > 0
+           THEN COALESCE(ct.contract_quantity_total, 0) - COALESCE(dt.delivered_quantity_total, 0)
+           ELSE 0
+         END`;
 
   const binds = [];
   const where = [];
@@ -132,6 +155,17 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
            AND dn.status = 'active'
            AND dni.rfq_item_id IN (SELECT rfq_item_id FROM page)
          GROUP BY dni.rfq_item_id
+       ),
+       deadline_summary AS (
+         SELECT
+           ci.rfq_item_id,
+           MIN(ci.delivery_deadline_date) AS delivery_deadline_date
+         FROM contract_items ci
+         WHERE ci.status = 'active'
+           AND ci.delivery_deadline_date IS NOT NULL
+           AND ci.delivery_deadline_date != ''
+           AND ci.rfq_item_id IN (SELECT rfq_item_id FROM page)
+         GROUP BY ci.rfq_item_id
        )
        SELECT page.*,
          COALESCE(ltc.clarification_count, 0) AS clarification_count,
@@ -139,11 +173,22 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
          ltc.title AS latest_clarification_title,
          COALESCE(ct.contract_quantity_total, 0) AS contract_quantity_total,
          COALESCE(dt.delivered_quantity_total, 0) AS delivered_quantity_total,
+         ${remainingExpr} AS remaining_quantity,
+         ds.delivery_deadline_date AS delivery_deadline_date,
          CASE
-           WHEN COALESCE(ct.contract_quantity_total, 0) - COALESCE(dt.delivered_quantity_total, 0) > 0
-           THEN COALESCE(ct.contract_quantity_total, 0) - COALESCE(dt.delivered_quantity_total, 0)
-           ELSE 0
-         END AS remaining_quantity,
+           WHEN ds.delivery_deadline_date IS NOT NULL AND ds.delivery_deadline_date != ''
+           THEN CAST(julianday(ds.delivery_deadline_date) - julianday(?) AS INTEGER)
+           ELSE NULL
+         END AS delivery_deadline_days_left,
+         CASE
+           WHEN ${remainingExpr} <= 0 THEN 'delivered_done'
+           WHEN ds.delivery_deadline_date IS NULL OR ds.delivery_deadline_date = '' THEN 'no_deadline'
+           WHEN ds.delivery_deadline_date < ? THEN 'overdue'
+           WHEN ds.delivery_deadline_date <= ? THEN 'due_7'
+           WHEN ds.delivery_deadline_date <= ? THEN 'due_15'
+           WHEN ds.delivery_deadline_date <= ? THEN 'due_30'
+           ELSE 'future'
+         END AS delivery_deadline_status,
          (SELECT COUNT(*) FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived') AS quote_count,
          (SELECT MIN(sq.price_vnd_incl_tax) FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived' AND sq.price_vnd_incl_tax > 0) AS min_price_vnd_incl_tax,
          (SELECT JSON_GROUP_ARRAY(JSON_OBJECT('p', sub.p, 'n', sub.n)) FROM (SELECT sq.price_vnd_incl_tax AS p, COALESCE(sq.supplier_name,'') AS n FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived' AND sq.price_vnd_incl_tax > 0 ORDER BY sq.price_vnd_incl_tax ASC LIMIT 6) sub) AS quote_prices_json,
@@ -153,8 +198,9 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
        LEFT JOIN tc_latest ltc ON ltc.rfq_item_id = page.rfq_item_id AND ltc.rn = 1
        LEFT JOIN contract_totals ct ON ct.rfq_item_id = page.rfq_item_id
        LEFT JOIN delivery_totals dt ON dt.rfq_item_id = page.rfq_item_id
+       LEFT JOIN deadline_summary ds ON ds.rfq_item_id = page.rfq_item_id
        ORDER BY ${outerOrderBy}`
-    ).bind(...binds, limit + 1).all(),
+    ).bind(...binds, limit + 1, today, today, due7, due15, due30).all(),
   ]);
 
   const totalCount = Number(countRow?.total ?? 0);

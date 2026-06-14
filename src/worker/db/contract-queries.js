@@ -105,13 +105,15 @@ export async function insertContractItemSQL(db, row) {
       contract_item_id, contract_id, rfq_item_id, item_id, line_no,
       ma_vat_tu, ten_vat_tu, required_model, manufacturer, brand,
       origin_country, unit, contract_quantity, contract_unit_price, contract_line_total,
+      delivery_lead_days, delivery_trigger_type, delivery_trigger_date, delivery_deadline_date,
       supplier_id, supplier_name, source_quote_id, status, note,
       created_at, updated_at, archived_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     row.contract_item_id, row.contract_id, row.rfq_item_id, row.item_id, row.line_no,
     row.ma_vat_tu, row.ten_vat_tu, row.required_model, row.manufacturer, row.brand,
     row.origin_country, row.unit, row.contract_quantity, row.contract_unit_price, row.contract_line_total,
+    row.delivery_lead_days, row.delivery_trigger_type, row.delivery_trigger_date, row.delivery_deadline_date,
     row.supplier_id, row.supplier_name, row.source_quote_id, row.status, row.note,
     row.created_at, row.updated_at, row.archived_at
   ).run();
@@ -127,12 +129,14 @@ export async function updateContractItemSQL(db, row) {
       line_no = ?, ma_vat_tu = ?, ten_vat_tu = ?, required_model = ?,
       manufacturer = ?, brand = ?, origin_country = ?, unit = ?,
       contract_quantity = ?, contract_unit_price = ?, contract_line_total = ?,
+      delivery_lead_days = ?, delivery_trigger_type = ?, delivery_trigger_date = ?, delivery_deadline_date = ?,
       supplier_id = ?, supplier_name = ?, source_quote_id = ?, note = ?, updated_at = ?
      WHERE contract_item_id = ?`
   ).bind(
     row.line_no, row.ma_vat_tu, row.ten_vat_tu, row.required_model,
     row.manufacturer, row.brand, row.origin_country, row.unit,
     row.contract_quantity, row.contract_unit_price, row.contract_line_total,
+    row.delivery_lead_days, row.delivery_trigger_type, row.delivery_trigger_date, row.delivery_deadline_date,
     row.supplier_id, row.supplier_name, row.source_quote_id, row.note, row.updated_at,
     row.contract_item_id
   ).run();

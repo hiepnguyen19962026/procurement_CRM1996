@@ -22,6 +22,7 @@ import { clampLimit, json, makeId, nowIso, readJson } from '../lib/utils.js';
 
 const VALID_CURRENCY = new Set(['VND', 'USD', 'EUR', 'JPY', 'CNY', 'SGD', 'KRW']);
 const VALID_STATUS   = new Set(['active', 'archived']);
+const VALID_DELIVERY_TRIGGER_TYPE = new Set(['contract_sign', 'award_notice', 'delivery_notice', 'po_date', 'manual']);
 const DATE_RE        = /^\d{4}-\d{2}-\d{2}$/;
 
 export async function handleContracts(action, request, env, ctx, actor) {
@@ -157,17 +158,23 @@ async function saveContract(request, env, ctx, actor, isUpdate) {
   if (isUpdate) {
     await updateContractSQL(env.DB, contract);
   } else {
+    const rawItems = Array.isArray(body.items) ? body.items : [];
+    const contractItems = [];
+    for (const p of rawItems) {
+      const ci = await buildContractItem(env.DB, contract.contract_id, p, now, contract);
+      if (!ci) continue;
+      if (ci.delivery_error) return json({ ok: false, error: ci.delivery_error }, 400);
+      contractItems.push(ci);
+    }
+
     await insertContractSQL(env.DB, contract);
 
     // Insert items if provided.
-    const rawItems = Array.isArray(body.items) ? body.items : [];
-    for (const p of rawItems) {
-      const ci = await buildContractItem(env.DB, contract.contract_id, p, now);
-      if (!ci) continue;
+    for (const ci of contractItems) {
       await insertContractItemSQL(env.DB, ci);
     }
 
-    if (rawItems.length > 0) {
+    if (contractItems.length > 0) {
       contract.contract_total = await recalcContractTotalSQL(env.DB, contract.contract_id, now);
     }
   }
@@ -219,8 +226,9 @@ async function addItem(request, env, ctx, actor) {
   if (!contract) return json({ ok: false, error: 'Khong tim thay hop dong' }, 404);
   if (contract.status === 'archived') return json({ ok: false, error: 'Hop dong da luu tru' }, 400);
   const now = nowIso();
-  const ci = await buildContractItem(env.DB, contractId, body, now);
+  const ci = await buildContractItem(env.DB, contractId, body, now, contract);
   if (!ci) return json({ ok: false, error: 'ten_vat_tu la bat buoc' }, 400);
+  if (ci.delivery_error) return json({ ok: false, error: ci.delivery_error }, 400);
   await insertContractItemSQL(env.DB, ci);
   const newTotal = await recalcContractTotalSQL(env.DB, contractId, now);
   ctx.waitUntil(writeActionLog(env, {
@@ -251,6 +259,9 @@ async function updateItem(request, env, ctx, actor) {
   const qty   = cleanNumber(body.contractQuantity  ?? body.contract_quantity  ?? old.contract_quantity);
   const price = Math.round(cleanNumber(body.contractUnitPrice ?? body.contract_unit_price ?? old.contract_unit_price));
   const line  = Math.round(cleanNumber(body.contractLineTotal ?? body.contract_line_total ?? (qty * price))) || Math.round(qty * price);
+  const contract = await getContractSQL(env.DB, old.contract_id);
+  const deadline = buildDeliveryDeadlineFields(body, old, contract);
+  if (!deadline.ok) return json({ ok: false, error: deadline.error }, 400);
   const updated = {
     contract_item_id:    contractItemId,
     line_no:             cleanString(body.lineNo || body.line_no || old.line_no || '', 40),
@@ -264,6 +275,7 @@ async function updateItem(request, env, ctx, actor) {
     contract_quantity:   qty,
     contract_unit_price: price,
     contract_line_total: line,
+    ...deadline.fields,
     supplier_id:         cleanString(body.supplierId || body.supplier_id || old.supplier_id || '', 80) || null,
     supplier_name:       cleanString(body.supplierName || body.supplier_name || old.supplier_name || '', 180),
     source_quote_id:     cleanString(body.sourceQuoteId || body.source_quote_id || old.source_quote_id || '', 80) || null,
@@ -353,14 +365,16 @@ async function createFromRfqItem(request, env, ctx, actor) {
     updated_at:    now,
     archived_at:   null,
   };
-  await insertContractSQL(env.DB, contract);
 
   // Build the one contract item from rfq_item snapshot + optional source_quote.
   const ci = await buildContractItem(env.DB, contract.contract_id, {
     ...body,
     rfqItemId,
     tenVatTu: rfqItem.ten_vat_tu,
-  }, now);
+  }, now, contract);
+  if (ci?.delivery_error) return json({ ok: false, error: ci.delivery_error }, 400);
+
+  await insertContractSQL(env.DB, contract);
   if (ci) {
     await insertContractItemSQL(env.DB, ci);
     contract.contract_total = await recalcContractTotalSQL(env.DB, contract.contract_id, now);
@@ -383,7 +397,7 @@ async function createFromRfqItem(request, env, ctx, actor) {
 // Copies rfq_item snapshot when rfqItemId given.
 // Copies supplier/price from source quote when sourceQuoteId given.
 // Returns null if ten_vat_tu is empty after all sources.
-async function buildContractItem(db, contractId, p, now) {
+async function buildContractItem(db, contractId, p, now, contract = null) {
   // Start with explicit fields from payload.
   let maVatTu    = cleanString(p.maVatTu    || p.ma_vat_tu    || '', 120);
   let tenVatTu   = cleanString(p.tenVatTu   || p.ten_vat_tu   || '', 500);
@@ -434,6 +448,8 @@ async function buildContractItem(db, contractId, p, now) {
   const lineTotal = Math.round(
     cleanNumber(p.contractLineTotal ?? p.contract_line_total ?? (qty * price))
   ) || Math.round(qty * price);
+  const deadline = buildDeliveryDeadlineFields(p, null, contract);
+  if (!deadline.ok) return { delivery_error: deadline.error };
 
   return {
     contract_item_id:    makeId('CI'),
@@ -451,6 +467,7 @@ async function buildContractItem(db, contractId, p, now) {
     contract_quantity:   qty,
     contract_unit_price: price,
     contract_line_total: lineTotal,
+    ...deadline.fields,
     supplier_id:         supplierId,
     supplier_name:       supplierName || null,
     source_quote_id:     sourceQuoteId,
@@ -465,4 +482,107 @@ async function buildContractItem(db, contractId, p, now) {
 function validateDate(value) {
   const s = cleanString(value || '', 20);
   return DATE_RE.test(s) ? s : '';
+}
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key);
+}
+
+function pickPayloadValue(obj, keys) {
+  for (const key of keys) {
+    if (hasOwn(obj, key)) return { present: true, value: obj[key] };
+  }
+  return { present: false, value: undefined };
+}
+
+function optionalDate(value, fieldName) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: null };
+  const s = cleanString(value, 20);
+  if (!s) return { ok: true, value: null };
+  if (!DATE_RE.test(s)) return { ok: false, error: `${fieldName} khong hop le` };
+  return { ok: true, value: s };
+}
+
+function optionalLeadDays(value) {
+  if (value === undefined || value === null || value === '') return { ok: true, value: null };
+  const raw = String(value).trim();
+  if (!raw) return { ok: true, value: null };
+  const n = Number(raw);
+  if (!Number.isInteger(n) || n < 0) {
+    return { ok: false, error: 'So ngay giao hang phai la so nguyen >= 0' };
+  }
+  return { ok: true, value: n };
+}
+
+function addDaysYmd(dateStr, days) {
+  if (!DATE_RE.test(String(dateStr || '')) || days === null || days === undefined) return null;
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  d.setUTCDate(d.getUTCDate() + Number(days));
+  return d.toISOString().slice(0, 10);
+}
+
+function buildDeliveryDeadlineFields(payload, oldItem = null, contract = null) {
+  const leadRaw = pickPayloadValue(payload, ['deliveryLeadDays', 'delivery_lead_days']);
+  const typeRaw = pickPayloadValue(payload, ['deliveryTriggerType', 'delivery_trigger_type']);
+  const triggerDateRaw = pickPayloadValue(payload, ['deliveryTriggerDate', 'delivery_trigger_date']);
+  const deadlineDateRaw = pickPayloadValue(payload, ['deliveryDeadlineDate', 'delivery_deadline_date']);
+  const hasDeadlinePayload = leadRaw.present || typeRaw.present || triggerDateRaw.present || deadlineDateRaw.present;
+
+  if (!hasDeadlinePayload && oldItem) {
+    return {
+      ok: true,
+      fields: {
+        delivery_lead_days: oldItem.delivery_lead_days ?? null,
+        delivery_trigger_type: oldItem.delivery_trigger_type || null,
+        delivery_trigger_date: oldItem.delivery_trigger_date || null,
+        delivery_deadline_date: oldItem.delivery_deadline_date || null,
+      },
+    };
+  }
+
+  const lead = leadRaw.present ? optionalLeadDays(leadRaw.value) : { ok: true, value: oldItem?.delivery_lead_days ?? null };
+  if (!lead.ok) return lead;
+
+  const triggerType = typeRaw.present
+    ? cleanString(typeRaw.value || '', 40) || null
+    : (oldItem?.delivery_trigger_type || null);
+  if (triggerType && !VALID_DELIVERY_TRIGGER_TYPE.has(triggerType)) {
+    return { ok: false, error: 'Loai moc tinh deadline giao hang khong hop le' };
+  }
+
+  const triggerDate = triggerDateRaw.present
+    ? optionalDate(triggerDateRaw.value, 'Ngay moc tinh deadline giao hang')
+    : { ok: true, value: oldItem?.delivery_trigger_date || null };
+  if (!triggerDate.ok) return triggerDate;
+
+  const directDeadline = deadlineDateRaw.present
+    ? optionalDate(deadlineDateRaw.value, 'Ngay deadline giao hang')
+    : { ok: true, value: oldItem?.delivery_deadline_date || null };
+  if (!directDeadline.ok) return directDeadline;
+
+  let deadlineDate = directDeadline.value || null;
+  const leadDays = lead.value;
+  const baseTriggerDate = triggerDate.value || null;
+
+  if (triggerType === 'contract_sign') {
+    const baseDate = baseTriggerDate || validateDate(contract?.signed_date || '');
+    deadlineDate = baseDate && leadDays !== null ? addDaysYmd(baseDate, leadDays) : null;
+  } else if (triggerType === 'award_notice' || triggerType === 'delivery_notice' || triggerType === 'po_date') {
+    deadlineDate = baseTriggerDate && leadDays !== null ? addDaysYmd(baseTriggerDate, leadDays) : null;
+  } else if (triggerType === 'manual') {
+    if (!deadlineDate && baseTriggerDate && leadDays !== null) {
+      deadlineDate = addDaysYmd(baseTriggerDate, leadDays);
+    }
+  }
+
+  return {
+    ok: true,
+    fields: {
+      delivery_lead_days: leadDays,
+      delivery_trigger_type: triggerType,
+      delivery_trigger_date: baseTriggerDate,
+      delivery_deadline_date: deadlineDate,
+    },
+  };
 }
