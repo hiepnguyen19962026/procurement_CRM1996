@@ -14,6 +14,7 @@
   var _rfqListCache = [];
   var _rfqAutocompleteInit = false;
   var _exportColPanelInit = false;
+  var _lastFilterParams = {};
 
   // Must mirror EXPORT_COL_HEADERS in src/worker/handlers/rfq-items.js
   var EXPORT_ALL_COLS = [
@@ -169,6 +170,11 @@
         limit: limit,
       };
       if (sort.by) { params.sortBy = sort.by; params.sortDir = sort.dir; }
+      _lastFilterParams = {
+        q: params.q, q2: params.q2, q3: params.q3,
+        rfqId: params.rfqId, status: params.status, techFilter: params.techFilter,
+        sortBy: sort.by || '', sortDir: sort.dir || '',
+      };
       var data = await API.get('getRfqItems', params);
       state.rows = reset ? data.rows : state.rows.concat(data.rows || []);
       state.cursor = data.nextCursor || '';
@@ -2377,23 +2383,24 @@
     ];
   }
 
+  function getCurrentFilterParams() {
+    return {
+      q: _lastFilterParams.q || '',
+      q2: _lastFilterParams.q2 || '',
+      q3: _lastFilterParams.q3 || '',
+      rfqId: _lastFilterParams.rfqId || '',
+      status: _lastFilterParams.status || '',
+      techFilter: _lastFilterParams.techFilter || '',
+      sortBy: _lastFilterParams.sortBy || '',
+      sortDir: _lastFilterParams.sortDir || '',
+    };
+  }
+
   async function exportCsv(template) {
     var tpl = template || 'chung';
-    var statusEl = document.getElementById('itemStatus');
-    var techEl = document.getElementById('itemTechFilter');
     var selectedIds = _getSelectedItemIds();
     var cols = tpl === 'chung' ? _getExportCols() : [];
-    var params = {
-      rfqId: _selectedRfqId,
-      q: state.q || '',
-      q2: state.q2 || '',
-      q3: state.q3 || '',
-      status: statusEl ? statusEl.value : '',
-      techFilter: techEl ? techEl.value : '',
-      sortBy: sort.by || '',
-      sortDir: sort.dir || '',
-      exportTemplate: tpl,
-    };
+    var params = Object.assign({}, getCurrentFilterParams(), { exportTemplate: tpl });
     if (selectedIds.length) params.selectedIds = selectedIds;
     if (cols.length) params.cols = cols;
     try {
@@ -2479,21 +2486,9 @@
 
   async function exportExcel(template) {
     var tpl = template || 'chung';
-    var statusEl = document.getElementById('itemStatus');
-    var techEl = document.getElementById('itemTechFilter');
     var selectedIds = _getSelectedItemIds();
     var cols = tpl === 'chung' ? _getExportCols() : [];
-    var params = {
-      rfqId: _selectedRfqId,
-      q: state.q || '',
-      q2: state.q2 || '',
-      q3: state.q3 || '',
-      status: statusEl ? statusEl.value : '',
-      techFilter: techEl ? techEl.value : '',
-      sortBy: sort.by || '',
-      sortDir: sort.dir || '',
-      exportTemplate: tpl,
-    };
+    var params = Object.assign({}, getCurrentFilterParams(), { exportTemplate: tpl });
     if (selectedIds.length) params.selectedIds = selectedIds;
     if (cols.length) params.cols = cols;
     try {
