@@ -132,7 +132,8 @@
       th.onclick = function () {
         if (sort.by === key) { sort.dir = sort.dir === 'asc' ? 'desc' : 'asc'; }
         else { sort.by = key; sort.dir = 'asc'; }
-        load(true);
+        if (isDeliverySortKey(key)) render();
+        else load(true);
       };
     });
   }
