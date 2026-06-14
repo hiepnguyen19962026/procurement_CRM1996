@@ -50,6 +50,7 @@ export async function listDeliveryNotesSQL(db, params) {
             c.contract_no, c.contract_name,
             cl.client_name,
             COALESCE(SUM(CASE WHEN dni.status = 'active' THEN dni.delivered_quantity ELSE 0 END), 0) AS delivered_quantity_total,
+            COALESCE(SUM(CASE WHEN dni.status = 'active' THEN dni.accepted_quantity  ELSE 0 END), 0) AS accepted_quantity_total,
             COUNT(CASE WHEN dni.status = 'active' THEN 1 END) AS item_count
      FROM delivery_notes dn
      LEFT JOIN rfqs r ON r.rfq_id = dn.rfq_id
@@ -178,4 +179,39 @@ export async function archiveDeliveryNoteItemSQL(db, deliveryNoteItemId, now) {
     `UPDATE delivery_note_items SET status = 'archived', archived_at = ?, updated_at = ?
      WHERE delivery_note_item_id = ? AND status = 'active'`
   ).bind(now, now, deliveryNoteItemId).run();
+}
+
+// Update acceptance header + all item rows in one batch.
+// header: { acceptance_date, acceptance_status, acceptance_note, payment_request_status, payment_request_date }
+// itemRows: [{ delivery_note_item_id, accepted_quantity, acceptance_status, rejection_reason, warranty_days, warranty_start_date, warranty_end_date }]
+export async function recordAcceptanceSQL(db, noteId, header, itemRows, now) {
+  const stmts = [
+    db.prepare(
+      `UPDATE delivery_notes SET
+         acceptance_date = ?, acceptance_status = ?, acceptance_note = ?,
+         payment_request_status = ?, payment_request_date = ?,
+         updated_at = ?
+       WHERE delivery_note_id = ? AND status = 'active'`
+    ).bind(
+      header.acceptance_date, header.acceptance_status, header.acceptance_note,
+      header.payment_request_status, header.payment_request_date,
+      now, noteId
+    ),
+  ];
+  for (const it of itemRows) {
+    stmts.push(
+      db.prepare(
+        `UPDATE delivery_note_items SET
+           accepted_quantity = ?, acceptance_status = ?, rejection_reason = ?,
+           warranty_days = ?, warranty_start_date = ?, warranty_end_date = ?,
+           updated_at = ?
+         WHERE delivery_note_item_id = ? AND delivery_note_id = ? AND status = 'active'`
+      ).bind(
+        it.accepted_quantity, it.acceptance_status, it.rejection_reason,
+        it.warranty_days, it.warranty_start_date, it.warranty_end_date,
+        now, it.delivery_note_item_id, noteId
+      )
+    );
+  }
+  return db.batch(stmts);
 }

@@ -166,6 +166,18 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
            AND ci.delivery_deadline_date != ''
            AND ci.rfq_item_id IN (SELECT rfq_item_id FROM page)
          GROUP BY ci.rfq_item_id
+       ),
+       acceptance_totals AS (
+         SELECT
+           dni.rfq_item_id,
+           COALESCE(SUM(CASE WHEN dni.acceptance_status = 'accepted' THEN dni.accepted_quantity ELSE 0 END), 0) AS accepted_quantity_total,
+           MIN(CASE WHEN dni.warranty_end_date IS NOT NULL AND dni.warranty_end_date != '' THEN dni.warranty_end_date END) AS earliest_warranty_end
+         FROM delivery_note_items dni
+         JOIN delivery_notes dn ON dn.delivery_note_id = dni.delivery_note_id
+         WHERE dni.status = 'active'
+           AND dn.status = 'active'
+           AND dni.rfq_item_id IN (SELECT rfq_item_id FROM page)
+         GROUP BY dni.rfq_item_id
        )
        SELECT page.*,
          COALESCE(ltc.clarification_count, 0) AS clarification_count,
@@ -192,6 +204,19 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
          (SELECT COUNT(*) FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived') AS quote_count,
          (SELECT MIN(sq.price_vnd_incl_tax) FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived' AND sq.price_vnd_incl_tax > 0) AS min_price_vnd_incl_tax,
          (SELECT JSON_GROUP_ARRAY(JSON_OBJECT('p', sub.p, 'n', sub.n)) FROM (SELECT sq.price_vnd_incl_tax AS p, COALESCE(sq.supplier_name,'') AS n FROM supplier_quotes sq WHERE sq.rfq_item_id = page.rfq_item_id AND sq.status != 'archived' AND sq.price_vnd_incl_tax > 0 ORDER BY sq.price_vnd_incl_tax ASC LIMIT 6) sub) AS quote_prices_json,
+         COALESCE(at.accepted_quantity_total, 0) AS accepted_quantity_total,
+         CASE
+           WHEN COALESCE(dt.delivered_quantity_total, 0) - COALESCE(at.accepted_quantity_total, 0) > 0
+           THEN COALESCE(dt.delivered_quantity_total, 0) - COALESCE(at.accepted_quantity_total, 0)
+           ELSE 0
+         END AS pending_acceptance_quantity,
+         at.earliest_warranty_end AS warranty_end_date,
+         CASE
+           WHEN at.earliest_warranty_end IS NULL OR at.earliest_warranty_end = '' THEN 'no_warranty'
+           WHEN at.earliest_warranty_end < ? THEN 'expired'
+           WHEN at.earliest_warranty_end <= ? THEN 'expiring_30'
+           ELSE 'active'
+         END AS warranty_status,
          (SELECT COUNT(*) FROM media_files mf WHERE mf.owner_type = 'rfq_item' AND mf.owner_id = page.rfq_item_id AND mf.file_kind = 'item_image') AS image_count,
          (SELECT COUNT(*) FROM media_files mf WHERE mf.owner_type = 'rfq_item' AND mf.owner_id = page.rfq_item_id AND mf.file_kind = 'document_pdf') AS file_count
        FROM page
@@ -199,8 +224,9 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
        LEFT JOIN contract_totals ct ON ct.rfq_item_id = page.rfq_item_id
        LEFT JOIN delivery_totals dt ON dt.rfq_item_id = page.rfq_item_id
        LEFT JOIN deadline_summary ds ON ds.rfq_item_id = page.rfq_item_id
+       LEFT JOIN acceptance_totals at ON at.rfq_item_id = page.rfq_item_id
        ORDER BY ${outerOrderBy}`
-    ).bind(...binds, limit + 1, today, today, due7, due15, due30).all(),
+    ).bind(...binds, limit + 1, today, today, due7, due15, due30, today, due30).all(),
   ]);
 
   const totalCount = Number(countRow?.total ?? 0);

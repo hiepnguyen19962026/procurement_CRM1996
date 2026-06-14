@@ -9,6 +9,7 @@ import {
   insertDeliveryNoteSQL,
   listDeliveryNotesSQL,
   nextDeliveryNoteNoSQL,
+  recordAcceptanceSQL,
   updateDeliveryNoteItemSQL,
   updateDeliveryNoteSQL,
 } from '../db/delivery-queries.js';
@@ -23,6 +24,9 @@ import { clampLimit, json, makeId, nowIso, readJson } from '../lib/utils.js';
 
 const VALID_STATUS    = new Set(['active', 'archived']);
 const VALID_NOTE_TYPES = new Set(['delivery', 'return']);
+const VALID_ACCEPTANCE_STATUSES      = new Set(['pending', 'accepted', 'partial', 'rejected']);
+const VALID_ACCEPTANCE_ITEM_STATUSES = new Set(['pending', 'accepted', 'rejected']);
+const VALID_PAYMENT_STATUSES         = new Set(['not_ready', 'ready', 'requested', 'paid']);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DASHBOARD_KEYS = ['dashboard:v1', 'dashboard:v2'];
 
@@ -36,6 +40,7 @@ export async function handleDelivery(action, request, env, ctx, actor) {
   if (action === 'addDeliveryNoteItem')        return saveItem(request, env, ctx, actor, false);
   if (action === 'updateDeliveryNoteItem')     return saveItem(request, env, ctx, actor, true);
   if (action === 'archiveDeliveryNoteItem')    return archiveItem(request, env, ctx, actor);
+  if (action === 'recordDeliveryAcceptance')   return recordAcceptance(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown delivery action' }, 400);
 }
 
@@ -347,4 +352,86 @@ async function buildDeliveryItem(db, p, now, oldItem = null) {
 function validateDate(value) {
   const s = cleanString(value || '', 20);
   return DATE_RE.test(s) ? s : '';
+}
+
+function addDays(isoDate, days) {
+  const d = new Date(isoDate + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+async function recordAcceptance(request, env, ctx, actor) {
+  const denied = requireRole(actor, WRITE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const now  = nowIso();
+
+  const deliveryNoteId = cleanString(body.deliveryNoteId || body.delivery_note_id || '', 80);
+  if (!deliveryNoteId) return json({ ok: false, error: 'Thieu ma phieu giao hang' }, 400);
+
+  const note = await getDeliveryNoteSQL(env.DB, deliveryNoteId);
+  if (!note) return json({ ok: false, error: 'Khong tim thay phieu giao hang' }, 404);
+  if (note.status === 'archived') return json({ ok: false, error: 'Phieu da luu tru, khong sua duoc' }, 400);
+
+  // Validate + normalize item rows
+  const rawItems = Array.isArray(body.items) ? body.items : [];
+  if (!rawItems.length) return json({ ok: false, error: 'Khong co dong vat tu nao' }, 400);
+
+  const itemRows = [];
+  for (const raw of rawItems) {
+    const id     = cleanString(raw.deliveryNoteItemId || raw.delivery_note_item_id || '', 80);
+    if (!id) return json({ ok: false, error: 'Thieu delivery_note_item_id' }, 400);
+    const rawStatus = cleanString(raw.acceptanceStatus || raw.acceptance_status || 'pending', 20);
+    const itemStatus = VALID_ACCEPTANCE_ITEM_STATUSES.has(rawStatus) ? rawStatus : 'pending';
+    const acceptedQty = Math.max(0, cleanNumber(raw.acceptedQuantity ?? raw.accepted_quantity ?? 0));
+    const warrantyDays  = raw.warrantyDays != null ? Math.max(0, parseInt(raw.warrantyDays, 10) || 0) : null;
+    const warrantyStart = validateDate(raw.warrantyStartDate || raw.warranty_start_date || '');
+    let warrantyEnd     = validateDate(raw.warrantyEndDate   || raw.warranty_end_date   || '');
+    if (warrantyDays && warrantyStart && !warrantyEnd) warrantyEnd = addDays(warrantyStart, warrantyDays);
+    itemRows.push({
+      delivery_note_item_id: id,
+      accepted_quantity:     itemStatus === 'rejected' ? 0 : acceptedQty,
+      acceptance_status:     itemStatus,
+      rejection_reason:      cleanString(raw.rejectionReason || raw.rejection_reason || '', 500) || null,
+      warranty_days:         warrantyDays || null,
+      warranty_start_date:   warrantyStart || null,
+      warranty_end_date:     warrantyEnd   || null,
+    });
+  }
+
+  // Derive header acceptance_status from items
+  const allAccepted = itemRows.every(r => r.acceptance_status === 'accepted');
+  const allRejected = itemRows.every(r => r.acceptance_status === 'rejected');
+  const anyPending  = itemRows.some(r => r.acceptance_status === 'pending');
+  let headerStatus = anyPending ? 'pending'
+    : allAccepted ? 'accepted'
+    : allRejected ? 'rejected'
+    : 'partial';
+
+  const acceptanceDate = validateDate(body.acceptanceDate || body.acceptance_date || '') || now.slice(0, 10);
+  const totalAccepted  = itemRows.reduce((s, r) => s + (r.accepted_quantity || 0), 0);
+  const paymentStatus  = (headerStatus === 'accepted' || headerStatus === 'partial') && totalAccepted > 0
+    ? 'ready' : 'not_ready';
+
+  const header = {
+    acceptance_date:        acceptanceDate,
+    acceptance_status:      headerStatus,
+    acceptance_note:        cleanString(body.acceptanceNote || body.acceptance_note || '', 2000) || null,
+    payment_request_status: paymentStatus,
+    payment_request_date:   paymentStatus === 'ready' ? acceptanceDate : null,
+  };
+
+  await recordAcceptanceSQL(env.DB, deliveryNoteId, header, itemRows, now);
+
+  ctx.waitUntil(invalidateKv(env, DASHBOARD_KEYS));
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'recordDeliveryAcceptance',
+    entityType: 'delivery_note',
+    entityId: deliveryNoteId,
+    message: `Ghi nghiem thu phieu ${note.delivery_note_no}: ${headerStatus}, ${totalAccepted} SL da NT`,
+    oldJson: note,
+    newJson: { ...header, deliveryNoteId, itemCount: itemRows.length },
+    actor,
+  }));
+  return json({ ok: true, acceptanceStatus: headerStatus, paymentRequestStatus: paymentStatus });
 }
