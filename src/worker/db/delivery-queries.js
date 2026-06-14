@@ -78,11 +78,51 @@ export async function getDeliveryNoteSQL(db, deliveryNoteId) {
 
 export async function getDeliveryNoteItemsSQL(db, deliveryNoteId) {
   const res = await db.prepare(
-    `SELECT dni.*, ci.contract_quantity, ci.contract_unit_price, ci.contract_line_total
+    `WITH cumulative AS (
+       SELECT x.rfq_item_id,
+              COALESCE(SUM(x.delivered_quantity), 0) AS cumulative_delivered_qty
+       FROM delivery_note_items x
+       JOIN delivery_notes xdn ON xdn.delivery_note_id = x.delivery_note_id
+       WHERE x.rfq_item_id IN (SELECT rfq_item_id FROM delivery_note_items WHERE delivery_note_id = ?)
+         AND x.status = 'active' AND xdn.status = 'active'
+       GROUP BY x.rfq_item_id
+     ),
+     clar_ranked AS (
+       SELECT tc.rfq_item_id, tc.title,
+              COUNT(*) OVER (PARTITION BY tc.rfq_item_id) AS clarification_count,
+              ROW_NUMBER() OVER (PARTITION BY tc.rfq_item_id ORDER BY tc.created_at DESC, tc.sequence_no DESC) AS rn
+       FROM technical_clarifications tc
+       WHERE tc.deleted_at IS NULL
+         AND tc.rfq_item_id IN (SELECT rfq_item_id FROM delivery_note_items WHERE delivery_note_id = ?)
+     ),
+     clar_summary AS (
+       SELECT rfq_item_id, title AS latest_clarification_title, clarification_count
+       FROM clar_ranked WHERE rn = 1
+     )
+     SELECT dni.*,
+            ci.contract_quantity, ci.contract_unit_price, ci.contract_line_total,
+            ci.delivery_deadline_date,
+            ri.stt_goc, ri.hang_final, ri.quy_cach_final, ri.vat_lieu, ri.thong_so_ky_thuat,
+            COALESCE(cu.cumulative_delivered_qty, 0) AS cumulative_delivered_qty,
+            COALESCE(cs.clarification_count, 0)      AS clarification_count,
+            cs.latest_clarification_title
      FROM delivery_note_items dni
-     LEFT JOIN contract_items ci ON ci.contract_item_id = dni.contract_item_id
+     LEFT JOIN contract_items ci  ON ci.contract_item_id = dni.contract_item_id
+     LEFT JOIN rfq_items ri       ON ri.rfq_item_id      = dni.rfq_item_id
+     LEFT JOIN cumulative cu      ON cu.rfq_item_id      = dni.rfq_item_id
+     LEFT JOIN clar_summary cs    ON cs.rfq_item_id      = dni.rfq_item_id
      WHERE dni.delivery_note_id = ?
      ORDER BY dni.created_at ASC, dni.delivery_note_item_id ASC`
+  ).bind(deliveryNoteId, deliveryNoteId, deliveryNoteId).all();
+  return res.results || [];
+}
+
+// Lightweight: only statuses + accepted_qty — used by recordAcceptance to compute header from ALL items.
+export async function getDeliveryNoteItemStatusesSQL(db, deliveryNoteId) {
+  const res = await db.prepare(
+    `SELECT delivery_note_item_id, acceptance_status, accepted_quantity
+     FROM delivery_note_items
+     WHERE delivery_note_id = ? AND status = 'active'`
   ).bind(deliveryNoteId).all();
   return res.results || [];
 }
@@ -214,4 +254,12 @@ export async function recordAcceptanceSQL(db, noteId, header, itemRows, now) {
     );
   }
   return db.batch(stmts);
+}
+
+// Hard delete — admin only, after safety check in handler.
+export async function deleteDeliveryNoteSQL(db, deliveryNoteId) {
+  return db.batch([
+    db.prepare('DELETE FROM delivery_note_items WHERE delivery_note_id = ?').bind(deliveryNoteId),
+    db.prepare('DELETE FROM delivery_notes WHERE delivery_note_id = ?').bind(deliveryNoteId),
+  ]);
 }

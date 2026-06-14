@@ -1,9 +1,11 @@
 import {
   archiveDeliveryNoteItemSQL,
   archiveDeliveryNoteSQL,
+  deleteDeliveryNoteSQL,
   getDeliveryItemsForRfqItemSQL,
   getDeliveryNoteItemSQL,
   getDeliveryNoteItemsSQL,
+  getDeliveryNoteItemStatusesSQL,
   getDeliveryNoteSQL,
   insertDeliveryNoteItemSQL,
   insertDeliveryNoteSQL,
@@ -41,6 +43,7 @@ export async function handleDelivery(action, request, env, ctx, actor) {
   if (action === 'updateDeliveryNoteItem')     return saveItem(request, env, ctx, actor, true);
   if (action === 'archiveDeliveryNoteItem')    return archiveItem(request, env, ctx, actor);
   if (action === 'recordDeliveryAcceptance')   return recordAcceptance(request, env, ctx, actor);
+  if (action === 'deleteDeliveryNote')         return deleteNote(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown delivery action' }, 400);
 }
 
@@ -349,6 +352,41 @@ async function buildDeliveryItem(db, p, now, oldItem = null) {
   };
 }
 
+async function deleteNote(request, env, ctx, actor) {
+  // Admin only — enforced here in addition to gateway whitelist.
+  if (!actor || actor.role !== 'admin') return json({ ok: false, error: 'Chi admin moi co the xoa phieu giao hang' }, 403);
+  const body = await readJson(request);
+  const deliveryNoteId = cleanString(body.deliveryNoteId || body.delivery_note_id || '', 80);
+  if (!deliveryNoteId) return json({ ok: false, error: 'Thieu ma phieu giao hang' }, 400);
+
+  const note = await getDeliveryNoteSQL(env.DB, deliveryNoteId);
+  if (!note) return json({ ok: false, error: 'Khong tim thay phieu giao hang' }, 404);
+
+  // Block if any acceptance or payment activity exists on the header.
+  const hasActivity = (note.acceptance_status && note.acceptance_status !== 'pending')
+    || (note.payment_request_status && note.payment_request_status !== 'not_ready');
+  if (hasActivity) return json({ ok: false, error: 'Đơn giao hàng đã có nghiệm thu hoặc thanh toán, không thể xóa.' }, 400);
+
+  // Also check individual items.
+  const statuses = await getDeliveryNoteItemStatusesSQL(env.DB, deliveryNoteId);
+  const itemHasActivity = statuses.some(r => r.acceptance_status && r.acceptance_status !== 'pending');
+  if (itemHasActivity) return json({ ok: false, error: 'Đơn giao hàng đã có nghiệm thu hoặc thanh toán, không thể xóa.' }, 400);
+
+  await deleteDeliveryNoteSQL(env.DB, deliveryNoteId);
+
+  ctx.waitUntil(invalidateKv(env, DASHBOARD_KEYS));
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'deleteDeliveryNote',
+    entityType: 'delivery_note',
+    entityId: deliveryNoteId,
+    message: `Xoa vinh vien phieu giao hang ${note.delivery_note_no}`,
+    oldJson: note,
+    newJson: null,
+    actor,
+  }));
+  return json({ ok: true });
+}
+
 function validateDate(value) {
   const s = cleanString(value || '', 20);
   return DATE_RE.test(s) ? s : '';
@@ -399,17 +437,26 @@ async function recordAcceptance(request, env, ctx, actor) {
     });
   }
 
-  // Derive header acceptance_status from items
-  const allAccepted = itemRows.every(r => r.acceptance_status === 'accepted');
-  const allRejected = itemRows.every(r => r.acceptance_status === 'rejected');
-  const anyPending  = itemRows.some(r => r.acceptance_status === 'pending');
+  // Derive header status from ALL items in the note (not only submitted ones).
+  // Fetch existing items, then merge: submitted rows override, unsubmitted rows keep current state.
+  const existingStatuses = await getDeliveryNoteItemStatusesSQL(env.DB, deliveryNoteId);
+  const submittedIds = new Set(itemRows.map(r => r.delivery_note_item_id));
+  const mergedStatuses = [
+    ...existingStatuses
+      .filter(r => !submittedIds.has(r.delivery_note_item_id))
+      .map(r => ({ status: r.acceptance_status || 'pending', qty: Number(r.accepted_quantity) || 0 })),
+    ...itemRows.map(r => ({ status: r.acceptance_status, qty: Number(r.accepted_quantity) || 0 })),
+  ];
+  const allAccepted = mergedStatuses.every(r => r.status === 'accepted');
+  const allRejected = mergedStatuses.every(r => r.status === 'rejected');
+  const anyPending  = mergedStatuses.some(r => r.status === 'pending');
   let headerStatus = anyPending ? 'pending'
     : allAccepted ? 'accepted'
     : allRejected ? 'rejected'
     : 'partial';
 
   const acceptanceDate = validateDate(body.acceptanceDate || body.acceptance_date || '') || now.slice(0, 10);
-  const totalAccepted  = itemRows.reduce((s, r) => s + (r.accepted_quantity || 0), 0);
+  const totalAccepted  = mergedStatuses.reduce((s, r) => s + r.qty, 0);
   const paymentStatus  = (headerStatus === 'accepted' || headerStatus === 'partial') && totalAccepted > 0
     ? 'ready' : 'not_ready';
 
