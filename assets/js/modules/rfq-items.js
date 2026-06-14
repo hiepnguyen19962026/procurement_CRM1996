@@ -3070,9 +3070,7 @@
   function _openDonWorkflowStep1() {
     var s         = _donWorkflowState;
     var typeLabel = s.type === 'don_giao_hang' ? 'Tạo đơn giao hàng' : 'Tạo đơn trả hàng';
-    var prefix    = s.type === 'don_giao_hang' ? 'DGH' : 'DTH';
     var d         = s.deliveryDate;
-    var previewNo = prefix + '-' + d.slice(0, 4) + '-' + d.slice(5, 7) + d.slice(8, 10) + '-???';
     var first     = s.items[0] || {};
     var maGoi     = first.ma_goi_tbmt || '';
     var tenGoi    = first.ten_goi     || '';
@@ -3099,19 +3097,21 @@
     // 3-column logistics form
     var formHtml = '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 20px">'
       + '<div><label ' + lbl + '>Ngày giao *</label>'
-        + '<input id="donWfDate" type="date" value="' + API.esc(d) + '" ' + fld + '></div>'
+        + '<input id="donWfDate" type="date" value="' + API.esc(d) + '"'
+        + ' oninput="RfqItemsModule._updateDonPreviewNo()" ' + fld + '></div>'
       + '<div><label ' + lbl + '>Mã đơn (dự kiến)</label>'
-        + '<input type="text" readonly value="' + API.esc(previewNo) + '"'
+        + '<input id="donWfPreviewNo" type="text" readonly value="..."'
         + ' style="width:100%;font-size:13px;color:var(--text-muted);background:var(--bg,#f9fafb)"></div>'
       + '<div><label ' + lbl + '>Biển số xe</label>'
         + '<input id="donWfVehicleNo" type="text" placeholder="(tùy chọn)" ' + fld + '></div>'
       + '<div><label ' + lbl + '>Bên nhận</label>'
-        + '<input id="donWfReceiverUnit" type="text" placeholder="Tên đơn vị nhận" ' + fld + '></div>'
+        + '<input id="donWfReceiverUnit" type="text" value="' + API.esc(cdt) + '" placeholder="Tên đơn vị nhận" ' + fld + '></div>'
       + '<div><label ' + lbl + '>Người nhận</label>'
         + '<input id="donWfReceiverName" type="text" placeholder="Họ tên người nhận" ' + fld + '></div>'
       + '<div></div>'
       + '<div><label ' + lbl + '>Bên giao</label>'
-        + '<input id="donWfSenderUnit" type="text" placeholder="Tên đơn vị giao" ' + fld + '></div>'
+        + '<input id="donWfSenderUnit" type="text" placeholder="Tên đơn vị giao" ' + fld
+        + ' oninput="RfqItemsModule._donSenderAc(this)" autocomplete="off"></div>'
       + '<div><label ' + lbl + '>Người giao</label>'
         + '<input id="donWfSenderName" type="text" placeholder="Họ tên người giao" ' + fld + '></div>'
       + '<div></div>'
@@ -3138,7 +3138,63 @@
     setTimeout(function () {
       var m = document.querySelector('#modal .modal');
       if (m) m.classList.add('modal--import-wide');
+      _updateDonPreviewNo();
     }, 0);
+  }
+
+  async function _updateDonPreviewNo() {
+    var s = _donWorkflowState;
+    var inp = document.getElementById('donWfPreviewNo');
+    if (!inp) return;
+    var d = (document.getElementById('donWfDate') || {}).value || s.deliveryDate;
+    inp.value = '...';
+    try {
+      var res = await API.call('previewDeliveryNoteNo', { deliveryDate: d, noteType: s.noteType });
+      if (res && res.ok) inp.value = res.no;
+    } catch (e) { inp.value = '—'; }
+  }
+
+  var _donSenderAcTimer = null;
+  function _donSenderAc(inp) {
+    clearTimeout(_donSenderAcTimer);
+    var dd = document.getElementById('don-sender-ac-dd');
+    if (dd) dd.remove();
+    var q = inp.value.trim();
+    if (q.length < 2) return;
+    _donSenderAcTimer = setTimeout(async function () {
+      try {
+        var data = await API.get('getClients', { q: q, limit: 8 });
+        if (!data.ok || !data.rows || !data.rows.length) return;
+        var dd2 = document.createElement('div');
+        dd2.id = 'don-sender-ac-dd';
+        dd2.style.cssText = 'position:fixed;z-index:9999;background:#fff;border:1px solid var(--border-mid);'
+          + 'border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);overflow:hidden';
+        var rect = inp.getBoundingClientRect();
+        dd2.style.top = (rect.bottom + 2) + 'px';
+        dd2.style.left = rect.left + 'px';
+        dd2.style.minWidth = rect.width + 'px';
+        dd2.style.maxWidth = '420px';
+        data.rows.forEach(function (c) {
+          var name = c.plant_name || c.client_name || c.legal_name || '';
+          if (!name) return;
+          var it = document.createElement('div');
+          it.style.cssText = 'padding:7px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--border)';
+          it.textContent = name;
+          it.onmouseover = function () { it.style.background = 'var(--primary-lt,#fef3c7)'; };
+          it.onmouseout  = function () { it.style.background = ''; };
+          it.onmousedown = function (e) {
+            e.preventDefault();
+            inp.value = name;
+            dd2.remove();
+          };
+          dd2.appendChild(it);
+        });
+        document.body.appendChild(dd2);
+        setTimeout(function () {
+          document.addEventListener('click', function () { dd2.remove(); }, { once: true });
+        }, 10);
+      } catch (e) {}
+    }, 250);
   }
 
   function _donStep1Qty(show) {
@@ -4938,6 +4994,8 @@
     openExcelMenu: openExcelMenu,
     openDonMenu: openDonMenu,
     _donStep1Qty: _donStep1Qty,
+    _updateDonPreviewNo: _updateDonPreviewNo,
+    _donSenderAc: _donSenderAc,
     _donWorkflowAction: _donWorkflowAction,
     toggleExportColPanel: toggleExportColPanel,
     _exportColAll: _exportColAll,

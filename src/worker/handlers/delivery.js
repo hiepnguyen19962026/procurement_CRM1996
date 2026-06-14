@@ -44,6 +44,7 @@ export async function handleDelivery(action, request, env, ctx, actor) {
   if (action === 'archiveDeliveryNoteItem')    return archiveItem(request, env, ctx, actor);
   if (action === 'recordDeliveryAcceptance')   return recordAcceptance(request, env, ctx, actor);
   if (action === 'deleteDeliveryNote')         return deleteNote(request, env, ctx, actor);
+  if (action === 'previewDeliveryNoteNo')      return previewNoteNo(request, env, actor);
   return json({ ok: false, error: 'Unknown delivery action' }, 400);
 }
 
@@ -386,6 +387,16 @@ async function deleteNote(request, env, ctx, actor) {
     actor,
   }));
   return json({ ok: true });
+}
+
+async function previewNoteNo(request, env, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const noteType = VALID_NOTE_TYPES.has(body.noteType) ? body.noteType : 'delivery';
+  const deliveryDate = validateDate(body.deliveryDate || '') || nowIso().slice(0, 10);
+  const no = await nextDeliveryNoteNoSQL(env.DB, deliveryDate, noteType);
+  return json({ ok: true, no });
 }
 
 function validateDate(value) {
