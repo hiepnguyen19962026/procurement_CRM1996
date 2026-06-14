@@ -439,10 +439,10 @@ const CHUNG_LEFT_ALIGN_HEADERS = new Set([
 
 function buildExportPreface(rows) {
   if (!rows.length) return ['', '', ''];
-  const key = r => r.rfq_id || r.ma_goi_tbmt || '';
-  const firstKey = key(rows[0]);
-  if (!firstKey || !rows.every(r => key(r) === firstKey)) return ['', '', ''];
-  const r = rows[0];
+  const keys = new Set(rows.map(r => r.rfq_id || r.ma_goi_tbmt || '').filter(Boolean));
+  if (keys.size !== 1) return ['', '', ''];
+  const key = [...keys][0];
+  const r = rows.find(x => (x.rfq_id || x.ma_goi_tbmt || '') === key) || rows[0];
   return [r.ma_goi_tbmt || '', r.ten_goi || '', r.ten_cdt || ''];
 }
 
@@ -513,14 +513,16 @@ async function exportItemsJson(request, env, actor) {
   const rfqId = cleanString(p.rfqId || p.rfq_id || 'all', 80);
   const today = nowIso().slice(0, 10);
   const tplSuffix = template === 'chung' ? '' : '-' + template.replace(/_/g, '-');
-  const { headers, rows: dataRows, textCols, longTextCols } = buildExportJson(rows, { template, colMask });
+  const { headers, rows: dataRows, textCols, longTextCols, leftAlignCols, preface } = buildExportJson(rows, { template, colMask });
   return json({
     ok: true,
     filename: `rfq-items${tplSuffix}-${rfqId}-${today}.xlsx`,
     headers,
     rows: dataRows,
-    textCols,
-    longTextCols,
+    preface: preface || ['', '', ''],
+    textCols: textCols || [],
+    longTextCols: longTextCols || [],
+    leftAlignCols: leftAlignCols || [],
     row_count: rows.length,
     capped: rows.length >= EXPORT_MAX_ROWS,
   });
