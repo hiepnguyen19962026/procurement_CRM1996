@@ -86,6 +86,15 @@
               <div class="rfq-autocomplete-wrap"><input id="itemRfqInput" placeholder="Lọc gói thầu..." autocomplete="off" oninput="RfqItemsModule._onRfqInput(this)" onkeydown="RfqItemsModule._onRfqKeydown(event)"><div id="itemRfqSuggestions" class="rfq-suggestions hidden"></div></div>
               <select id="itemTechFilter" style="width:128px;flex:0 0 auto" onchange="RfqItemsModule.load(true)"><option value="">Tất cả kỹ thuật</option><option value="has_clarification">Có làm rõ kỹ thuật</option><option value="no_clarification">Chưa có làm rõ</option><option value="khong_can">Không cần xác nhận</option><option value="dang_hoi">Đang hỏi / cần xác nhận</option><option value="da_xac_nhan">Đã xác nhận</option><option value="bi_tu_choi">Bị từ chối / thay thế</option></select>
               <select id="itemStatus" style="width:128px;flex:0 0 auto" onchange="RfqItemsModule.load(true)"><option value="">Tất cả trạng thái</option><option value="chua_xu_ly">Chưa xử lý</option><option value="dang_hoi_gia">Đang hỏi giá</option><option value="du_gia">Đủ giá</option><option value="da_final">Đã final</option></select>
+              <div class="delivery-filter-wrap">
+                <button id="itemDeliveryFilterBtn" type="button" onclick="RfqItemsModule.toggleDeliveryFilterMenu()">Giao hàng ▼</button>
+                <div id="itemDeliveryFilterMenu" class="delivery-filter-menu hidden">
+                  <label><input type="checkbox" value="not_delivered" onchange="RfqItemsModule.onDeliveryFilterChange(this)"> Chưa giao</label>
+                  <label><input type="checkbox" value="partial" onchange="RfqItemsModule.onDeliveryFilterChange(this)"> Chưa giao hết</label>
+                  <label><input type="checkbox" value="complete" onchange="RfqItemsModule.onDeliveryFilterChange(this)"> Đã giao đủ</label>
+                  <label><input type="checkbox" value="over" onchange="RfqItemsModule.onDeliveryFilterChange(this)"> Giao vượt SL HĐ</label>
+                </div>
+              </div>
               <select id="itemPageSize" style="width:72px;flex:0 0 auto" onchange="RfqItemsModule.load(true)"><option value="500" selected>500</option><option value="1000">1.000</option><option value="2000">2.000</option><option value="all">Tất cả</option></select>
               <button onclick="RfqItemsModule.load(true)">Tìm kiếm</button>
               <button id="itemCreateDeliverySelected" class="hidden" data-write onclick="RfqItemsModule.openCreateDeliveryForSelected()">Tạo đơn giao hàng (<span id="itemDeliveryCount">0</span>)</button>

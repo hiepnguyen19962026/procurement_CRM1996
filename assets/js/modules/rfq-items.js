@@ -15,6 +15,7 @@
   var _rfqAutocompleteInit = false;
   var _exportColPanelInit = false;
   var _lastFilterParams = {};
+  var deliveryStatusFilters = {};
   var DELIVERY_SORT_KEYS = {
     delivered_quantity_total: true,
     remaining_quantity: true,
@@ -41,6 +42,8 @@
     document.addEventListener('click', function (e) {
       var wrap = document.querySelector('.rfq-autocomplete-wrap');
       if (wrap && !wrap.contains(e.target)) _hideRfqSuggestions();
+      var deliveryWrap = document.querySelector('#screen-items .delivery-filter-wrap');
+      if (deliveryWrap && !deliveryWrap.contains(e.target)) closeDeliveryFilterMenu();
     });
     window.addEventListener('resize', syncTopScroll);
   }
@@ -140,6 +143,35 @@
 
   function isDeliverySortKey(key) {
     return !!DELIVERY_SORT_KEYS[key];
+  }
+
+  function selectedDeliveryStatuses() {
+    return Object.keys(deliveryStatusFilters).filter(function (key) { return deliveryStatusFilters[key]; });
+  }
+
+  function syncDeliveryFilterLabel() {
+    var btn = document.getElementById('itemDeliveryFilterBtn');
+    if (!btn) return;
+    var count = selectedDeliveryStatuses().length;
+    btn.textContent = count ? ('Giao hàng (' + count + ') ▼') : 'Giao hàng ▼';
+  }
+
+  function toggleDeliveryFilterMenu() {
+    var menu = document.getElementById('itemDeliveryFilterMenu');
+    if (!menu) return;
+    menu.classList.toggle('hidden');
+  }
+
+  function closeDeliveryFilterMenu() {
+    var menu = document.getElementById('itemDeliveryFilterMenu');
+    if (menu) menu.classList.add('hidden');
+  }
+
+  function onDeliveryFilterChange(cb) {
+    if (!cb) return;
+    deliveryStatusFilters[cb.value] = !!cb.checked;
+    syncDeliveryFilterLabel();
+    render();
   }
 
   async function load(reset) {
@@ -244,9 +276,11 @@
 
   function render() {
     syncSort();
-    var rows = sortDeliveryRows(state.rows || []);
+    syncDeliveryFilterLabel();
+    var baseRows = state.rows || [];
+    var rows = sortDeliveryRows(filterDeliveryRows(baseRows));
     var rfqFilter = _selectedRfqId;
-    if (!rows.length && rfqFilter) {
+    if (!baseRows.length && rfqFilter) {
       var rfqMeta = (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === rfqFilter; }) || null;
       var rfqInfo = rfqMeta
         ? '<div style="margin-bottom:14px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;text-align:left">'
@@ -267,6 +301,24 @@
         + '</td></tr>';
       document.getElementById('itemMore').classList.add('hidden');
       Auth.applyRoleUI();
+      return;
+    }
+    if (baseRows.length && !rows.length) {
+      document.getElementById('itemRows').innerHTML = '<tr><td colspan="37" style="text-align:center;color:var(--text-muted);padding:18px">Không có dòng vật tư phù hợp bộ lọc giao hàng.</td></tr>';
+      document.getElementById('itemMore').classList.toggle('hidden', !state.hasMore);
+      Auth.applyRoleUI();
+      var noMatchSelectAll = document.getElementById('itemSelectAll');
+      if (noMatchSelectAll) noMatchSelectAll.checked = false;
+      var noMatchDelSelBtn = document.getElementById('itemDeleteSelected');
+      if (noMatchDelSelBtn) noMatchDelSelBtn.classList.add('hidden');
+      var noMatchDelCnt = document.getElementById('itemDeleteCount');
+      if (noMatchDelCnt) noMatchDelCnt.textContent = '0';
+      var noMatchDeliveryBtn = document.getElementById('itemCreateDeliverySelected');
+      if (noMatchDeliveryBtn) noMatchDeliveryBtn.classList.add('hidden');
+      var noMatchDeliveryCnt = document.getElementById('itemDeliveryCount');
+      if (noMatchDeliveryCnt) noMatchDeliveryCnt.textContent = '0';
+      updateCountInfo();
+      syncTopScroll();
       return;
     }
     var canWrite = Utils.roleCanWrite();
@@ -497,6 +549,25 @@
     var n = toQty(value);
     if (!n) return '';
     return n.toLocaleString('vi-VN', { maximumFractionDigits: 3 });
+  }
+
+  function matchesDeliveryStatus(row, key) {
+    var contractQty = toQty(row.contract_quantity_total);
+    var deliveredQty = toQty(row.delivered_quantity_total);
+    var remainingQty = toQty(row.remaining_quantity);
+    if (key === 'not_delivered') return deliveredQty <= 0;
+    if (key === 'partial') return remainingQty > 0;
+    if (key === 'complete') return contractQty > 0 && remainingQty <= 0 && deliveredQty <= contractQty;
+    if (key === 'over') return contractQty > 0 && deliveredQty > contractQty;
+    return false;
+  }
+
+  function filterDeliveryRows(rows) {
+    var filters = selectedDeliveryStatuses();
+    if (!filters.length) return rows;
+    return rows.filter(function (row) {
+      return filters.some(function (key) { return matchesDeliveryStatus(row, key); });
+    });
   }
 
   function sortDeliveryRows(rows) {
@@ -4283,6 +4354,8 @@
     openRevisionHistory: openRevisionHistory,
     archiveRfqItem: archiveRfqItem,
     openCreateDeliveryForSelected: openCreateDeliveryForSelected,
+    toggleDeliveryFilterMenu: toggleDeliveryFilterMenu,
+    onDeliveryFilterChange: onDeliveryFilterChange,
     toggleSelectAll: toggleSelectAll,
     onCheckChange: onCheckChange,
     deleteSelected: deleteSelected,
