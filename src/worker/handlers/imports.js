@@ -84,11 +84,11 @@ function normKeyNum(v) {
   const n = parseFloat(String(v == null ? '' : v).replace(/[,\s]/g, ''));
   return isNaN(n) ? '0' : String(n);
 }
-// Composite key: rfq_id + stt + maMuaSam + maVatTu + qty
-// Excludes ten_vat_tu and required_model so rows remain identifiable when description/spec text changes.
+// Composite key: rfq_id + stt_goc + ma_mua_sam + ma_vat_tu
+// Excludes ten_vat_tu, required_model, quantity, unit — all editable data fields, not identity fields.
 // Null-byte separator avoids collisions with values containing "||"
-function buildImportKey(rfqId, sttGoc, maMuaSam, maVatTu, quantity) {
-  return [String(rfqId || ''), normKey(sttGoc), normKey(maMuaSam), normKey(maVatTu), normKeyNum(quantity)].join('\x00');
+function buildImportKey(rfqId, sttGoc, maMuaSam, maVatTu) {
+  return [String(rfqId || ''), normKey(sttGoc), normKey(maMuaSam), normKey(maVatTu)].join('\x00');
 }
 
 const COMPARE_FIELDS = [
@@ -122,7 +122,7 @@ function buildExistingKeyMap(rfqId, items) {
   const map = new Map();
   for (const item of items) {
     const stt = item.stt_goc || String(item.source_row_number || '0');
-    const key = buildImportKey(rfqId, stt, item.ma_mua_sam, item.ma_vat_tu, item.quantity);
+    const key = buildImportKey(rfqId, stt, item.ma_mua_sam, item.ma_vat_tu);
     if (!map.has(key)) map.set(key, item);
   }
   return map;
@@ -221,7 +221,7 @@ async function commitRows(request, env, ctx, actor) {
     const existing = await listRfqItemsByRfqIdSQL(env.DB, rfqId);
     for (const item of existing) {
       const stt = item.stt_goc || String(item.source_row_number || '0');
-      const key = buildImportKey(rfqId, stt, item.ma_mua_sam, item.ma_vat_tu, item.quantity);
+      const key = buildImportKey(rfqId, stt, item.ma_mua_sam, item.ma_vat_tu);
       if (!existingByKey.has(key)) existingByKey.set(key, item);
     }
   }
@@ -263,7 +263,7 @@ async function commitRows(request, env, ctx, actor) {
           if (oldRow.rfq_id !== rfqId) throw new Error(`rfq_item_id ${explicitId} khong thuoc RFQ dang import`);
         } else if (importMode !== 'force_insert' && importMode !== 'clear_and_reimport') {
           const stt = cleanString(mapped.stt_goc, 40) || String(sourceRowNumber - 1);
-          const key = buildImportKey(rfqId, stt, mapped.ma_mua_sam, mapped.ma_vat_tu, mapped.quantity);
+          const key = buildImportKey(rfqId, stt, mapped.ma_mua_sam, mapped.ma_vat_tu);
           oldRow = existingByKey.get(key) ?? null;
         }
 
@@ -281,6 +281,9 @@ async function commitRows(request, env, ctx, actor) {
           status = 'updated';
           summary.updated++;
           rfqItemId = itemRow.rfq_item_id;
+        } else if (importMode === 'selective_update') {
+          // selective_update: no row matched by identity key — skip silently, never insert
+          status = 'skipped';
         } else {
           // new row: always write all fields regardless of overwriteFields
           const itemRow = await buildImportItemRow(env.DB, { rfqId, mapped, oldRow: null, rawRow, sourceRowNumber, sourceSheetName, now, overwriteFields: [] });
@@ -374,7 +377,7 @@ async function previewRows(request, env, actor) {
       continue;
     }
 
-    const key = buildImportKey(rfqId, stt, mapped.ma_mua_sam, mapped.ma_vat_tu, mapped.quantity);
+    const key = buildImportKey(rfqId, stt, mapped.ma_mua_sam, mapped.ma_vat_tu);
     const existingItem = existingByKey.get(key) ?? null;
 
     if (!existingItem) {

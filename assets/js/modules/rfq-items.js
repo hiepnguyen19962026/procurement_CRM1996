@@ -4436,8 +4436,16 @@
         allRows, 'selective_update', overwriteFields
       );
       var s = data.summary || {};
+      var created  = s.created  || 0;
+      var updated  = s.updated  || 0;
+      var skipped  = s.skipped  || 0;
+      var errors   = s.errors   || 0;
+      var parts = ['cập nhật ' + updated, 'bỏ qua ' + skipped];
+      if (errors)  parts.push(errors  + ' lỗi');
+      if (created) parts.push('⚠ tạo mới ' + created + ' (không mong đợi trong chế độ này)');
+      var toastType = (errors || created) ? 'warn' : 'success';
       Utils.closeModal();
-      API.toast('Cập nhật xong: tạo mới ' + (s.created || 0) + ', cập nhật ' + (s.updated || 0) + ', bỏ qua ' + (s.skipped || 0) + ' dòng', 'success');
+      API.toast('Cập nhật DS vật tư: ' + parts.join(', ') + ' dòng', toastType);
       await load(true);
       if (typeof RfqsModule !== 'undefined') await RfqsModule.load(true);
     } catch (err) {
