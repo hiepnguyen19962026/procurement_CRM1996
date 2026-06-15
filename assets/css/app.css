@@ -441,8 +441,9 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  /* force line-break between hamburger+title row and action row */
-  .topbar-row-break { flex-basis: 100%; height: 0; padding: 0; margin: 0; }
+  /* force line-break between hamburger+title row and action row;
+     must set display:block to override the global display:none */
+  .topbar-row-break { display: block; flex-basis: 100%; height: 0; padding: 0; margin: 0; }
   /* screen-actions: flex-basis:0 keeps hypothetical size at 0 so btnRefresh always
      fits on the same flex line; flex-grow:1 then expands to fill remaining width */
   .screen-actions {
@@ -468,6 +469,7 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     padding: 4px 8px;
     font-size: 12px;
     margin-left: 5px;
+    margin-top: 4px;
   }
   /* hide user/logout from topbar; show in sidebar instead */
   .topbar-account { display: none; }
