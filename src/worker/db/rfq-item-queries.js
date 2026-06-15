@@ -117,7 +117,7 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
   const outerOrderBy = sort ? `${sort.col.replace(/^\w+\./, '')} ${dir}, rfq_item_id ${dir}` : `COALESCE(source_row_number, 0) ASC, rfq_item_id ASC`;
   const countSql = `SELECT COUNT(*) AS total FROM rfq_items i${baseWhere.length ? ` WHERE ${baseWhere.join(' AND ')}` : ''}`;
   const [countRow, res] = await Promise.all([
-    db.prepare(countSql).bind(...baseBinds).first(),
+    cursor ? Promise.resolve(null) : db.prepare(countSql).bind(...baseBinds).first(),
     db.prepare(
       `WITH page AS (
          SELECT i.*, r.ten_goi, r.ma_goi_tbmt, COALESCE(c.client_name, r.nha_may_cdt, '') AS ten_cdt
@@ -229,7 +229,7 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
     ).bind(...binds, limit + 1, today, today, due7, due15, due30, today, due30).all(),
   ]);
 
-  const totalCount = Number(countRow?.total ?? 0);
+  const totalCount = cursor ? null : Number(countRow?.total ?? 0);
   const rows = res.results || [];
   const page = rows.slice(0, limit);
   let nextCursor = null;

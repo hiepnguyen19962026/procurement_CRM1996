@@ -230,7 +230,7 @@
           );
           if (!ok) return;
         }
-        limit = known > 0 ? known + 50 : 10000;
+        limit = known > 0 ? Math.min(known + 50, 2000) : 2000;
       } else {
         limit = Number(pageSizeVal) || 500;
       }
