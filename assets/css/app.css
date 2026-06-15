@@ -63,6 +63,7 @@ textarea { min-height: 86px; resize: vertical; }
 .nav button:hover { background: var(--primary-bg); border-color: #ffedd5; color: var(--primary-dk); }
 .sidebar-foot { margin-top: auto; border-top: 1px solid var(--border); padding: 18px 10px 2px; display: grid; gap: 8px; color: var(--text-muted); font-size: 12px; }
 .sidebar-account { display: none; }
+.topbar-row-break { display: none; }
 
 .main { min-width: 0; }
 .topbar { min-height: var(--header-h); height: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(255,255,255,.92); border-bottom: 1px solid var(--border); padding: 6px 28px; position: sticky; top: 0; z-index: 5; backdrop-filter: blur(10px); flex-wrap: wrap; }
@@ -440,9 +441,12 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  /* screen-actions: full-width row 2, buttons wrap onto multiple lines */
+  /* force line-break between hamburger+title row and action row */
+  .topbar-row-break { flex-basis: 100%; height: 0; padding: 0; margin: 0; }
+  /* screen-actions: flex-basis:0 keeps hypothetical size at 0 so btnRefresh always
+     fits on the same flex line; flex-grow:1 then expands to fill remaining width */
   .screen-actions {
-    flex-basis: 100%;
+    flex: 1 1 0;
     flex-wrap: wrap;
     overflow-x: visible;
     gap: 5px;
@@ -455,17 +459,15 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     padding: 4px 9px;
     font-size: 12px;
   }
-  /* topbar-right: compact, top-aligned so it sits on row 1 */
-  .topbar-right {
-    flex-shrink: 0;
-    align-self: flex-start;
-    gap: 5px;
-    padding-top: 2px;
-  }
+  /* topbar-right: dissolve box so #btnRefresh joins the action row directly */
+  .topbar-right { display: contents; }
   .topbar-right > button {
+    flex-shrink: 0;
+    white-space: nowrap;
     min-height: 28px;
     padding: 4px 8px;
     font-size: 12px;
+    margin-left: 5px;
   }
   /* hide user/logout from topbar; show in sidebar instead */
   .topbar-account { display: none; }
