@@ -415,8 +415,8 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
 @media (max-width: 640px) {
 
   /* topbar: compact 2-row layout
-     Row 1 — hamburger + title (topbar-left, flex:1) + topbar-right (user/refresh/logout)
-     Row 2 — screen-actions as full-width horizontal-scroll strip                        */
+     Row 1 — hamburger + title + topbar-right (user/refresh/logout)
+     Row 2 — screen-actions full-width, buttons wrap onto new lines                      */
   .topbar {
     padding: 4px 10px 0;
     min-height: auto;
@@ -424,11 +424,12 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     row-gap: 0;
     column-gap: 0;
   }
+  /* display:contents removes the topbar-left box so its children (hamburger,
+     title, screen-actions) become direct flex children of .topbar — this lets
+     screen-actions use flex-basis:100% of the FULL topbar width, not the ~183px
+     slice topbar-left was given when sharing row 1 with topbar-right. */
   .topbar-left {
-    flex-wrap: wrap;
-    row-gap: 0;
-    column-gap: 6px;
-    align-items: center;
+    display: contents;
   }
   .topbar strong { font-size: 14px; }
   #screenTitle {
@@ -438,21 +439,16 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     overflow: hidden;
     text-overflow: ellipsis;
   }
-  /* screen-actions: full-width row 2, single-line horizontal scroll */
+  /* screen-actions: full-width row 2, buttons wrap onto multiple lines */
   .screen-actions {
     flex-basis: 100%;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior-inline: contain;
+    flex-wrap: wrap;
+    overflow-x: visible;
     gap: 5px;
     padding: 4px 0 5px;
-    scrollbar-width: none;
   }
-  .screen-actions::-webkit-scrollbar { display: none; }
   .screen-actions:empty { padding: 0; }
   .screen-actions button {
-    flex-shrink: 0;
     white-space: nowrap;
     min-height: 28px;
     padding: 4px 9px;
