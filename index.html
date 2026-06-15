@@ -40,7 +40,7 @@
         <button data-screen="quotes" data-title="Báo giá NCC"><span>◈</span>Báo giá NCC</button>
         <button data-screen="delivery-notes" data-title="Đơn giao hàng"><span>◻</span>Đơn giao hàng</button>
         <div class="nav-section">Hệ thống</div>
-        <button data-screen="audit" data-title="Nhật ký hệ thống" data-role-only="admin,manager"><span>☷</span>Nhật ký hệ thống</button>
+        <button data-screen="audit" data-title="Nhật ký hệ thống" data-role-only="admin"><span>☷</span>Nhật ký hệ thống</button>
         <button data-screen="accounts" data-title="Tài khoản" data-role-only="admin"><span>○</span>Tài khoản</button>
       </nav>
       <div class="sidebar-foot">
@@ -108,6 +108,7 @@
               </div>
               <select id="itemPageSize" style="width:72px;flex:0 0 auto" onchange="RfqItemsModule.load(true)"><option value="500" selected>500</option><option value="1000">1.000</option><option value="2000">2.000</option><option value="all">Tất cả</option></select>
               <button onclick="RfqItemsModule.load(true)">Tìm kiếm</button>
+              <button id="itemBulkEditSelected" class="hidden" data-write onclick="RfqItemsModule.openBulkEditForSelected()">Sửa hàng loạt (<span id="itemBulkEditCount">0</span>)</button>
               <button id="itemCreateDeliverySelected" class="hidden" data-write onclick="RfqItemsModule.openDonWorkflow('don_giao_hang')">Tạo đơn giao hàng (<span id="itemDeliveryCount">0</span>)</button>
               <button id="itemDeleteSelected" class="hidden" style="color:#dc2626;border-color:#dc2626" data-role-only="admin,manager" onclick="RfqItemsModule.deleteSelected()">Xóa đã chọn (<span id="itemDeleteCount">0</span>)</button>
               <button id="itemDeleteAll" class="hidden" style="color:#dc2626;border-color:#dc2626;flex:0 0 auto" data-role-only="admin,manager" onclick="RfqItemsModule.deleteAll()">Xóa DS vật tư RFQ</button>
@@ -284,7 +285,7 @@
   <script src="/assets/js/modules/accounts.js"></script>
   <script>
     var SCREEN_ACTIONS = {
-      dashboard: '<button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button><button onclick="DashboardModule.openNsxStats()">Thống kê NSX</button>',
+      dashboard: '<button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button>',
       rfqs:      '<button data-write onclick="OcrModule.openRfqOcr()">OCR từ thư viện</button><button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button>',
       items:     '<button onclick="RfqItemsModule.downloadTemplate()">Tải template CSV</button><button class="btn-green" onclick="RfqItemsModule.openExportMenu(this)">Xuất CSV ▾</button><button class="btn-green" onclick="RfqItemsModule.openExcelMenu(this)">Xuất Excel ▾</button><button class="btn-green" onclick="RfqItemsModule.openDonMenu(this)">Đơn ▾</button><button onclick="RfqItemsModule.toggleExportColPanel()">Chọn cột ▼</button><button data-write onclick="RfqItemsModule.openImportMapping({defaultMode:\'update_changed\'})">Upload DS vật tư</button><button data-write onclick="RfqItemsModule.openImportMapping({defaultMode:\'selective_update\'})">Cập nhật DS vật tư</button><button data-write onclick="OcrModule.openItemOcr()">OCR từ thư viện</button><button class="primary" data-write onclick="RfqItemsModule.openCreate()">+ Thêm dòng</button>',
       tasks:     '<button class="primary" data-write onclick="TasksModule.openCreate()">+ Thêm task</button>',
