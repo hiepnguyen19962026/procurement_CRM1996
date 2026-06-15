@@ -43,6 +43,10 @@
         <button data-screen="audit" data-title="Nhật ký hệ thống" data-role-only="admin"><span>☷</span>Nhật ký hệ thống</button>
         <button data-screen="accounts" data-title="Tài khoản" data-role-only="admin"><span>○</span>Tài khoản</button>
       </nav>
+      <div class="sidebar-account">
+        <span id="sidebarUser"></span>
+        <button onclick="Auth.logout()">Đăng xuất</button>
+      </div>
       <div class="sidebar-foot">
         <span>© 2026 Procurement CRM</span>
         <span>Phiên bản 1.0.0</span>
@@ -53,9 +57,11 @@
       <header class="topbar">
         <div class="topbar-left"><button class="hamburger" type="button" onclick="if(window.innerWidth<=860){document.body.classList.toggle('mobile-nav-open')}else{document.body.classList.toggle('sidebar-collapsed')}">☰</button><strong id="screenTitle">Tổng quan</strong><div id="screenActions" class="screen-actions"></div></div>
         <div class="topbar-right">
-          <div class="userbar" id="currentUser"></div>
           <button id="btnRefresh" onclick="App.refreshCurrentView()">Làm mới</button>
-          <button onclick="Auth.logout()">Đăng xuất</button>
+          <div class="topbar-account">
+            <div class="userbar" id="currentUser"></div>
+            <button onclick="Auth.logout()">Đăng xuất</button>
+          </div>
         </div>
       </header>
       <div class="content">

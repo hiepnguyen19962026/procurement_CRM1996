@@ -62,6 +62,7 @@ textarea { min-height: 86px; resize: vertical; }
 .nav button.active span { color: var(--primary); }
 .nav button:hover { background: var(--primary-bg); border-color: #ffedd5; color: var(--primary-dk); }
 .sidebar-foot { margin-top: auto; border-top: 1px solid var(--border); padding: 18px 10px 2px; display: grid; gap: 8px; color: var(--text-muted); font-size: 12px; }
+.sidebar-account { display: none; }
 
 .main { min-width: 0; }
 .topbar { min-height: var(--header-h); height: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; background: rgba(255,255,255,.92); border-bottom: 1px solid var(--border); padding: 6px 28px; position: sticky; top: 0; z-index: 5; backdrop-filter: blur(10px); flex-wrap: wrap; }
@@ -466,9 +467,19 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     padding: 4px 8px;
     font-size: 12px;
   }
-  /* userbar: hide masked username to free horizontal space */
-  .user-text span { display: none; }
-  .user-text strong { font-size: 12px; }
+  /* hide user/logout from topbar; show in sidebar instead */
+  .topbar-account { display: none; }
+  .sidebar-account {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border-top: 1px solid var(--border);
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text);
+  }
+  .sidebar-account button { font-size: 12px; padding: 4px 10px; min-height: 30px; }
 
   /* dashboard: 3 metric cards in one horizontal row
      Overrides the 1-column stack set by the ≤860px rule above               */
