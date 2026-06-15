@@ -13,6 +13,7 @@
   }
 
   async function load(force) {
+    if (!force && _lastData) return;
     try {
       var data = await API.get('getDashboardV2', force ? { force: '1' } : {});
       _lastData = data.data || {};
