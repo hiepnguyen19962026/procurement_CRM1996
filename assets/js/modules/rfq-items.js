@@ -4649,10 +4649,12 @@
             var hint = isSensitive ? ' <span style="color:var(--text-faint);font-size:10px">(nhận dạng)</span>'
                      : isFinal    ? ' <span style="color:var(--text-faint);font-size:10px">(final)</span>' : '';
             return '<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">'
-              + '<input type="checkbox" name="overwriteField" value="' + API.esc(f) + '"' + (defaultChecked ? ' checked' : '') + '>'
+              + '<input type="checkbox" name="overwriteField" value="' + API.esc(f) + '"' + (defaultChecked ? ' checked' : '') + ' onchange="RfqItemsModule._refreshOverwriteSummary()">'
               + API.esc(label) + hint + '</label>';
           }).join('')
-        + '</div></div>'
+        + '</div>'
+        + '<div id="selectiveUpdateSummary" style="margin-top:6px;font-size:11px;color:var(--text-faint)"></div>'
+        + '</div>'
       : '';
 
     var defMode = importMapState._defaultMode || 'update_changed';
@@ -4710,6 +4712,21 @@
   function _onImportModeChange(radio) {
     var section = document.getElementById('importOverwriteSection');
     if (section) section.style.display = radio && radio.value === 'selective_update' ? '' : 'none';
+    if (radio && radio.value === 'selective_update') _refreshOverwriteSummary();
+  }
+
+  function _refreshOverwriteSummary() {
+    var el = document.getElementById('selectiveUpdateSummary');
+    if (!el) return;
+    var checked = Array.from(document.querySelectorAll('#importOverwriteSection input[name="overwriteField"]:checked'));
+    if (!checked.length) { el.textContent = 'Chưa chọn trường nào.'; return; }
+    var labels = checked.map(function (cb) {
+      var pair = IMPORT_TARGET_FIELDS.find(function (p) { return p[0] === cb.value; });
+      return pair ? pair[1] : cb.value;
+    });
+    el.innerHTML = 'Ghi đè: ' + labels.map(function (l) {
+      return '<span style="background:var(--bg-alt,var(--bg));border:1px solid var(--border);border-radius:3px;padding:0 4px;margin-right:2px">' + API.esc(l) + '</span>';
+    }).join('');
   }
 
   async function _doCommitImport() {
@@ -4735,6 +4752,22 @@
         if (btn) btn.disabled = false;
         return;
       }
+    }
+
+    // selective_update: confirm columns + row count before committing
+    if (importMode === 'selective_update') {
+      var fieldLabels = overwriteFields.map(function (f) {
+        var pair = IMPORT_TARGET_FIELDS.find(function (p) { return p[0] === f; });
+        return pair ? pair[1] : f;
+      }).join(', ');
+      var totalRows = (importMapState._pendingAllRows || []).length;
+      var ok = await Utils.confirmDanger(
+        'Xác nhận ghi đè hàng loạt',
+        'Bạn sắp ghi đè ' + overwriteFields.length + ' cột (' + fieldLabels + ') trên ' + totalRows + ' dòng. Không thể hoàn tác. Tiếp tục?',
+        'Tiếp tục',
+        'Hủy'
+      );
+      if (!ok) { if (btn) btn.disabled = false; return; }
     }
 
     // Mode C: safety check before proceeding
@@ -4813,7 +4846,7 @@
 
   async function commitInChunks(rfqId, ownerKey, templateId, sourceFileName, sourceSheetName, allRows, importMode, overwriteFields) {
     var CHUNK_SIZE = 500;
-    var totalCreated = 0, totalUpdated = 0, totalSkipped = 0, totalErrors = 0;
+    var totalCreated = 0, totalUpdated = 0, totalSkipped = 0, totalSkippedUnmatched = 0, totalErrors = 0;
     var allRowErrors = [];
     var lastJobId = '';
     for (var i = 0; i < allRows.length; i += CHUNK_SIZE) {
@@ -4834,6 +4867,7 @@
       totalCreated += Number(s.created || 0);
       totalUpdated += Number(s.updated || 0);
       totalSkipped += Number(s.skipped || 0);
+      totalSkippedUnmatched += Number(s.skippedUnmatched || 0);
       totalErrors += Number(s.errors || 0);
       if (s.jobId) lastJobId = s.jobId;
       if (s.rowErrors && s.rowErrors.length) allRowErrors = allRowErrors.concat(s.rowErrors);
@@ -4845,6 +4879,7 @@
         created: totalCreated,
         updated: totalUpdated,
         skipped: totalSkipped,
+        skippedUnmatched: totalSkippedUnmatched,
         errors: totalErrors,
         rowErrors: allRowErrors,
       },
@@ -4855,6 +4890,9 @@
     var area = document.getElementById('importMapArea');
     if (!area) return;
     var errors = summary.rowErrors || [];
+    var unmatchedNote = Number(summary.skippedUnmatched || 0) > 0
+      ? '<p style="margin:2px 0;color:var(--primary)">⚠ Không tìm thấy dòng khớp: ' + Number(summary.skippedUnmatched) + ' dòng bị bỏ qua (không có trong RFQ hiện tại)</p>'
+      : '';
     var html = '<div style="border-left:3px solid ' + (summary.errors ? 'var(--primary)' : 'var(--green)') + ';padding-left:10px;margin-bottom:10px">'
       + '<p style="margin:2px 0"><strong>Import job:</strong> ' + API.esc(summary.jobId || '') + '</p>'
       + '<p style="margin:2px 0"><strong>Tổng:</strong> ' + Number(summary.totalRows || 0)
@@ -4862,6 +4900,7 @@
       + ' | Cập nhật: ' + Number(summary.updated || 0)
       + ' | Bỏ qua: ' + Number(summary.skipped || 0)
       + ' | Lỗi: ' + Number(summary.errors || 0) + '</p>'
+      + unmatchedNote
       + '</div>';
     if (errors.length) {
       html += '<ul style="font-size:12px;color:var(--red);margin:0 0 10px;padding-left:1.2em">'
@@ -5052,6 +5091,7 @@
     _doCommitImport: _doCommitImport,
     _cancelImport: _cancelImport,
     _onImportModeChange: _onImportModeChange,
+    _refreshOverwriteSummary: _refreshOverwriteSummary,
     _checkAndConfirmModeC: _checkAndConfirmModeC,
     _commitSimpleUpdate: _commitSimpleUpdate,
     filterByRfq: filterByRfq,

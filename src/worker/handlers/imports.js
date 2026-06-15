@@ -212,7 +212,7 @@ async function commitRows(request, env, ctx, actor) {
   const sourceSheetName = cleanString(body.sourceSheetName || body.source_sheet_name, 80) || 'csv';
   const now = nowIso();
   const jobId = makeId('IMPJOB');
-  const summary = { jobId, totalRows: rows.length, created: 0, updated: 0, skipped: 0, errors: 0, rowErrors: [] };
+  const summary = { jobId, totalRows: rows.length, created: 0, updated: 0, skipped: 0, skippedUnmatched: 0, errors: 0, rowErrors: [] };
 
   // Preload all existing items for composite key lookup
   // Skipped for force_insert and clear_and_reimport (existingByKey stays empty → all rows insert as new)
@@ -282,8 +282,9 @@ async function commitRows(request, env, ctx, actor) {
           summary.updated++;
           rfqItemId = itemRow.rfq_item_id;
         } else if (importMode === 'selective_update') {
-          // selective_update: no row matched by identity key — skip silently, never insert
+          // selective_update: no row matched by identity key — skip, never insert
           status = 'skipped';
+          summary.skippedUnmatched++;
         } else {
           // new row: always write all fields regardless of overwriteFields
           const itemRow = await buildImportItemRow(env.DB, { rfqId, mapped, oldRow: null, rawRow, sourceRowNumber, sourceSheetName, now, overwriteFields: [] });
@@ -474,6 +475,9 @@ async function buildImportItemRow(db, { rfqId, mapped, oldRow, rawRow, sourceRow
   const ow = (field) => !oldRow || !overwriteFields || !overwriteFields.length || overwriteFields.includes(field);
 
   const row = oldRow ? { ...oldRow } : emptyItemRow();
+  // Workflow status fields must never be changed by import — preserve existing value or default
+  row.trang_thai_dong = oldRow?.trang_thai_dong || 'chua_xu_ly';
+  row.trang_thai_ky_thuat = oldRow?.trang_thai_ky_thuat || 'khong_can_xac_nhan';
   row.rfq_item_id = oldRow ? oldRow.rfq_item_id : await nextEntityId(db, 'rfq_items', 'rfq_item_id', 'RFQI');
   row.rfq_id = rfqId;
   row.created_at = oldRow?.created_at || now;
