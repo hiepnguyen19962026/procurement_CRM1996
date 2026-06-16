@@ -254,7 +254,7 @@
       + '<label class="span-12 compact-ta">Ghi chú 2<textarea name="note2" rows="5">' + API.esc(r.note2 || '') + '</textarea></label>'
       + '<label class="span-12">URL thư mục/tài liệu<input name="externalUrl" type="url" maxlength="2000" placeholder="https://drive.google.com/…" value="' + API.esc(r.external_url || '') + '"></label>';
 
-    if (r.rfq_id) base += rfqContractsSection(r.rfq_id, rfqContracts) + rfqContactsSection(r.rfq_id, rfqContacts, clientContacts, r.client_id || '');
+    if (r.rfq_id) base += rfqContractsSection(r, rfqContracts) + rfqContactsSection(r.rfq_id, rfqContacts, clientContacts, r.client_id || '');
     return base;
   }
 
@@ -392,10 +392,13 @@
 
   // --- RFQ contract/addendum section ---------------------------------------
 
-  function rfqContractsSection(rfqId, contracts) {
+  function rfqContractsSection(rfq, contracts) {
+    var rfqId = rfq.rfq_id || '';
     contracts = contracts || [];
     if (!contracts.length) {
+      var canCreate = rfq.trang_thai_goi === 'trung';
       return '<div class="modal-section">'
+        + (canCreate ? '<div style="display:flex;justify-content:flex-end;margin-bottom:8px"><button type="button" class="btn btn-sm" data-write onclick="RfqsModule.openRfqContractModal(\'' + API.esc(rfqId) + '\')">Tạo hợp đồng</button></div>' : '')
         + '<div class="section-head"><h4>Hợp đồng / Phụ lục</h4></div>'
         + '<p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">RFQ này chưa có hợp đồng nên chưa thể thêm phụ lục.</p>'
         + '</div>';
@@ -531,6 +534,27 @@
 
   function textarea(name, label, value, attrs, cls) {
     return '<label' + (cls ? ' class="' + cls + '"' : '') + '>' + API.esc(label) + '<textarea name="' + API.esc(name) + '" ' + (attrs || '') + '>' + API.esc(value) + '</textarea></label>';
+  }
+
+  function openRfqContractModal(rfqId) {
+    var rfq = (state.rows || []).find(function (r) { return r.rfq_id === rfqId; }) || { rfq_id: rfqId };
+    var html = ''
+      + input('contractNo', 'Mã hợp đồng *', '', 'required placeholder="VD: VTPC1-0401-251013001"', 'span-4')
+      + input('contractName', 'Tên hợp đồng', rfq.ten_goi || '', 'placeholder="Tên hợp đồng"', 'span-5')
+      + input('signedDate', 'Ngày ký', '', 'type="date"', 'span-3')
+      + input('contractTotal', 'Giá trị hợp đồng', rfq.du_toan || '', 'inputmode="numeric" placeholder="0"', 'span-4')
+      + textarea('note', 'Ghi chú', '', '', 'span-12 compact-ta');
+    Utils.openModal('Tạo hợp đồng từ RFQ', html, async function (form) {
+      try {
+        form.rfqId = rfqId;
+        await API.call('createContract', form);
+        API.toast('Đã tạo hợp đồng', 'success');
+        await openEdit(rfqId);
+      } catch (err) {
+        API.error(err);
+      }
+    });
+    Auth.applyRoleUI();
   }
 
   function openContractAddendumModal(rfqId, contractId, addendumId) {
@@ -736,6 +760,7 @@
     openContactPicker: openContactPicker,
     _addRfqContact:   _addRfqContact,
     archiveRfqContact: archiveRfqContact,
+    openRfqContractModal: openRfqContractModal,
     openContractAddendumModal: openContractAddendumModal,
     archiveContractAddendum: archiveContractAddendum,
     archiveRfq:        archiveRfq,

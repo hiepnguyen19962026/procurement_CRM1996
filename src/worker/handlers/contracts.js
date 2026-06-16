@@ -146,6 +146,7 @@ async function saveContract(request, env, ctx, actor, isUpdate) {
 
   const rawCurrency = cleanString(body.currency || oldContract?.currency || 'VND', 10).toUpperCase();
   const currency = VALID_CURRENCY.has(rawCurrency) ? rawCurrency : 'VND';
+  const initialContractTotal = isUpdate ? oldContract.contract_total : Math.max(0, cleanMoney(body.contractTotal ?? body.contract_total ?? 0));
 
   const contract = {
     contract_id:    isUpdate ? oldContract.contract_id : makeId('CTR'),
@@ -157,7 +158,7 @@ async function saveContract(request, env, ctx, actor, isUpdate) {
     effective_date: validateDate(body.effectiveDate || body.effective_date || oldContract?.effective_date || ''),
     expiry_date:    validateDate(body.expiryDate || body.expiry_date || oldContract?.expiry_date || ''),
     currency,
-    contract_total: isUpdate ? oldContract.contract_total : 0,
+    contract_total: initialContractTotal,
     status:         isUpdate ? (oldContract.status || 'active') : 'active',
     note:           cleanString(body.note || oldContract?.note || '', 2000),
     created_by:     isUpdate ? oldContract.created_by : actor.id,
