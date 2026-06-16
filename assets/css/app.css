@@ -62,7 +62,10 @@ textarea { min-height: 86px; resize: vertical; }
 .nav button.active span { color: var(--primary); }
 .nav button:hover { background: var(--primary-bg); border-color: #ffedd5; color: var(--primary-dk); }
 .sidebar-foot { margin-top: auto; border-top: 1px solid var(--border); padding: 18px 10px 2px; display: grid; gap: 8px; color: var(--text-muted); font-size: 12px; }
-.sidebar-account { display: none; }
+.topbar-account { display: none; }
+.sidebar-account { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-top: 1px solid var(--border); font-size: 13px; font-weight: 500; color: var(--text); }
+.sidebar-account button { font-size: 12px; padding: 4px 10px; min-height: 30px; }
+.sidebar-account .user-text { text-align: left; }
 .topbar-row-break { display: none; }
 
 .main { min-width: 0; }
@@ -471,19 +474,7 @@ span.link-edit:hover { color: var(--primary-dk); text-decoration: underline; }
     margin-left: 5px;
     margin-top: 4px;
   }
-  /* hide user/logout from topbar; show in sidebar instead */
-  .topbar-account { display: none; }
-  .sidebar-account {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 8px 10px;
-    border-top: 1px solid var(--border);
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--text);
-  }
-  .sidebar-account button { font-size: 12px; padding: 4px 10px; min-height: 30px; }
+  /* topbar-account already hidden globally; sidebar-account already shown globally */
 
   /* dashboard: 3 metric cards in one horizontal row
      Overrides the 1-column stack set by the ≤860px rule above               */

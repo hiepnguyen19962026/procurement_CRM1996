@@ -39,7 +39,8 @@
       (maskedUsername ? '<span>' + API.esc(maskedUsername) + '</span>' : '') +
       '</div>';
     var sb = document.getElementById('sidebarUser');
-    if (sb) sb.textContent = name;
+    if (sb) sb.innerHTML = '<strong>' + API.esc(name) + '</strong>' +
+      (maskedUsername ? '<span>' + API.esc(maskedUsername) + '</span>' : '');
   }
 
   function maskUsername(username) {
