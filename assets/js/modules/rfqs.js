@@ -444,11 +444,6 @@
         if (r.addendum_id) contractAddendumCache[r.addendum_id] = r;
       });
       container.innerHTML = renderRfqContractAddendums(rfqId, contractId, data);
-      setTimeout(function () {
-        (data.rows || []).forEach(function (r) {
-          if (r.addendum_id) loadRfqContractAddendumItems(rfqId, contractId, r.addendum_id);
-        });
-      }, 0);
       Auth.applyRoleUI();
     } catch (err) {
       container.textContent = 'Lỗi tải phụ lục hợp đồng.';
@@ -460,10 +455,10 @@
     var rows = data.rows || [];
     return rfqAddendumSummary(data.summary || {})
       + '<div class="quotes-table-wrap" style="margin-top:8px">'
-      + '<table class="quotes-mini-table"><thead><tr>'
-      + '<th>Số PL</th><th>Tên phụ lục</th><th>Ngày ký</th>'
-      + '<th>Trước thuế</th><th>Thuế %</th><th>Sau thuế</th>'
-      + '<th>Tác động +/-</th><th>Trạng thái</th><th>URL</th><th></th>'
+      + '<table class="quotes-mini-table contract-addendum-table"><thead><tr>'
+      + '<th>Số PL</th><th>Nội dung</th><th>Ngày ký</th>'
+      + '<th>Giá trị trước thuế</th><th>Thuế %</th><th>Giá trị sau thuế</th>'
+      + '<th>Giá trị phụ lục (+/-)</th><th>Trạng thái</th><th>URL</th><th>Thao tác</th>'
       + '</tr></thead><tbody>'
       + (rows.length ? rows.map(function (r) { return rfqAddendumRow(rfqId, contractId, r); }).join('') : '<tr><td colspan="10" class="empty-state small">Chưa có phụ lục.</td></tr>')
       + '</tbody></table></div>';
@@ -495,42 +490,10 @@
     var archived = r.status === 'archived';
     var editBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-write onclick="RfqsModule.openContractAddendumModal(\'' + API.esc(rfqId) + '\',\'' + API.esc(contractId) + '\',\'' + API.esc(r.addendum_id || '') + '\')">Sửa</button>';
     var archiveBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-role-only="admin,manager" onclick="RfqsModule.archiveContractAddendum(\'' + API.esc(rfqId) + '\',\'' + API.esc(r.addendum_id || '') + '\',\'' + API.esc(contractId) + '\')">Lưu trữ</button>';
-    return '<tr>'
-      + '<td><strong>' + API.esc(r.addendum_no || '') + '</strong></td>'
-      + '<td>' + API.esc(r.addendum_name || '') + (r.note ? '<div class="muted" style="font-size:11px">' + API.esc(r.note) + '</div>' : '') + '</td>'
-      + '<td>' + API.esc(r.signed_date || '') + '</td>'
-      + '<td class="num">' + moneyOrDash(r.value_before_tax) + '</td>'
-      + '<td class="num">' + API.esc(r.tax_rate != null ? r.tax_rate : 0) + '</td>'
-      + '<td class="num"><strong>' + moneyOrDash(r.value_after_tax) + '</strong></td>'
-      + '<td class="num">' + signedMoney(r.amount_delta) + '</td>'
-      + '<td>' + addendumStatusBadge(r.status) + '</td>'
-      + '<td style="text-align:center">' + addendumUrlCell(r.external_url) + '</td>'
-      + '<td style="white-space:nowrap;text-align:center">' + editBtn + archiveBtn + '</td>'
-      + '</tr>';
-  }
-
-  function renderRfqContractAddendums(rfqId, contractId, data) {
-    var rows = data.rows || [];
-    return rfqAddendumSummary(data.summary || {})
-      + '<div class="quotes-table-wrap" style="margin-top:8px">'
-      + '<table class="quotes-mini-table"><thead><tr>'
-      + '<th>So PL</th><th>Noi dung</th><th>Ghi chu</th><th>Ngay ky</th>'
-      + '<th>Truoc thue</th><th>Thue %</th><th>Sau thue</th>'
-      + '<th>Tac dong +/-</th><th>Trang thai</th><th>URL</th><th></th>'
-      + '</tr></thead><tbody>'
-      + (rows.length ? rows.map(function (r) { return rfqAddendumRow(rfqId, contractId, r); }).join('') : '<tr><td colspan="11" class="empty-state small">Chua co phu luc.</td></tr>')
-      + '</tbody></table></div>';
-  }
-
-  function rfqAddendumRow(rfqId, contractId, r) {
-    var archived = r.status === 'archived';
-    var editBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-write onclick="RfqsModule.openContractAddendumModal(\'' + API.esc(rfqId) + '\',\'' + API.esc(contractId) + '\',\'' + API.esc(r.addendum_id || '') + '\')">Sua</button>';
-    var archiveBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-role-only="admin,manager" onclick="RfqsModule.archiveContractAddendum(\'' + API.esc(rfqId) + '\',\'' + API.esc(r.addendum_id || '') + '\',\'' + API.esc(contractId) + '\')">Luu tru</button>';
     var addendumId = r.addendum_id || '';
     return '<tr>'
       + '<td><strong>' + API.esc(r.addendum_no || '') + '</strong></td>'
-      + '<td>' + API.esc(r.addendum_name || '') + '</td>'
-      + '<td>' + API.esc(r.note || '') + '</td>'
+      + '<td class="contract-addendum-content">' + API.esc(r.addendum_name || '') + (r.note ? '<div class="muted" style="font-size:11px">' + API.esc(r.note) + '</div>' : '') + '</td>'
       + '<td>' + API.esc(r.signed_date || '') + '</td>'
       + '<td class="num">' + moneyOrDash(r.value_before_tax) + '</td>'
       + '<td class="num">' + API.esc(r.tax_rate != null ? r.tax_rate : 0) + '</td>'
@@ -540,8 +503,9 @@
       + '<td style="text-align:center">' + addendumUrlCell(r.external_url) + '</td>'
       + '<td style="white-space:nowrap;text-align:center">' + editBtn + archiveBtn + '</td>'
       + '</tr>'
-      + '<tr><td colspan="11" style="background:var(--bg);padding:8px 10px">'
-      + '<div id="' + rfqAddendumItemsContainerId(addendumId) + '" class="empty-state small">Dang tai dong chi tiet...</div>'
+      + '<tr><td colspan="10" class="contract-addendum-detail-cell">'
+      + '<button type="button" class="btn btn-sm contract-addendum-detail-toggle" onclick="RfqsModule.toggleContractAddendumItems(\'' + API.esc(rfqId) + '\',\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\')">Chi tiết vật tư/dịch vụ</button>'
+      + '<div id="' + rfqAddendumItemsContainerId(addendumId) + '" class="contract-addendum-detail-panel hidden"></div>'
       + '</td></tr>';
   }
 
@@ -560,36 +524,49 @@
       container.innerHTML = renderRfqContractAddendumItems(rfqId, contractId, addendumId, data);
       Auth.applyRoleUI();
     } catch (err) {
-      container.textContent = 'Loi tai dong chi tiet phu luc.';
+      container.textContent = 'Lỗi tải dòng chi tiết phụ lục.';
       API.error(err);
     }
   }
 
+  async function toggleContractAddendumItems(rfqId, contractId, addendumId) {
+    var container = document.getElementById(rfqAddendumItemsContainerId(addendumId));
+    if (!container) return;
+    var willOpen = container.classList.contains('hidden');
+    container.classList.toggle('hidden', !willOpen);
+    if (!willOpen) return;
+    if (container.dataset.loaded === '1') return;
+    container.innerHTML = '<div class="muted" style="font-size:12px;padding:6px 0">Đang tải chi tiết vật tư/dịch vụ...</div>';
+    await loadRfqContractAddendumItems(rfqId, contractId, addendumId);
+    container.dataset.loaded = '1';
+  }
+
   function renderRfqContractAddendumItems(rfqId, contractId, addendumId, data) {
     var rows = data.rows || [];
+    var activeRows = rows.filter(function (r) { return r.status !== 'archived'; });
     var addendum = contractAddendumCache[addendumId] || data.addendum || {};
     var detailTotal = Number((data.summary || {}).detail_total || 0);
     var headerDelta = Number(addendum.amount_delta || 0);
-    var warn = detailTotal !== headerDelta
-      ? '<div class="muted" style="color:var(--red);font-size:12px;margin-top:4px">T&#7893;ng chi ti&#7871;t kh&#225;c t&#225;c &#273;&#7897;ng gi&#225; tr&#7883; c&#7911;a ph&#7909; l&#7909;c.</div>'
+    var warn = activeRows.length && detailTotal !== headerDelta
+      ? '<div class="muted" style="color:var(--red);font-size:12px;margin-top:4px">Tổng chi tiết khác giá trị phụ lục</div>'
       : '';
     return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
-      + '<div><strong>Tong chi tiet: ' + API.esc(API.money(detailTotal) || '0') + '</strong>'
-      + '<span class="muted" style="margin-left:10px">Tac dong header: ' + API.esc(API.money(headerDelta) || '0') + '</span>'
+      + '<div><strong>Tổng chi tiết: ' + API.esc(API.money(detailTotal) || '0') + '</strong>'
+      + '<span class="muted" style="margin-left:10px">Giá trị phụ lục: ' + API.esc(API.money(headerDelta) || '0') + '</span>'
       + warn + '</div>'
-      + '<button type="button" class="btn btn-sm" data-write onclick="RfqsModule.openContractAddendumItemModal(\'' + API.esc(rfqId) + '\',\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\')">+ Dong chi tiet</button>'
+      + '<button type="button" class="btn btn-sm" data-write onclick="RfqsModule.openContractAddendumItemModal(\'' + API.esc(rfqId) + '\',\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\')">+ Dòng chi tiết</button>'
       + '</div>'
-      + '<div class="quotes-table-wrap"><table class="quotes-mini-table"><thead><tr>'
-      + '<th>Loai</th><th>Ma</th><th>Noi dung</th><th>Quy cach</th><th>DVT</th><th>SL</th><th>Don gia</th><th>Thanh tien</th><th>Thue %</th><th>Ghi chu</th><th>Thao tac</th>'
+      + (rows.length ? '<div class="quotes-table-wrap"><table class="quotes-mini-table contract-addendum-detail-table"><thead><tr>'
+      + '<th>Loại</th><th>Mã</th><th>Nội dung</th><th>Quy cách</th><th>ĐVT</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th><th>Thuế %</th><th>Ghi chú</th><th>Thao tác</th>'
       + '</tr></thead><tbody>'
-      + (rows.length ? rows.map(function (r) { return rfqAddendumItemRow(rfqId, contractId, addendumId, r); }).join('') : '<tr><td colspan="11" class="empty-state small">Chua co dong chi tiet.</td></tr>')
-      + '</tbody></table></div>';
+      + rows.map(function (r) { return rfqAddendumItemRow(rfqId, contractId, addendumId, r); }).join('')
+      + '</tbody></table></div>' : '<div class="muted contract-addendum-empty">Chưa có chi tiết vật tư/dịch vụ.</div>');
   }
 
   function rfqAddendumItemRow(rfqId, contractId, addendumId, r) {
     var archived = r.status === 'archived';
-    var editBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-write onclick="RfqsModule.openContractAddendumItemModal(\'' + API.esc(rfqId) + '\',\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\',\'' + API.esc(r.addendum_item_id || '') + '\')">Sua</button>';
-    var archiveBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-role-only="admin,manager" onclick="RfqsModule.archiveContractAddendumItem(\'' + API.esc(rfqId) + '\',\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\',\'' + API.esc(r.addendum_item_id || '') + '\')">Luu tru</button>';
+    var editBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-write onclick="RfqsModule.openContractAddendumItemModal(\'' + API.esc(rfqId) + '\',\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\',\'' + API.esc(r.addendum_item_id || '') + '\')">Sửa</button>';
+    var archiveBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-role-only="admin,manager" onclick="RfqsModule.archiveContractAddendumItem(\'' + API.esc(rfqId) + '\',\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\',\'' + API.esc(r.addendum_item_id || '') + '\')">Lưu trữ</button>';
     return '<tr' + (archived ? ' style="opacity:.65"' : '') + '>'
       + '<td>' + API.esc(rfqAddendumItemTypeLabel(r.item_type)) + '</td>'
       + '<td>' + API.esc(r.item_code || '') + '</td>'
@@ -606,11 +583,11 @@
   }
 
   function rfqAddendumItemTypeLabel(type) {
-    return { material: 'Material', service: 'Service', other: 'Other' }[type] || type || '';
+    return { material: 'Vật tư', service: 'Dịch vụ', other: 'Khác' }[type] || type || '';
   }
 
   function rfqAddendumItemTypeOptions(current) {
-    var opts = [['material', 'Material'], ['service', 'Service'], ['other', 'Other']];
+    var opts = [['material', 'Vật tư'], ['service', 'Dịch vụ'], ['other', 'Khác']];
     return opts.map(function (o) {
       return '<option value="' + API.esc(o[0]) + '"' + (o[0] === current ? ' selected' : '') + '>' + API.esc(o[1]) + '</option>';
     }).join('');
@@ -822,8 +799,8 @@
       + input('valueBeforeTax', 'Giá trị trước thuế', row.value_before_tax || '', 'inputmode="numeric" placeholder="0"', 'span-3')
       + input('taxRate', 'Thuế %', row.tax_rate ?? '', 'type="number" min="0" step="0.01" placeholder="0"', 'span-2')
       + input('valueAfterTax', 'Giá trị sau thuế', row.value_after_tax || '', 'inputmode="numeric" placeholder="0" readonly', 'span-3')
-      + input('amountDelta', 'Tác động giá trị hợp đồng', row.amount_delta || '', 'inputmode="numeric" readonly', 'span-4')
-      + '<div class="span-12 muted" style="font-size:12px;margin-top:-4px">Tự tính từ giá trị sau thuế. Số âm là giảm giá trị hợp đồng.</div>'
+      + input('amountDelta', 'Giá trị phụ lục (+/-)', row.amount_delta || '', 'inputmode="numeric" readonly', 'span-4')
+      + '<div class="span-12 muted" style="font-size:12px;margin-top:-4px">Số âm là phụ lục giảm giá trị hợp đồng.</div>'
       + textarea('note', 'Ghi chú / nội dung', row.note || '', '', 'span-12 compact-ta')
       + input('externalUrl', 'URL', row.external_url || '', 'type="url" maxlength="2000" placeholder="https://drive.google.com/..."', 'span-12');
     Utils.openModal(addendumId ? 'Sửa phụ lục hợp đồng' : 'Thêm phụ lục hợp đồng', html, async function (form) {
@@ -876,22 +853,22 @@
   function openContractAddendumItemModal(rfqId, contractId, addendumId, addendumItemId) {
     var row = addendumItemId ? (contractAddendumItemCache[addendumItemId] || {}) : {};
     var html = ''
-      + '<label class="span-3">Loai<select name="itemType">' + rfqAddendumItemTypeOptions(row.item_type || 'material') + '</select></label>'
-      + input('itemCode', 'Ma', row.item_code || '', 'maxlength="120"', 'span-3')
-      + input('itemName', 'Noi dung *', row.item_name || '', 'required maxlength="500"', 'span-6')
-      + input('spec', 'Quy cach', row.spec || '', 'maxlength="1000"', 'span-6')
-      + input('unit', 'DVT', row.unit || '', 'maxlength="80"', 'span-2')
+      + '<label class="span-3">Loại<select name="itemType">' + rfqAddendumItemTypeOptions(row.item_type || 'material') + '</select></label>'
+      + input('itemCode', 'Mã', row.item_code || '', 'maxlength="120"', 'span-3')
+      + input('itemName', 'Nội dung *', row.item_name || '', 'required maxlength="500"', 'span-6')
+      + input('spec', 'Quy cách', row.spec || '', 'maxlength="1000"', 'span-6')
+      + input('unit', 'ĐVT', row.unit || '', 'maxlength="80"', 'span-2')
       + input('quantity', 'SL', row.quantity ?? '', 'type="number" min="0" step="0.001"', 'span-2')
-      + input('unitPrice', 'Don gia', row.unit_price || '', 'inputmode="numeric"', 'span-3')
-      + input('lineTotal', 'Thanh tien', row.line_total || '', 'inputmode="numeric"', 'span-3')
-      + input('taxRate', 'Thue %', row.tax_rate ?? '', 'type="number" min="0" step="0.01"', 'span-2')
-      + textarea('note', 'Ghi chu', row.note || '', '', 'span-12 compact-ta');
-    Utils.openModal(addendumItemId ? 'Sua dong chi tiet phu luc' : 'Them dong chi tiet phu luc', html, async function (form) {
+      + input('unitPrice', 'Đơn giá', row.unit_price || '', 'inputmode="numeric"', 'span-3')
+      + input('lineTotal', 'Thành tiền', row.line_total || '', 'inputmode="numeric"', 'span-3')
+      + input('taxRate', 'Thuế %', row.tax_rate ?? '', 'type="number" min="0" step="0.01"', 'span-2')
+      + textarea('note', 'Ghi chú', row.note || '', '', 'span-12 compact-ta');
+    Utils.openModal(addendumItemId ? 'Sửa dòng chi tiết phụ lục' : 'Thêm dòng chi tiết phụ lục', html, async function (form) {
       try {
         form.addendumId = addendumId;
         if (addendumItemId) form.addendumItemId = addendumItemId;
         await API.call(addendumItemId ? 'updateContractAddendumItem' : 'createContractAddendumItem', form);
-        API.toast('Da luu dong chi tiet', 'success');
+        API.toast('Đã lưu dòng chi tiết', 'success');
         await loadRfqContractAddendumItems(rfqId, contractId, addendumId);
       } catch (err) {
         API.error(err);
@@ -901,11 +878,11 @@
   }
 
   async function archiveContractAddendumItem(rfqId, contractId, addendumId, addendumItemId) {
-    var ok = await Utils.confirmDanger('Luu tru dong chi tiet', 'Luu tru dong chi tiet phu luc nay?', 'Luu tru');
+    var ok = await Utils.confirmDanger('Lưu trữ dòng chi tiết', 'Lưu trữ dòng chi tiết phụ lục này?', 'Lưu trữ');
     if (!ok) return;
     try {
       await API.call('archiveContractAddendumItem', { addendumItemId: addendumItemId });
-      API.toast('Da luu tru dong chi tiet', 'success');
+      API.toast('Đã lưu trữ dòng chi tiết', 'success');
       await loadRfqContractAddendumItems(rfqId, contractId, addendumId);
     } catch (err) {
       API.error(err);
@@ -1092,6 +1069,7 @@
     openRfqContractModal: openRfqContractModal,
     openContractAddendumModal: openContractAddendumModal,
     archiveContractAddendum: archiveContractAddendum,
+    toggleContractAddendumItems: toggleContractAddendumItems,
     openContractAddendumItemModal: openContractAddendumItemModal,
     archiveContractAddendumItem: archiveContractAddendumItem,
     archiveRfq:        archiveRfq,

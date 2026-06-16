@@ -178,6 +178,9 @@ function normalizeItemRow(body, base) {
   const technicalParams = firstText(body, ['technicalParams', 'technical_params', 'thongSoKyThuat', 'thong_so_ky_thuat'], 2000);
   const unit = firstText(body, ['unit', 'donVi', 'don_vi'], 80);
   const quantity = firstNumber(body, ['quantity', 'soLuong', 'so_luong']);
+  const taxRate = cleanNumber(body.thueSuat ?? body.thue_suat);
+  const unitPrice = cleanMoney(body.donGiaSauThue ?? body.don_gia_sau_thue ?? body.donGiaTruocThue ?? body.don_gia_truoc_thue);
+  const lineTotalAfterTax = Math.round(quantity * unitPrice * (1 + taxRate / 100));
   const warrantyPercent = nullableNumber(body, ['warrantyPercent', 'warranty_percent']);
   const warrantyDays = nullableNumber(body, ['warrantyDays', 'warranty_days'], true);
   if (warrantyPercent?.error) return { error: warrantyPercent.error };
@@ -211,10 +214,10 @@ function normalizeItemRow(body, base) {
     yeu_cau_ky_thuat_bo_sung: v(body, 'yeuCauKyThuatBoSung', 'yeu_cau_ky_thuat_bo_sung', 1500),
     so_luong: quantity,
     don_vi: unit,
-    thue_suat: cleanNumber(body.thueSuat ?? body.thue_suat),
+    thue_suat: taxRate,
     don_gia_truoc_thue: cleanMoney(body.donGiaTruocThue ?? body.don_gia_truoc_thue),
-    don_gia_sau_thue: cleanMoney(body.donGiaSauThue ?? body.don_gia_sau_thue),
-    thanh_tien_sau_thue: cleanMoney(body.thanhTienSauThue ?? body.thanh_tien_sau_thue),
+    don_gia_sau_thue: unitPrice,
+    thanh_tien_sau_thue: lineTotalAfterTax,
     gia_hop_dong: cleanMoney(body.giaHopDong ?? body.gia_hop_dong),
     nguon_gia: v(body, 'nguonGia', 'nguon_gia', 120),
     trang_thai_dong: v(body, 'trangThaiDong', 'trang_thai_dong', 80) || 'chua_xu_ly',

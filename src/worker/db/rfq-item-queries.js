@@ -120,7 +120,7 @@ export async function listRfqItemsSQL(db, { q, q2, q3, rfqId, status, techFilter
     cursor ? Promise.resolve(null) : db.prepare(countSql).bind(...baseBinds).first(),
     db.prepare(
       `WITH page AS (
-         SELECT i.*, r.ten_goi, r.ma_goi_tbmt, COALESCE(c.client_name, r.nha_may_cdt, '') AS ten_cdt
+         SELECT i.*, r.ten_goi, r.ma_goi_tbmt, r.trang_thai_goi, COALESCE(c.client_name, r.nha_may_cdt, '') AS ten_cdt
          FROM rfq_items i LEFT JOIN rfqs r ON r.rfq_id = i.rfq_id LEFT JOIN clients c ON c.client_id = r.client_id
          ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
          ORDER BY ${innerOrderBy} LIMIT ?
@@ -250,7 +250,13 @@ export async function archiveRfqItemSQL(db, rfqItemId, now) {
 }
 
 export async function getRfqItemSQL(db, id) {
-  return db.prepare('SELECT * FROM rfq_items WHERE rfq_item_id = ?').bind(id).first();
+  return db.prepare(
+    `SELECT i.*, r.trang_thai_goi, r.ten_goi, r.ma_goi_tbmt, COALESCE(c.client_name, r.nha_may_cdt, '') AS ten_cdt
+     FROM rfq_items i
+     LEFT JOIN rfqs r ON r.rfq_id = i.rfq_id
+     LEFT JOIN clients c ON c.client_id = r.client_id
+     WHERE i.rfq_item_id = ?`
+  ).bind(id).first();
 }
 
 export async function insertRfqItemSQL(db, row) {

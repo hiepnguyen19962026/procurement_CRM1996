@@ -233,6 +233,22 @@ mark { background: #fcd34d; padding: 0 2px; border-radius: 2px; font-style: norm
 .dash-th-sort:hover { color: var(--blue); }
 /* quotes/history table scroll inside modal — needs overflow-x: clip on .modal-body to work */
 .quotes-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; max-width: 100%; }
+.contract-addendum-table { min-width: 1320px; width: max-content; }
+.contract-addendum-detail-table { min-width: 1280px; width: max-content; }
+.contract-addendum-table th,
+.contract-addendum-table td,
+.contract-addendum-detail-table th,
+.contract-addendum-detail-table td { white-space: nowrap; overflow-wrap: normal; }
+.contract-addendum-table .num,
+.contract-addendum-detail-table .num { min-width: 120px; text-align: right; font-variant-numeric: tabular-nums; }
+.contract-addendum-table .contract-addendum-content { min-width: 220px; max-width: 320px; white-space: normal; overflow-wrap: anywhere; }
+.contract-addendum-detail-table td:nth-child(3),
+.contract-addendum-detail-table td:nth-child(4),
+.contract-addendum-detail-table td:nth-child(10) { min-width: 180px; max-width: 280px; white-space: normal; overflow-wrap: anywhere; }
+.contract-addendum-detail-cell { background: var(--bg); padding: 7px 10px; }
+.contract-addendum-detail-toggle { min-height: 28px; padding: 4px 10px; }
+.contract-addendum-detail-panel { margin-top: 8px; }
+.contract-addendum-empty { padding: 6px 0 2px; font-size: 12px; }
 /* coverage 2-stat grid — overridable by media query */
 .coverage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
 .empty-state { min-height: 150px; display: grid; place-items: center; color: var(--text-muted); border: 1px dashed var(--border-mid); border-radius: 10px; background: #fcfcfd; font-size: 13px; text-align: center; padding: 18px; }
