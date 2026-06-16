@@ -1,6 +1,7 @@
 import {
   getTechnicalClarificationSQL,
   insertTechnicalClarificationSQL,
+  listAllClarificationsSQL,
   listTechnicalClarificationsSQL,
   nextClarificationId,
   nextClarificationSequenceSQL,
@@ -47,6 +48,7 @@ const TECH_STATUS_MAP = {
 };
 
 export async function handleTechnicalClarifications(action, request, env, ctx, actor) {
+  if (action === 'listAllClarifications')        return listAllClarifications(request, env, actor);
   if (action === 'getTechnicalClarifications')  return listClarifications(request, env, actor);
   if (action === 'getItemRevisions')            return listRevisions(request, env, actor);
   if (action === 'createTechnicalClarification') return saveClarification(request, env, ctx, actor, false);
@@ -54,6 +56,21 @@ export async function handleTechnicalClarifications(action, request, env, ctx, a
   if (action === 'deleteTechnicalClarification') return deleteClarification(request, env, ctx, actor);
   if (action === 'quickUpdateClarification')    return quickUpdateClar(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown technical clarification action' }, 400);
+}
+
+async function listAllClarifications(request, env, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const body    = await readJson(request);
+  const q       = cleanString(body.q,   200) || '';
+  const q2      = cleanString(body.q2,  200) || '';
+  const q3      = cleanString(body.q3,  200) || '';
+  const sortBy  = cleanString(body.sortBy  || body.sort_by,  40) || 'created_at';
+  const sortDir = body.sortDir === 'asc' || body.sort_dir === 'asc' ? 'asc' : 'desc';
+  const cursor  = cleanString(body.cursor, 300) || '';
+  const limit   = Math.min(Number(body.limit) || 50, 100);
+  const result  = await listAllClarificationsSQL(env.DB, { q, q2, q3, sortBy, sortDir, cursor, limit });
+  return json({ ok: true, ...result });
 }
 
 async function listClarifications(request, env, actor) {

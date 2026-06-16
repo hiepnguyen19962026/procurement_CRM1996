@@ -39,6 +39,7 @@
         <button data-screen="suppliers" data-title="Nhà cung cấp"><span>◌</span>Nhà cung cấp</button>
         <button data-screen="quotes" data-title="Báo giá NCC"><span>◈</span>Báo giá NCC</button>
         <button data-screen="delivery-notes" data-title="Đơn giao hàng"><span>◻</span>Đơn giao hàng</button>
+        <button data-screen="clarifications" data-title="Làm rõ"><span>◐</span>Làm rõ</button>
         <div class="nav-section">Hệ thống</div>
         <button data-screen="audit" data-title="Nhật ký hệ thống" data-role-only="admin"><span>☷</span>Nhật ký hệ thống</button>
         <button data-screen="accounts" data-title="Tài khoản" data-role-only="admin"><span>○</span>Tài khoản</button>
@@ -253,6 +254,39 @@
           </div>
         </section>
 
+        <section class="screen" id="screen-clarifications">
+          <div class="panel">
+            <div class="toolbar">
+              <input id="clarQ"  placeholder="Tìm ID, tiêu đề, nội dung..." style="width:200px;flex:0 0 auto">
+              <input id="clarQ2" placeholder="Mã gói, tên gói..." style="width:160px;flex:0 0 auto">
+              <input id="clarQ3" placeholder="Mã vật tư, tên vật tư..." style="width:170px;flex:0 0 auto">
+              <button onclick="ClarificationsModule.load(true)">Tìm kiếm</button>
+            </div>
+            <p id="clarInfo" style="margin:0 0 6px;font-size:12px;color:var(--text-muted)"></p>
+            <div class="table-wrap">
+              <table id="clarTable">
+                <thead id="clarThead">
+                  <tr>
+                    <th style="white-space:nowrap;width:130px">ID làm rõ</th>
+                    <th style="white-space:nowrap;width:90px;cursor:pointer" data-sort="created_at" data-label="Thời gian" onclick="ClarificationsModule.onSort('created_at')">Thời gian ▼</th>
+                    <th style="white-space:nowrap;width:80px;cursor:pointer" data-sort="ma_goi_tbmt" data-label="Mã gói" onclick="ClarificationsModule.onSort('ma_goi_tbmt')">Mã gói</th>
+                    <th style="min-width:110px;cursor:pointer" data-sort="ten_goi" data-label="Tên gói" onclick="ClarificationsModule.onSort('ten_goi')">Tên gói</th>
+                    <th style="white-space:nowrap;width:85px;cursor:pointer" data-sort="ma_vat_tu" data-label="Mã vật tư" onclick="ClarificationsModule.onSort('ma_vat_tu')">Mã vật tư</th>
+                    <th style="min-width:110px">Tên vật tư</th>
+                    <th style="white-space:nowrap;width:100px;cursor:pointer" data-sort="clarification_type" data-label="Loại" onclick="ClarificationsModule.onSort('clarification_type')">Loại</th>
+                    <th style="white-space:nowrap;width:100px;cursor:pointer" data-sort="status_after" data-label="Trạng thái" onclick="ClarificationsModule.onSort('status_after')">Trạng thái</th>
+                    <th style="min-width:130px">Tiêu đề</th>
+                    <th style="min-width:150px">Nội dung</th>
+                    <th style="width:55px">URL</th>
+                  </tr>
+                </thead>
+                <tbody id="clarRows"></tbody>
+              </table>
+            </div>
+            <p><button id="clarMore" class="hidden" onclick="ClarificationsModule.load(false)">Tải thêm</button></p>
+          </div>
+        </section>
+
         <section class="screen" id="screen-audit">
           <div class="panel"><div class="toolbar"><input id="auditSearch" placeholder="Tìm hành động, người thao tác, nội dung"><button onclick="AuditModule.load(true)">Tìm kiếm</button></div><div class="table-wrap"><table><thead><tr><th data-sort-key="created_at">Thời gian</th><th data-sort-key="actor_name">Người thao tác</th><th data-sort-key="action">Hành động</th><th>Nội dung</th></tr></thead><tbody id="auditRows"></tbody></table></div><p><button id="auditMore" class="hidden" onclick="AuditModule.load(false)">Tải thêm</button></p></div>
         </section>
@@ -286,6 +320,7 @@
   <script src="/assets/js/modules/ocr.js"></script>
   <script src="/assets/js/modules/supplier-quotes.js"></script>
   <script src="/assets/js/modules/delivery-notes.js?v=20260614b"></script>
+  <script src="/assets/js/modules/clarifications.js"></script>
   <script src="/assets/js/modules/tasks.js"></script>
   <script src="/assets/js/modules/audit.js"></script>
   <script src="/assets/js/modules/accounts.js"></script>
@@ -299,6 +334,7 @@
       suppliers: '<button data-write onclick="OcrModule.openSupplierOcr()">OCR danh thiếp</button><button class="primary" data-write onclick="SuppliersModule.openCreate()">+ Thêm NCC</button>',
       quotes:    '',
       'delivery-notes': '',
+      'clarifications': '',
       audit:     '',
       accounts:  '<button onclick="AccountsModule.load(true)">Tải lại</button><button class="primary" onclick="AccountsModule.openCreate()">+ Thêm tài khoản</button>',
     };
@@ -332,6 +368,7 @@
       if (screen === 'suppliers') SuppliersModule.load(true);
       if (screen === 'quotes') SupplierQuotesModule.load(true);
       if (screen === 'delivery-notes') DeliveryNotesModule.load(true);
+      if (screen === 'clarifications') ClarificationsModule.load(true);
       if (screen === 'audit') AuditModule.load(true);
       if (screen === 'accounts') AccountsModule.load(true);
     });

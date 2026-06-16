@@ -1,5 +1,5 @@
 // bump CACHE_NAME on every deploy that changes JS/CSS to bust stale asset cache
-const CACHE_NAME = 'procurement-crm-v28';
+const CACHE_NAME = 'procurement-crm-v29';
 const STATIC_ASSETS = [
   '/manifest.json',
   '/icon-192.png',
@@ -17,6 +17,7 @@ const STATIC_ASSETS = [
   '/assets/js/modules/supplier-quotes.js',
   '/assets/js/modules/audit.js',
   '/assets/js/modules/accounts.js',
+  '/assets/js/modules/clarifications.js',
 ];
 // index.html / are intentionally excluded: always network-first (see fetch handler)
 

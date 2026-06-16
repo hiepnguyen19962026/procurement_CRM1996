@@ -81,6 +81,85 @@ export async function softDeleteTechnicalClarificationSQL(db, { clarificationId,
   ).bind(deletedAt, deletedAt, clarificationId).run();
 }
 
+export async function listAllClarificationsSQL(db, { q, q2, q3, sortBy, sortDir, cursor, limit }) {
+  const SORT_MAP = {
+    created_at:         { col: 'tc.created_at',          field: 'created_at',         noCoalesce: true  },
+    clarification_type: { col: 'tc.clarification_type',  field: 'clarification_type',  noCoalesce: false },
+    status_after:       { col: 'tc.status_after',        field: 'status_after',        noCoalesce: false },
+    ma_goi_tbmt:        { col: 'r.ma_goi_tbmt',          field: 'ma_goi_tbmt',         noCoalesce: false },
+    ten_goi:            { col: 'r.ten_goi',              field: 'ten_goi',             noCoalesce: false },
+    ma_vat_tu:          { col: 'i.ma_vat_tu',            field: 'ma_vat_tu',           noCoalesce: false },
+  };
+  const sort = SORT_MAP[sortBy] || SORT_MAP.created_at;
+  const dir  = sortDir === 'asc' ? 'ASC' : 'DESC';
+  const op   = dir === 'ASC' ? '>' : '<';
+  const lim  = Math.min(Number(limit) || 50, 100);
+
+  const where = ['tc.deleted_at IS NULL'];
+  const binds = [];
+
+  function addSearch(qv) {
+    if (!qv) return;
+    const pct = `%${qv}%`;
+    where.push(`(tc.clarification_id LIKE ? OR tc.title LIKE ? OR tc.content LIKE ?
+      OR i.ma_vat_tu LIKE ? OR i.ten_vat_tu LIKE ?
+      OR r.ma_goi_tbmt LIKE ? OR r.ten_goi LIKE ?)`);
+    binds.push(pct, pct, pct, pct, pct, pct, pct);
+  }
+  addSearch(q); addSearch(q2); addSearch(q3);
+
+  const baseWhere = [...where];
+  const baseBinds = [...binds];
+
+  if (cursor) {
+    const sep     = cursor.indexOf('|||');
+    const sortVal = sep === -1 ? null : cursor.slice(0, sep);
+    const pk      = sep === -1 ? cursor : cursor.slice(sep + 3);
+    const wrap    = sort.noCoalesce ? sort.col : `COALESCE(${sort.col}, '')`;
+    if (sortVal === null) {
+      where.push(`tc.clarification_id ${op} ?`);
+      binds.push(pk);
+    } else {
+      where.push(`(${wrap} ${op} ? OR (${wrap} = ? AND tc.clarification_id ${op} ?))`);
+      binds.push(sortVal, sortVal, pk);
+    }
+  }
+
+  const orderBy = `${sort.col} ${dir}, tc.clarification_id ${dir}`;
+  const joinSql = `FROM technical_clarifications tc
+    JOIN rfq_items i ON i.rfq_item_id = tc.rfq_item_id
+    JOIN rfqs r ON r.rfq_id = i.rfq_id`;
+
+  const countSql = `SELECT COUNT(*) AS total ${joinSql} WHERE ${baseWhere.join(' AND ')}`;
+  const dataSql  = `SELECT
+    tc.clarification_id, tc.created_at, tc.clarification_type, tc.status_after,
+    tc.title, tc.content, tc.external_url,
+    i.rfq_item_id, i.ma_vat_tu, i.ten_vat_tu, i.rfq_id,
+    r.ma_goi_tbmt, r.ten_goi
+    ${joinSql}
+    WHERE ${where.join(' AND ')}
+    ORDER BY ${orderBy}
+    LIMIT ?`;
+
+  const [countRow, res] = await Promise.all([
+    cursor ? Promise.resolve(null) : db.prepare(countSql).bind(...baseBinds).first(),
+    db.prepare(dataSql).bind(...binds, lim + 1).all(),
+  ]);
+
+  const rows = res.results || [];
+  const hasMore = rows.length > lim;
+  if (hasMore) rows.pop();
+
+  let nextCursor = null;
+  if (hasMore && rows.length > 0) {
+    const last = rows[rows.length - 1];
+    const sv   = last[sort.field] != null ? String(last[sort.field]) : '';
+    nextCursor = `${sv}|||${last.clarification_id}`;
+  }
+
+  return { rows, total: countRow ? Number(countRow.total) : null, hasMore, nextCursor };
+}
+
 export async function updateRfqItemTechnicalFinalSQL(db, row) {
   return db.prepare(
     `UPDATE rfq_items SET
