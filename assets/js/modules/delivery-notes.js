@@ -62,6 +62,16 @@
   function todayYmd() {
     return new Date(Date.now() + 7 * 3600000).toISOString().slice(0, 10);
   }
+  function effectiveWarrantyDays(it) {
+    if (!it) return null;
+    if (it.warranty_days != null) return it.warranty_days;
+    if (it.item_warranty_days_override != null) return it.item_warranty_days_override;
+    if (it.rfq_warranty_days_default != null) return it.rfq_warranty_days_default;
+    return it.effective_warranty_days != null ? it.effective_warranty_days : null;
+  }
+  function isSelectedDetailItem(it) {
+    return it && _selectedDetailIds.has(String(it.delivery_note_item_id));
+  }
 
   function _deadlineCellHtml(deadlineDate) {
     if (!deadlineDate) return '—';
@@ -407,7 +417,17 @@
     var today = todayYmd();
 
     var selectedItems = items.filter(function (it) {
-      return _selectedDetailIds.has(it.delivery_note_item_id);
+      return isSelectedDetailItem(it);
+    });
+    var commonWarrantyDays = '';
+    selectedItems.forEach(function (it, idx) {
+      var days = effectiveWarrantyDays(it);
+      var val = days != null ? String(days) : '';
+      if (idx === 0) {
+        commonWarrantyDays = val;
+      } else if (commonWarrantyDays !== val) {
+        commonWarrantyDays = '';
+      }
     });
 
     var summaryRows = selectedItems.map(function (it) {
@@ -423,7 +443,7 @@
       + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Ngày nghiệm thu *</label>'
         + '<input id="fnt-date" name="fnt-date" type="date" value="' + today + '" style="width:100%"></div>'
       + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Số ngày bảo hành</label>'
-        + '<input id="fnt-warranty" type="text" inputmode="numeric" placeholder="(tùy chọn)" style="width:100%"></div>'
+        + '<input id="fnt-warranty" type="text" inputmode="numeric" value="' + esc(commonWarrantyDays) + '" placeholder="(tùy chọn)" style="width:100%"></div>'
       + '<div style="grid-column:1/-1"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Ghi chú nghiệm thu</label>'
         + '<input id="fnt-note" type="text" placeholder="(tùy chọn)" style="width:100%"></div>'
       + '</div>'
@@ -451,17 +471,19 @@
     var ntNote   = (document.getElementById('fnt-note')    || {}).value || '';
 
     if (!dateVal) { API.toast('Vui lòng chọn ngày nghiệm thu', 'warn'); return; }
-    var warrantyDays = wDaysRaw ? (parseInt(wDaysRaw, 10) || null) : null;
+    var hasWarrantyOverride = String(wDaysRaw).trim() !== '';
+    var warrantyDays = hasWarrantyOverride ? parseInt(wDaysRaw, 10) : null;
+    if (hasWarrantyOverride && !Number.isFinite(warrantyDays)) warrantyDays = null;
 
     var items = detail.items;
     // Build ALL items — selected get new acceptance, unselected keep current state.
     var itemRows = items.map(function (it) {
-      if (_selectedDetailIds.has(it.delivery_note_item_id)) {
+      if (isSelectedDetailItem(it)) {
         return {
           deliveryNoteItemId: it.delivery_note_item_id,
           acceptanceStatus:   'accepted',
           acceptedQuantity:   Number(it.delivered_quantity) || 0,
-          warrantyDays:       warrantyDays,
+          warrantyDays:       hasWarrantyOverride ? warrantyDays : effectiveWarrantyDays(it),
           warrantyStartDate:  dateVal,
           warrantyEndDate:    null, // backend computes from days + start
         };
@@ -471,7 +493,7 @@
         acceptanceStatus:   it.acceptance_status  || 'pending',
         acceptedQuantity:   Number(it.accepted_quantity) || 0,
         rejectionReason:    it.rejection_reason   || null,
-        warrantyDays:       it.warranty_days      || null,
+        warrantyDays:       it.warranty_days       != null ? it.warranty_days : null,
         warrantyStartDate:  it.warranty_start_date || null,
         warrantyEndDate:    it.warranty_end_date   || null,
       };
@@ -524,7 +546,8 @@
       + items.map(function (it, idx) {
           var prevStatus       = it.acceptance_status || 'pending';
           var prevAccepted     = Number(it.accepted_quantity) || 0;
-          var prevWarrantyDays = it.warranty_days  != null ? String(it.warranty_days)  : '';
+          var daysValue        = effectiveWarrantyDays(it);
+          var prevWarrantyDays = daysValue != null ? String(daysValue) : '';
           var prevWarrantyStart = it.warranty_start_date || '';
           return '<tr data-idx="' + idx + '">'
             + '<td style="font-size:12px">' + esc(it.ten_vat_tu || '—') + '</td>'

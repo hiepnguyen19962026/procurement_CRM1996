@@ -28,6 +28,7 @@ export async function runScheduledTasks(env, cron) {
       scanExpiredQuotes(env),
       scanRfqDeadlines(env),
       scanOrphanMedia(env),
+      purgeOldAuditLogs(env),
     ]);
   }
 }
@@ -65,6 +66,14 @@ async function scanRfqDeadlines(env) {
     generated_at:   new Date().toISOString(),
   }, REPORT_TTL);
   console.log(`[cron] rfq:deadline:scan — overdue=${report.overdue_count} due_soon=${report.due_soon_count}`);
+}
+
+// Delete audit_logs rows older than 365 days — keeps storage bounded, uses idx_audit_created.
+async function purgeOldAuditLogs(env) {
+  const result = await env.DB.prepare(
+    `DELETE FROM audit_logs WHERE created_at < datetime('now', '-365 days')`
+  ).run();
+  console.log(`[cron] audit_logs: purged ${result.meta?.changes ?? 0} rows older than 365 days`);
 }
 
 // Report media_files rows whose owner no longer exists in D1 (quote or rfq_item deleted).

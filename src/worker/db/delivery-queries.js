@@ -103,12 +103,19 @@ export async function getDeliveryNoteItemsSQL(db, deliveryNoteId) {
             COALESCE(ci.contract_quantity, ri.so_luong, ri.quantity, 0) AS contract_quantity, ci.contract_unit_price, ci.contract_line_total,
             ci.delivery_deadline_date,
             ri.stt_goc, ri.hang_final, ri.quy_cach_final, ri.vat_lieu, ri.thong_so_ky_thuat,
+            ri.warranty_days AS item_warranty_days_override,
+            r.warranty_days AS rfq_warranty_days_default,
+            COALESCE(ri.warranty_days, r.warranty_days) AS effective_warranty_days,
+            ri.warranty_percent AS item_warranty_percent_override,
+            r.warranty_percent AS rfq_warranty_percent_default,
+            COALESCE(ri.warranty_percent, r.warranty_percent) AS effective_warranty_percent,
             COALESCE(cu.cumulative_delivered_qty, 0) AS cumulative_delivered_qty,
             COALESCE(cs.clarification_count, 0)      AS clarification_count,
             cs.latest_clarification_title
      FROM delivery_note_items dni
      LEFT JOIN contract_items ci  ON ci.contract_item_id = dni.contract_item_id
      LEFT JOIN rfq_items ri       ON ri.rfq_item_id      = dni.rfq_item_id
+     LEFT JOIN rfqs r             ON r.rfq_id            = ri.rfq_id
      LEFT JOIN cumulative cu      ON cu.rfq_item_id      = dni.rfq_item_id
      LEFT JOIN clar_summary cs    ON cs.rfq_item_id      = dni.rfq_item_id
      WHERE dni.delivery_note_id = ?
