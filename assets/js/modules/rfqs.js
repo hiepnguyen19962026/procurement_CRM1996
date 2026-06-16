@@ -617,7 +617,7 @@
       });
     }
     (clients || []).forEach(function (r) {
-      add(r.legal_name || r.client_name || r.plant_name || '', [r.plant_name, r.tax_code ? 'MST: ' + r.tax_code : '', r.province], [r.legal_name, r.client_name, r.plant_name, r.tax_code, r.province]);
+      add(r.client_name || r.plant_name || r.legal_name || '', [r.legal_name, r.tax_code ? 'MST: ' + r.tax_code : '', r.province], [r.legal_name, r.client_name, r.plant_name, r.tax_code, r.province]);
     });
     (suppliers || []).forEach(function (r) {
       add(r.supplier_name || '', [r.tax_code ? 'MST: ' + r.tax_code : '', r.country], [r.supplier_name, r.tax_code, r.country]);
