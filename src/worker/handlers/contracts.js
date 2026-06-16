@@ -1,19 +1,25 @@
 import {
+  archiveContractAddendumItemSQL,
   archiveContractAddendumSQL,
   archiveContractItemSQL,
   archiveContractSQL,
+  getContractAddendumItemSQL,
+  getContractAddendumItemSummarySQL,
+  getContractAddendumItemsSQL,
   getContractAddendumSQL,
   getContractAddendumSummarySQL,
   getContractItemSQL,
   getContractItemsForRfqItemSQL,
   getContractItemsSQL,
   getContractSQL,
+  insertContractAddendumItemSQL,
   insertContractAddendumSQL,
   insertContractItemSQL,
   insertContractSQL,
   listContractAddendumsSQL,
   listContractsSQL,
   recalcContractTotalSQL,
+  updateContractAddendumItemSQL,
   updateContractAddendumSQL,
   updateContractItemSQL,
   updateContractSQL,
@@ -29,6 +35,7 @@ import { clampLimit, json, makeId, nowIso, readJson } from '../lib/utils.js';
 const VALID_CURRENCY = new Set(['VND', 'USD', 'EUR', 'JPY', 'CNY', 'SGD', 'KRW']);
 const VALID_STATUS   = new Set(['active', 'archived']);
 const VALID_ADDENDUM_STATUS = new Set(['draft', 'active', 'archived', 'cancelled']);
+const VALID_ADDENDUM_ITEM_TYPE = new Set(['material', 'service', 'other']);
 const VALID_DELIVERY_TRIGGER_TYPE = new Set(['contract_sign', 'award_notice', 'delivery_notice', 'po_date', 'manual']);
 const DATE_RE        = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -47,6 +54,10 @@ export async function handleContracts(action, request, env, ctx, actor) {
   if (action === 'createContractAddendum')     return saveAddendum(request, env, ctx, actor, false);
   if (action === 'updateContractAddendum')     return saveAddendum(request, env, ctx, actor, true);
   if (action === 'archiveContractAddendum')    return archiveAddendum(request, env, ctx, actor);
+  if (action === 'getContractAddendumItems')   return listAddendumItems(request, env, actor);
+  if (action === 'createContractAddendumItem') return saveAddendumItem(request, env, ctx, actor, false);
+  if (action === 'updateContractAddendumItem') return saveAddendumItem(request, env, ctx, actor, true);
+  if (action === 'archiveContractAddendumItem') return archiveAddendumItem(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown contract action' }, 400);
 }
 
@@ -435,6 +446,145 @@ async function archiveAddendum(request, env, ctx, actor) {
     action: 'archiveContractAddendum',
     entityType: 'contract_addendum',
     entityId: addendumId,
+    oldJson: old,
+    newJson: { ...old, status: 'archived', archived_at: now, updated_at: now },
+    actor,
+  }));
+  return json({ ok: true, summary });
+}
+
+async function listAddendumItems(request, env, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const addendumId = cleanString(body.addendumId || body.addendum_id || '', 80);
+  if (!addendumId) return json({ ok: false, error: 'Thieu ma phu luc' }, 400);
+  const addendum = await getContractAddendumSQL(env.DB, addendumId);
+  if (!addendum) return json({ ok: false, error: 'Khong tim thay phu luc' }, 404);
+  const rows = await getContractAddendumItemsSQL(env.DB, addendumId);
+  const summary = await getContractAddendumItemSummarySQL(env.DB, addendumId);
+  return json({ ok: true, addendum, rows, summary });
+}
+
+async function saveAddendumItem(request, env, ctx, actor, isUpdate) {
+  const denied = requireRole(actor, WRITE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const now = nowIso();
+
+  const old = isUpdate
+    ? await getContractAddendumItemSQL(env.DB, cleanString(body.addendumItemId || body.addendum_item_id || '', 80))
+    : null;
+  if (isUpdate && !old) return json({ ok: false, error: 'Khong tim thay dong chi tiet phu luc' }, 404);
+  if (isUpdate && old.status === 'archived') {
+    return json({ ok: false, error: 'Dong chi tiet da luu tru, khong sua duoc' }, 400);
+  }
+
+  const addendumId = cleanString(body.addendumId || body.addendum_id || old?.addendum_id || '', 80);
+  if (!addendumId) return json({ ok: false, error: 'Thieu ma phu luc' }, 400);
+  const addendum = await getContractAddendumSQL(env.DB, addendumId);
+  if (!addendum) return json({ ok: false, error: 'Khong tim thay phu luc' }, 404);
+  if (addendum.status === 'archived' || addendum.status === 'cancelled') {
+    return json({ ok: false, error: 'Phu luc da luu tru/huy, khong sua chi tiet' }, 400);
+  }
+
+  const contract = await getContractSQL(env.DB, addendum.contract_id);
+  if (!contract) return json({ ok: false, error: 'Khong tim thay hop dong' }, 404);
+  if (contract.status === 'archived') {
+    return json({ ok: false, error: 'Hop dong da luu tru, khong sua chi tiet phu luc' }, 400);
+  }
+
+  const itemType = cleanString(body.itemType || body.item_type || old?.item_type || 'material', 20);
+  if (!VALID_ADDENDUM_ITEM_TYPE.has(itemType)) {
+    return json({ ok: false, error: 'Loai dong chi tiet khong hop le' }, 400);
+  }
+
+  const itemName = cleanString(body.itemName || body.item_name || old?.item_name || '', 500);
+  if (!itemName) return json({ ok: false, error: 'Noi dung la bat buoc' }, 400);
+
+  const qty = nonNegativeNumber(body.quantity ?? old?.quantity ?? 0);
+  const unitPrice = nonNegativeMoney(body.unitPrice ?? body.unit_price ?? old?.unit_price ?? 0);
+  if (!qty.ok) return json({ ok: false, error: 'So luong phai >= 0' }, 400);
+  if (!unitPrice.ok) return json({ ok: false, error: 'Don gia phai >= 0' }, 400);
+
+  const hasQtyPayload = hasOwn(body, 'quantity');
+  const hasPricePayload = hasOwn(body, 'unitPrice') || hasOwn(body, 'unit_price');
+  const hasLineTotalPayload = hasOwn(body, 'lineTotal') || hasOwn(body, 'line_total');
+  const rawLineTotal = cleanMoney(hasLineTotalPayload ? (body.lineTotal ?? body.line_total) : 0);
+  const lineTotal = rawLineTotal > 0
+    ? rawLineTotal
+    : (isUpdate && !hasQtyPayload && !hasPricePayload && old?.line_total > 0)
+      ? old.line_total
+      : Math.round(qty.value * unitPrice.value);
+  const taxRate = nonNegativeNumber(body.taxRate ?? body.tax_rate ?? old?.tax_rate ?? 0);
+  if (!taxRate.ok) return json({ ok: false, error: 'Thue % phai >= 0' }, 400);
+
+  const row = {
+    addendum_item_id: isUpdate ? old.addendum_item_id : makeId('ADI'),
+    addendum_id:      addendumId,
+    contract_id:      addendum.contract_id,
+    rfq_item_id:      cleanString(body.rfqItemId || body.rfq_item_id || old?.rfq_item_id || '', 80) || null,
+    item_type:        itemType,
+    item_code:        cleanString(body.itemCode || body.item_code || old?.item_code || '', 120),
+    item_name:        itemName,
+    spec:             cleanString(body.spec || old?.spec || '', 1000),
+    unit:             cleanString(body.unit || old?.unit || '', 80),
+    quantity:         qty.value,
+    unit_price:       unitPrice.value,
+    line_total:       lineTotal,
+    tax_rate:         taxRate.value,
+    note:             cleanString(body.note || old?.note || '', 2000),
+    status:           isUpdate ? old.status : 'active',
+    created_by:       isUpdate ? old.created_by : actor.id,
+    created_at:       isUpdate ? old.created_at : now,
+    updated_at:       now,
+    archived_at:      old?.archived_at || null,
+  };
+
+  if (isUpdate) await updateContractAddendumItemSQL(env.DB, row);
+  else await insertContractAddendumItemSQL(env.DB, row);
+
+  const summary = await getContractAddendumItemSummarySQL(env.DB, addendumId);
+  ctx.waitUntil(writeActionLog(env, {
+    action: isUpdate ? 'updateContractAddendumItem' : 'createContractAddendumItem',
+    entityType: 'contract_addendum_item',
+    entityId: row.addendum_item_id,
+    oldJson: old,
+    newJson: row,
+    actor,
+  }));
+  return json({ ok: true, item: row, summary });
+}
+
+async function archiveAddendumItem(request, env, ctx, actor) {
+  const denied = requireRole(actor, MANAGE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const addendumItemId = cleanString(body.addendumItemId || body.addendum_item_id || '', 80);
+  if (!addendumItemId) return json({ ok: false, error: 'Thieu ma dong chi tiet phu luc' }, 400);
+  const old = await getContractAddendumItemSQL(env.DB, addendumItemId);
+  if (!old) return json({ ok: false, error: 'Khong tim thay dong chi tiet phu luc' }, 404);
+  if (old.status === 'archived') return json({ ok: false, error: 'Dong chi tiet da luu tru' }, 400);
+
+  const addendum = await getContractAddendumSQL(env.DB, old.addendum_id);
+  if (!addendum) return json({ ok: false, error: 'Khong tim thay phu luc' }, 404);
+  if (addendum.status === 'archived' || addendum.status === 'cancelled') {
+    return json({ ok: false, error: 'Phu luc da luu tru/huy, khong sua chi tiet' }, 400);
+  }
+
+  const contract = await getContractSQL(env.DB, old.contract_id);
+  if (!contract) return json({ ok: false, error: 'Khong tim thay hop dong' }, 404);
+  if (contract.status === 'archived') {
+    return json({ ok: false, error: 'Hop dong da luu tru, khong sua chi tiet phu luc' }, 400);
+  }
+
+  const now = nowIso();
+  await archiveContractAddendumItemSQL(env.DB, addendumItemId, now);
+  const summary = await getContractAddendumItemSummarySQL(env.DB, old.addendum_id);
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'archiveContractAddendumItem',
+    entityType: 'contract_addendum_item',
+    entityId: addendumItemId,
     oldJson: old,
     newJson: { ...old, status: 'archived', archived_at: now, updated_at: now },
     actor,

@@ -17,6 +17,7 @@
   var _lastFilterParams = {};
   var contractItemRowCache = {};
   var contractAddendumCache = {};
+  var contractAddendumItemCache = {};
   var deliveryStatusFilters = {};
   var deadlineStatusFilters = {};
   var _donWorkflowState = null;
@@ -2802,6 +2803,11 @@
         if (r.addendum_id) contractAddendumCache[r.addendum_id] = r;
       });
       container.innerHTML = renderContractAddendums(contractId, data);
+      setTimeout(function () {
+        (data.rows || []).forEach(function (r) {
+          if (r.addendum_id) loadContractAddendumItems(contractId, r.addendum_id);
+        });
+      }, 0);
       Auth.applyRoleUI();
     } catch (err) {
       container.textContent = 'Loi tai phu luc hop dong.';
@@ -2815,11 +2821,11 @@
     return addendumSummary(summary)
       + '<div class="quotes-table-wrap" style="margin-top:8px">'
       + '<table class="quotes-mini-table"><thead><tr>'
-      + '<th>S&#7889; PL</th><th>T&#234;n ph&#7909; l&#7909;c</th><th>Ng&#224;y k&#253;</th>'
+      + '<th>S&#7889; PL</th><th>N&#7897;i dung</th><th>Ghi ch&#250;</th><th>Ng&#224;y k&#253;</th>'
       + '<th>Tr&#432;&#7899;c thu&#7871;</th><th>Thu&#7871; %</th><th>Sau thu&#7871;</th>'
       + '<th>T&#225;c &#273;&#7897;ng +/-</th><th>Tr&#7841;ng th&#225;i</th><th>URL</th><th></th>'
       + '</tr></thead><tbody>'
-      + (rows.length ? rows.map(function (r) { return addendumRow(contractId, r); }).join('') : '<tr><td colspan="10" class="empty-state small">Ch&#432;a c&#243; ph&#7909; l&#7909;c.</td></tr>')
+      + (rows.length ? rows.map(function (r) { return addendumRow(contractId, r); }).join('') : '<tr><td colspan="11" class="empty-state small">Ch&#432;a c&#243; ph&#7909; l&#7909;c.</td></tr>')
       + '</tbody></table></div>';
   }
 
@@ -2828,7 +2834,7 @@
     var addTotal = summary.addendum_total || 0;
     var current = summary.current_effective_value || (original + addTotal);
     var count = summary.active_addendum_count || 0;
-    return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px">'
+    return '<div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:8px">'
       + summaryBox('Gi&#225; tr&#7883; H&#272; g&#7889;c', original)
       + summaryBox('T&#7893;ng ph&#7909; l&#7909;c', addTotal)
       + summaryBox('Gi&#225; tr&#7883; hi&#7879;n h&#224;nh', current)
@@ -2850,9 +2856,11 @@
     var archived = r.status === 'archived';
     var editBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-write onclick="RfqItemsModule.openContractAddendumModal(\'' + API.esc(contractId) + '\',\'' + API.esc(r.addendum_id || '') + '\')">S&#7917;a</button>';
     var archiveBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-role-only="admin,manager" onclick="RfqItemsModule.archiveContractAddendum(\'' + API.esc(r.addendum_id || '') + '\',\'' + API.esc(contractId) + '\')">L&#432;u tr&#7919;</button>';
+    var addendumId = r.addendum_id || '';
     return '<tr>'
       + '<td><strong>' + API.esc(r.addendum_no || '') + '</strong></td>'
-      + '<td>' + API.esc(r.addendum_name || '') + (r.note ? '<div class="muted" style="font-size:11px">' + API.esc(r.note) + '</div>' : '') + '</td>'
+      + '<td>' + API.esc(r.addendum_name || '') + '</td>'
+      + '<td>' + API.esc(r.note || '') + '</td>'
       + '<td>' + API.esc(r.signed_date || '') + '</td>'
       + '<td class="num">' + moneyOrDash(r.value_before_tax) + '</td>'
       + '<td class="num">' + API.esc(r.tax_rate != null ? r.tax_rate : 0) + '</td>'
@@ -2861,7 +2869,120 @@
       + '<td>' + addendumStatusBadge(r.status) + '</td>'
       + '<td style="text-align:center">' + addendumUrlCell(r.external_url) + '</td>'
       + '<td style="white-space:nowrap;text-align:center">' + editBtn + archiveBtn + '</td>'
+      + '</tr>'
+      + '<tr><td colspan="11" style="background:var(--bg);padding:8px 10px">'
+      + '<div id="' + addendumItemsContainerId(addendumId) + '" class="empty-state small">&#272;ang t&#7843;i d&#242;ng chi ti&#7871;t...</div>'
+      + '</td></tr>';
+  }
+
+  function addendumItemsContainerId(addendumId) {
+    return 'addi_' + String(addendumId || '').replace(/[^A-Za-z0-9_-]/g, '_');
+  }
+
+  async function loadContractAddendumItems(contractId, addendumId) {
+    var container = document.getElementById(addendumItemsContainerId(addendumId));
+    if (!container) return;
+    try {
+      var data = await API.get('getContractAddendumItems', { addendumId: addendumId });
+      (data.rows || []).forEach(function (r) {
+        if (r.addendum_item_id) contractAddendumItemCache[r.addendum_item_id] = r;
+      });
+      container.innerHTML = renderContractAddendumItems(contractId, addendumId, data);
+      Auth.applyRoleUI();
+    } catch (err) {
+      container.textContent = 'Loi tai dong chi tiet phu luc.';
+      API.error(err);
+    }
+  }
+
+  function renderContractAddendumItems(contractId, addendumId, data) {
+    var rows = data.rows || [];
+    var addendum = contractAddendumCache[addendumId] || data.addendum || {};
+    var detailTotal = Number((data.summary || {}).detail_total || 0);
+    var headerDelta = Number(addendum.amount_delta || 0);
+    var warn = detailTotal !== headerDelta
+      ? '<div class="muted" style="color:var(--red);font-size:12px;margin-top:4px">T&#7893;ng chi ti&#7871;t kh&#225;c t&#225;c &#273;&#7897;ng gi&#225; tr&#7883; c&#7911;a ph&#7909; l&#7909;c.</div>'
+      : '';
+    return '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px">'
+      + '<div><strong>T&#7893;ng chi ti&#7871;t: ' + API.esc(API.money(detailTotal) || '0') + '</strong>'
+      + '<span class="muted" style="margin-left:10px">T&#225;c &#273;&#7897;ng header: ' + API.esc(API.money(headerDelta) || '0') + '</span>'
+      + warn + '</div>'
+      + '<button type="button" class="btn btn-sm" data-write onclick="RfqItemsModule.openContractAddendumItemModal(\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\')">+ D&#242;ng chi ti&#7871;t</button>'
+      + '</div>'
+      + '<div class="quotes-table-wrap"><table class="quotes-mini-table"><thead><tr>'
+      + '<th>Lo&#7841;i</th><th>M&#227;</th><th>N&#7897;i dung</th><th>Quy c&#225;ch</th><th>&#272;VT</th><th>SL</th><th>&#272;&#417;n gi&#225;</th><th>Th&#224;nh ti&#7873;n</th><th>Thu&#7871; %</th><th>Ghi ch&#250;</th><th>Thao t&#225;c</th>'
+      + '</tr></thead><tbody>'
+      + (rows.length ? rows.map(function (r) { return addendumItemRow(contractId, addendumId, r); }).join('') : '<tr><td colspan="11" class="empty-state small">Ch&#432;a c&#243; d&#242;ng chi ti&#7871;t.</td></tr>')
+      + '</tbody></table></div>';
+  }
+
+  function addendumItemRow(contractId, addendumId, r) {
+    var archived = r.status === 'archived';
+    var editBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-write onclick="RfqItemsModule.openContractAddendumItemModal(\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\',\'' + API.esc(r.addendum_item_id || '') + '\')">S&#7917;a</button>';
+    var archiveBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-role-only="admin,manager" onclick="RfqItemsModule.archiveContractAddendumItem(\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\',\'' + API.esc(r.addendum_item_id || '') + '\')">L&#432;u tr&#7919;</button>';
+    return '<tr' + (archived ? ' style="opacity:.65"' : '') + '>'
+      + '<td>' + API.esc(addendumItemTypeLabel(r.item_type)) + '</td>'
+      + '<td>' + API.esc(r.item_code || '') + '</td>'
+      + '<td>' + API.esc(r.item_name || '') + '</td>'
+      + '<td>' + API.esc(r.spec || '') + '</td>'
+      + '<td>' + API.esc(r.unit || '') + '</td>'
+      + '<td class="num">' + API.esc(r.quantity != null ? Number(r.quantity).toLocaleString('vi-VN') : '0') + '</td>'
+      + '<td class="num">' + moneyOrDash(r.unit_price) + '</td>'
+      + '<td class="num"><strong>' + moneyOrDash(r.line_total) + '</strong></td>'
+      + '<td class="num">' + API.esc(r.tax_rate != null ? r.tax_rate : 0) + '</td>'
+      + '<td>' + API.esc(r.note || '') + '</td>'
+      + '<td style="white-space:nowrap;text-align:center">' + editBtn + archiveBtn + '</td>'
       + '</tr>';
+  }
+
+  function addendumItemTypeLabel(type) {
+    return { material: 'Material', service: 'Service', other: 'Other' }[type] || type || '';
+  }
+
+  function addendumItemTypeOptions(current) {
+    return option('material', 'Material', current)
+      + option('service', 'Service', current)
+      + option('other', 'Other', current);
+  }
+
+  function openContractAddendumItemModal(contractId, addendumId, addendumItemId) {
+    var row = addendumItemId ? (contractAddendumItemCache[addendumItemId] || {}) : {};
+    var html = ''
+      + '<label class="span-3">Loai<select name="itemType">' + addendumItemTypeOptions(row.item_type || 'material') + '</select></label>'
+      + input('itemCode', 'Ma', row.item_code || '', 'maxlength="120"', 'span-3')
+      + input('itemName', 'Noi dung *', row.item_name || '', 'required maxlength="500"', 'span-6')
+      + input('spec', 'Quy cach', row.spec || '', 'maxlength="1000"', 'span-6')
+      + input('unit', 'DVT', row.unit || '', 'maxlength="80"', 'span-2')
+      + input('quantity', 'SL', row.quantity ?? '', 'type="number" min="0" step="0.001"', 'span-2')
+      + input('unitPrice', 'Don gia', row.unit_price || '', 'inputmode="numeric"', 'span-3')
+      + input('lineTotal', 'Thanh tien', row.line_total || '', 'inputmode="numeric"', 'span-3')
+      + input('taxRate', 'Thue %', row.tax_rate ?? '', 'type="number" min="0" step="0.01"', 'span-2')
+      + textarea('note', 'Ghi chu', row.note || '', '', 'span-12 compact-ta');
+    Utils.openModal(addendumItemId ? 'Sua dong chi tiet phu luc' : 'Them dong chi tiet phu luc', html, async function (form) {
+      try {
+        form.addendumId = addendumId;
+        if (addendumItemId) form.addendumItemId = addendumItemId;
+        await API.call(addendumItemId ? 'updateContractAddendumItem' : 'createContractAddendumItem', form);
+        Utils.closeModal();
+        API.toast('Da luu dong chi tiet', 'success');
+        await loadContractAddendumItems(contractId, addendumId);
+      } catch (err) {
+        API.error(err);
+      }
+    });
+    Auth.applyRoleUI();
+  }
+
+  async function archiveContractAddendumItem(contractId, addendumId, addendumItemId) {
+    var ok = await Utils.confirmDanger('Luu tru dong chi tiet', 'Luu tru dong chi tiet phu luc nay?', 'Luu tru');
+    if (!ok) return;
+    try {
+      await API.call('archiveContractAddendumItem', { addendumItemId: addendumItemId });
+      API.toast('Da luu tru dong chi tiet', 'success');
+      await loadContractAddendumItems(contractId, addendumId);
+    } catch (err) {
+      API.error(err);
+    }
   }
 
   function moneyOrDash(value) {
@@ -5437,6 +5558,8 @@
     openContractItemDeadlineModal: openContractItemDeadlineModal,
     openContractAddendumModal: openContractAddendumModal,
     archiveContractAddendum: archiveContractAddendum,
+    openContractAddendumItemModal: openContractAddendumItemModal,
+    archiveContractAddendumItem: archiveContractAddendumItem,
     openRevisionHistory: openRevisionHistory,
     archiveRfqItem: archiveRfqItem,
     exportDeliveryNoteDoc: exportDeliveryNoteDoc,
