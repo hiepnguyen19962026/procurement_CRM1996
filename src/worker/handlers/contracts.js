@@ -1,14 +1,20 @@
 import {
+  archiveContractAddendumSQL,
   archiveContractItemSQL,
   archiveContractSQL,
+  getContractAddendumSQL,
+  getContractAddendumSummarySQL,
   getContractItemSQL,
   getContractItemsForRfqItemSQL,
   getContractItemsSQL,
   getContractSQL,
+  insertContractAddendumSQL,
   insertContractItemSQL,
   insertContractSQL,
+  listContractAddendumsSQL,
   listContractsSQL,
   recalcContractTotalSQL,
+  updateContractAddendumSQL,
   updateContractItemSQL,
   updateContractSQL,
 } from '../db/contract-queries.js';
@@ -17,11 +23,12 @@ import { getSupplierQuoteSQL } from '../db/supplier-quote-queries.js';
 import { getRfqSQL } from '../db/rfq-queries.js';
 import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
-import { cleanNumber, cleanString } from '../lib/normalize.js';
+import { cleanMoney, cleanNumber, cleanString } from '../lib/normalize.js';
 import { clampLimit, json, makeId, nowIso, readJson } from '../lib/utils.js';
 
 const VALID_CURRENCY = new Set(['VND', 'USD', 'EUR', 'JPY', 'CNY', 'SGD', 'KRW']);
 const VALID_STATUS   = new Set(['active', 'archived']);
+const VALID_ADDENDUM_STATUS = new Set(['draft', 'active', 'archived', 'cancelled']);
 const VALID_DELIVERY_TRIGGER_TYPE = new Set(['contract_sign', 'award_notice', 'delivery_notice', 'po_date', 'manual']);
 const DATE_RE        = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -36,6 +43,10 @@ export async function handleContracts(action, request, env, ctx, actor) {
   if (action === 'updateContractItem')         return updateItem(request, env, ctx, actor);
   if (action === 'archiveContractItem')        return archiveItem(request, env, ctx, actor);
   if (action === 'createContractFromRfqItem')  return createFromRfqItem(request, env, ctx, actor);
+  if (action === 'getContractAddendums')       return listAddendums(request, env, actor);
+  if (action === 'createContractAddendum')     return saveAddendum(request, env, ctx, actor, false);
+  if (action === 'updateContractAddendum')     return saveAddendum(request, env, ctx, actor, true);
+  if (action === 'archiveContractAddendum')    return archiveAddendum(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown contract action' }, 400);
 }
 
@@ -322,6 +333,111 @@ async function archiveItem(request, env, ctx, actor) {
 
 // ─── create contract from a single rfq item ───────────────────────────────────
 
+// Addendum headers for a parent contract. Phase 1 keeps line items out of scope.
+async function listAddendums(request, env, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const contractId = cleanString(body.contractId || body.contract_id || '', 80);
+  if (!contractId) return json({ ok: false, error: 'Thieu ma hop dong' }, 400);
+  const contract = await getContractSQL(env.DB, contractId);
+  if (!contract) return json({ ok: false, error: 'Khong tim thay hop dong' }, 404);
+  const rows = await listContractAddendumsSQL(env.DB, contractId);
+  const summary = await getContractAddendumSummarySQL(env.DB, contractId);
+  return json({ ok: true, contract, rows, summary });
+}
+
+async function saveAddendum(request, env, ctx, actor, isUpdate) {
+  const denied = requireRole(actor, WRITE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const now = nowIso();
+
+  const old = isUpdate
+    ? await getContractAddendumSQL(env.DB, cleanString(body.addendumId || body.addendum_id || '', 80))
+    : null;
+  if (isUpdate && !old) return json({ ok: false, error: 'Khong tim thay phu luc' }, 404);
+  if (isUpdate && old.status === 'archived') {
+    return json({ ok: false, error: 'Phu luc da luu tru, khong sua duoc' }, 400);
+  }
+
+  const contractId = cleanString(body.contractId || body.contract_id || old?.contract_id || '', 80);
+  if (!contractId) return json({ ok: false, error: 'Thieu ma hop dong' }, 400);
+  const contract = await getContractSQL(env.DB, contractId);
+  if (!contract) return json({ ok: false, error: 'Khong tim thay hop dong' }, 404);
+  if (contract.status === 'archived') {
+    return json({ ok: false, error: 'Hop dong da luu tru, khong them/sua phu luc' }, 400);
+  }
+
+  const addendumNo = cleanString(body.addendumNo || body.addendum_no || old?.addendum_no || '', 200);
+  if (!addendumNo) return json({ ok: false, error: 'So phu luc la bat buoc' }, 400);
+
+  const valueBeforeTax = nonNegativeMoney(body.valueBeforeTax ?? body.value_before_tax ?? old?.value_before_tax);
+  const taxRate = nonNegativeNumber(body.taxRate ?? body.tax_rate ?? old?.tax_rate);
+  const valueAfterTax = nonNegativeMoney(body.valueAfterTax ?? body.value_after_tax ?? old?.value_after_tax);
+  if (!valueBeforeTax.ok) return json({ ok: false, error: 'Gia tri truoc thue phai >= 0' }, 400);
+  if (!taxRate.ok) return json({ ok: false, error: 'Thue % phai >= 0' }, 400);
+  if (!valueAfterTax.ok) return json({ ok: false, error: 'Gia tri sau thue phai >= 0' }, 400);
+
+  const rawStatus = cleanString(body.status || old?.status || 'active', 20);
+  const status = VALID_ADDENDUM_STATUS.has(rawStatus) ? rawStatus : 'active';
+  const row = {
+    addendum_id:      isUpdate ? old.addendum_id : makeId('ADD'),
+    contract_id:      contractId,
+    addendum_no:      addendumNo,
+    addendum_name:    cleanString(body.addendumName || body.addendum_name || old?.addendum_name || '', 300),
+    signed_date:      validateDate(body.signedDate || body.signed_date || old?.signed_date || ''),
+    value_before_tax: valueBeforeTax.value,
+    tax_rate:         taxRate.value,
+    value_after_tax:  valueAfterTax.value,
+    amount_delta:     cleanMoney(body.amountDelta ?? body.amount_delta ?? old?.amount_delta ?? 0),
+    note:             cleanString(body.note || old?.note || '', 4000),
+    external_url:     cleanUrl(body.externalUrl ?? body.external_url ?? old?.external_url ?? ''),
+    status,
+    created_by:       isUpdate ? old.created_by : actor.id,
+    created_at:       isUpdate ? old.created_at : now,
+    updated_at:       now,
+    archived_at:      old?.archived_at || null,
+  };
+
+  if (isUpdate) await updateContractAddendumSQL(env.DB, row);
+  else await insertContractAddendumSQL(env.DB, row);
+
+  const summary = await getContractAddendumSummarySQL(env.DB, contractId);
+  ctx.waitUntil(writeActionLog(env, {
+    action: isUpdate ? 'updateContractAddendum' : 'createContractAddendum',
+    entityType: 'contract_addendum',
+    entityId: row.addendum_id,
+    oldJson: old,
+    newJson: row,
+    actor,
+  }));
+  return json({ ok: true, addendum: row, summary });
+}
+
+async function archiveAddendum(request, env, ctx, actor) {
+  const denied = requireRole(actor, MANAGE_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const addendumId = cleanString(body.addendumId || body.addendum_id || '', 80);
+  if (!addendumId) return json({ ok: false, error: 'Thieu ma phu luc' }, 400);
+  const old = await getContractAddendumSQL(env.DB, addendumId);
+  if (!old) return json({ ok: false, error: 'Khong tim thay phu luc' }, 404);
+  if (old.status === 'archived') return json({ ok: false, error: 'Phu luc da luu tru' }, 400);
+  const now = nowIso();
+  await archiveContractAddendumSQL(env.DB, addendumId, now);
+  const summary = await getContractAddendumSummarySQL(env.DB, old.contract_id);
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'archiveContractAddendum',
+    entityType: 'contract_addendum',
+    entityId: addendumId,
+    oldJson: old,
+    newJson: { ...old, status: 'archived', archived_at: now, updated_at: now },
+    actor,
+  }));
+  return json({ ok: true, summary });
+}
+
 async function createFromRfqItem(request, env, ctx, actor) {
   const denied = requireRole(actor, WRITE_ROLES);
   if (denied) return denied;
@@ -482,6 +598,22 @@ async function buildContractItem(db, contractId, p, now, contract = null) {
 function validateDate(value) {
   const s = cleanString(value || '', 20);
   return DATE_RE.test(s) ? s : '';
+}
+
+function cleanUrl(raw) {
+  const s = cleanString(raw || '', 2000);
+  if (!s) return '';
+  return /^https?:\/\//i.test(s) ? s : '';
+}
+
+function nonNegativeMoney(value) {
+  const n = cleanMoney(value ?? 0);
+  return Number.isFinite(n) && n >= 0 ? { ok: true, value: n } : { ok: false, value: 0 };
+}
+
+function nonNegativeNumber(value) {
+  const n = cleanNumber(value ?? 0);
+  return Number.isFinite(n) && n >= 0 ? { ok: true, value: n } : { ok: false, value: 0 };
 }
 
 function hasOwn(obj, key) {

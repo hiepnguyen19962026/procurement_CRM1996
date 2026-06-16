@@ -54,7 +54,8 @@ export async function getContractItemsForRfqItemSQL(db, rfqItemId) {
   const res = await db.prepare(
     `SELECT ci.*, c.contract_no, c.signed_date, c.contract_name,
             c.status AS contract_status, c.currency AS contract_currency,
-            c.rfq_id AS contract_rfq_id
+            c.rfq_id AS contract_rfq_id,
+            COALESCE(c.original_contract_total, c.contract_total, 0) AS original_contract_total
      FROM contract_items ci
      JOIN contracts c ON c.contract_id = ci.contract_id
      WHERE ci.rfq_item_id = ?
@@ -69,12 +70,12 @@ export async function insertContractSQL(db, row) {
     `INSERT INTO contracts (
       contract_id, rfq_id, contract_no, contract_name, client_id,
       signed_date, effective_date, expiry_date, currency, contract_total,
-      status, note, created_by, created_at, updated_at, archived_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      original_contract_total, status, note, created_by, created_at, updated_at, archived_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     row.contract_id, row.rfq_id, row.contract_no, row.contract_name, row.client_id,
     row.signed_date, row.effective_date, row.expiry_date, row.currency, row.contract_total,
-    row.status, row.note, row.created_by, row.created_at, row.updated_at, row.archived_at
+    row.contract_total, row.status, row.note, row.created_by, row.created_at, row.updated_at, row.archived_at
   ).run();
 }
 
@@ -159,4 +160,76 @@ export async function recalcContractTotalSQL(db, contractId, now) {
     `UPDATE contracts SET contract_total = ?, updated_at = ? WHERE contract_id = ?`
   ).bind(total, now, contractId).run();
   return total;
+}
+
+export async function listContractAddendumsSQL(db, contractId) {
+  const res = await db.prepare(
+    `SELECT *
+     FROM contract_addendums
+     WHERE contract_id = ?
+     ORDER BY COALESCE(signed_date, created_at) DESC, created_at DESC, addendum_id DESC`
+  ).bind(contractId).all();
+  return res.results || [];
+}
+
+export async function getContractAddendumSQL(db, addendumId) {
+  return db.prepare('SELECT * FROM contract_addendums WHERE addendum_id = ?').bind(addendumId).first();
+}
+
+export async function getContractAddendumSummarySQL(db, contractId) {
+  const row = await db.prepare(
+    `SELECT
+       COALESCE(c.original_contract_total, c.contract_total, 0) AS original_contract_total,
+       COALESCE(SUM(CASE WHEN ca.status = 'active' THEN ca.amount_delta ELSE 0 END), 0) AS addendum_total,
+       COALESCE(SUM(CASE WHEN ca.status = 'active' THEN 1 ELSE 0 END), 0) AS active_addendum_count
+     FROM contracts c
+     LEFT JOIN contract_addendums ca ON ca.contract_id = c.contract_id
+     WHERE c.contract_id = ?
+     GROUP BY c.contract_id`
+  ).bind(contractId).first();
+  const original = row?.original_contract_total || 0;
+  const addendumTotal = row?.addendum_total || 0;
+  return {
+    original_contract_total: original,
+    addendum_total: addendumTotal,
+    current_effective_value: original + addendumTotal,
+    active_addendum_count: row?.active_addendum_count || 0,
+  };
+}
+
+export async function insertContractAddendumSQL(db, row) {
+  return db.prepare(
+    `INSERT INTO contract_addendums (
+      addendum_id, contract_id, addendum_no, addendum_name, signed_date,
+      value_before_tax, tax_rate, value_after_tax, amount_delta,
+      note, external_url, status, created_by, created_at, updated_at, archived_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(
+    row.addendum_id, row.contract_id, row.addendum_no, row.addendum_name, row.signed_date,
+    row.value_before_tax, row.tax_rate, row.value_after_tax, row.amount_delta,
+    row.note, row.external_url, row.status, row.created_by, row.created_at, row.updated_at, row.archived_at
+  ).run();
+}
+
+export async function updateContractAddendumSQL(db, row) {
+  return db.prepare(
+    `UPDATE contract_addendums SET
+      addendum_no = ?, addendum_name = ?, signed_date = ?,
+      value_before_tax = ?, tax_rate = ?, value_after_tax = ?, amount_delta = ?,
+      note = ?, external_url = ?, status = ?, updated_at = ?
+     WHERE addendum_id = ?`
+  ).bind(
+    row.addendum_no, row.addendum_name, row.signed_date,
+    row.value_before_tax, row.tax_rate, row.value_after_tax, row.amount_delta,
+    row.note, row.external_url, row.status, row.updated_at,
+    row.addendum_id
+  ).run();
+}
+
+export async function archiveContractAddendumSQL(db, addendumId, archivedAt) {
+  return db.prepare(
+    `UPDATE contract_addendums
+     SET status = 'archived', archived_at = ?, updated_at = ?
+     WHERE addendum_id = ?`
+  ).bind(archivedAt, archivedAt, addendumId).run();
 }

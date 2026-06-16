@@ -16,6 +16,7 @@
   var _exportColPanelInit = false;
   var _lastFilterParams = {};
   var contractItemRowCache = {};
+  var contractAddendumCache = {};
   var deliveryStatusFilters = {};
   var deadlineStatusFilters = {};
   var _donWorkflowState = null;
@@ -2715,6 +2716,10 @@
     rows.forEach(function (r) {
       if (r.contract_item_id) contractItemRowCache[r.contract_item_id] = r;
     });
+    var contracts = uniqueContractsFromRows(rows);
+    setTimeout(function () {
+      contracts.forEach(function (c) { loadContractAddendums(c.contract_id); });
+    }, 0);
     return '<div class="quotes-table-wrap">'
       + '<table class="quotes-mini-table">'
       + '<thead><tr>'
@@ -2744,7 +2749,184 @@
             + '<td style="text-align:center">' + editBtn + '</td>'
             + '</tr>';
         }).join('')
+      + '</tbody></table></div>'
+      + contractAddendumPanels(contracts);
+  }
+
+  function uniqueContractsFromRows(rows) {
+    var byId = {};
+    (rows || []).forEach(function (r) {
+      if (!r.contract_id || byId[r.contract_id]) return;
+      byId[r.contract_id] = {
+        contract_id: r.contract_id,
+        contract_no: r.contract_no || '',
+        contract_name: r.contract_name || '',
+        contract_status: r.contract_status || '',
+        original_contract_total: r.original_contract_total || 0,
+      };
+    });
+    return Object.keys(byId).map(function (id) { return byId[id]; });
+  }
+
+  function contractAddendumPanels(contracts) {
+    if (!contracts.length) return '';
+    return '<div class="modal-section" style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">'
+      + '<div class="section-head"><h4>Ph&#7909; l&#7909;c h&#7907;p &#273;&#7891;ng</h4></div>'
+      + contracts.map(function (c) {
+          var id = addendumContainerId(c.contract_id);
+          var disabled = c.contract_status === 'archived' ? ' disabled style="opacity:.5;cursor:not-allowed"' : '';
+          return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px">'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+              + '<div><strong>' + API.esc(c.contract_no || c.contract_id) + '</strong>'
+              + (c.contract_name ? '<div class="muted" style="font-size:12px">' + API.esc(c.contract_name) + '</div>' : '')
+              + '</div>'
+              + '<button type="button" class="btn btn-sm" data-write onclick="RfqItemsModule.openContractAddendumModal(\'' + API.esc(c.contract_id) + '\')"' + disabled + '>+ Ph&#7909; l&#7909;c</button>'
+            + '</div>'
+            + '<div id="' + id + '" class="empty-state small" style="margin-top:8px">&#272;ang t&#7843;i ph&#7909; l&#7909;c...</div>'
+          + '</div>';
+        }).join('')
+      + '</div>';
+  }
+
+  function addendumContainerId(contractId) {
+    return 'add_' + String(contractId || '').replace(/[^A-Za-z0-9_-]/g, '_');
+  }
+
+  async function loadContractAddendums(contractId) {
+    var container = document.getElementById(addendumContainerId(contractId));
+    if (!container) return;
+    try {
+      var data = await API.get('getContractAddendums', { contractId: contractId });
+      contractAddendumCache[contractId] = data;
+      (data.rows || []).forEach(function (r) {
+        if (r.addendum_id) contractAddendumCache[r.addendum_id] = r;
+      });
+      container.innerHTML = renderContractAddendums(contractId, data);
+      Auth.applyRoleUI();
+    } catch (err) {
+      container.textContent = 'Loi tai phu luc hop dong.';
+      API.error(err);
+    }
+  }
+
+  function renderContractAddendums(contractId, data) {
+    var rows = data.rows || [];
+    var summary = data.summary || {};
+    return addendumSummary(summary)
+      + '<div class="quotes-table-wrap" style="margin-top:8px">'
+      + '<table class="quotes-mini-table"><thead><tr>'
+      + '<th>S&#7889; PL</th><th>T&#234;n ph&#7909; l&#7909;c</th><th>Ng&#224;y k&#253;</th>'
+      + '<th>Tr&#432;&#7899;c thu&#7871;</th><th>Thu&#7871; %</th><th>Sau thu&#7871;</th>'
+      + '<th>T&#225;c &#273;&#7897;ng +/-</th><th>Tr&#7841;ng th&#225;i</th><th>URL</th><th></th>'
+      + '</tr></thead><tbody>'
+      + (rows.length ? rows.map(function (r) { return addendumRow(contractId, r); }).join('') : '<tr><td colspan="10" class="empty-state small">Ch&#432;a c&#243; ph&#7909; l&#7909;c.</td></tr>')
       + '</tbody></table></div>';
+  }
+
+  function addendumSummary(summary) {
+    var original = summary.original_contract_total || 0;
+    var addTotal = summary.addendum_total || 0;
+    var current = summary.current_effective_value || (original + addTotal);
+    var count = summary.active_addendum_count || 0;
+    return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px">'
+      + summaryBox('Gi&#225; tr&#7883; H&#272; g&#7889;c', original)
+      + summaryBox('T&#7893;ng ph&#7909; l&#7909;c', addTotal)
+      + summaryBox('Gi&#225; tr&#7883; hi&#7879;n h&#224;nh', current)
+      + '<div style="border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg)">'
+        + '<div class="muted" style="font-size:11px">S&#7889; ph&#7909; l&#7909;c active</div>'
+        + '<strong>' + API.esc(count) + '</strong>'
+      + '</div>'
+      + '</div>';
+  }
+
+  function summaryBox(label, value) {
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg)">'
+      + '<div class="muted" style="font-size:11px">' + label + '</div>'
+      + '<strong>' + API.esc(API.money(value) || '0') + '</strong>'
+      + '</div>';
+  }
+
+  function addendumRow(contractId, r) {
+    var archived = r.status === 'archived';
+    var editBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-write onclick="RfqItemsModule.openContractAddendumModal(\'' + API.esc(contractId) + '\',\'' + API.esc(r.addendum_id || '') + '\')">S&#7917;a</button>';
+    var archiveBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-role-only="admin,manager" onclick="RfqItemsModule.archiveContractAddendum(\'' + API.esc(r.addendum_id || '') + '\',\'' + API.esc(contractId) + '\')">L&#432;u tr&#7919;</button>';
+    return '<tr>'
+      + '<td><strong>' + API.esc(r.addendum_no || '') + '</strong></td>'
+      + '<td>' + API.esc(r.addendum_name || '') + (r.note ? '<div class="muted" style="font-size:11px">' + API.esc(r.note) + '</div>' : '') + '</td>'
+      + '<td>' + API.esc(r.signed_date || '') + '</td>'
+      + '<td class="num">' + moneyOrDash(r.value_before_tax) + '</td>'
+      + '<td class="num">' + API.esc(r.tax_rate != null ? r.tax_rate : 0) + '</td>'
+      + '<td class="num"><strong>' + moneyOrDash(r.value_after_tax) + '</strong></td>'
+      + '<td class="num">' + signedMoney(r.amount_delta) + '</td>'
+      + '<td>' + addendumStatusBadge(r.status) + '</td>'
+      + '<td style="text-align:center">' + addendumUrlCell(r.external_url) + '</td>'
+      + '<td style="white-space:nowrap;text-align:center">' + editBtn + archiveBtn + '</td>'
+      + '</tr>';
+  }
+
+  function moneyOrDash(value) {
+    return value ? API.esc(API.money(value)) : '<span class="muted">-</span>';
+  }
+
+  function signedMoney(value) {
+    var n = Number(value || 0);
+    var sign = n > 0 ? '+' : '';
+    var color = n < 0 ? 'var(--red)' : 'inherit';
+    return '<strong style="color:' + color + '">' + API.esc(sign + (API.money(n) || '0')) + '</strong>';
+  }
+
+  function addendumStatusBadge(status) {
+    var labels = { draft: 'Nh&#225;p', active: 'Hi&#7879;u l&#7921;c', archived: 'L&#432;u tr&#7919;', cancelled: 'H&#7911;y' };
+    var style = status === 'active'
+      ? 'background:var(--green-bg);border-color:#86efac;color:var(--green)'
+      : status === 'archived'
+        ? 'opacity:.6'
+        : '';
+    return '<span class="badge" style="' + style + '">' + (labels[status] || API.esc(status || '')) + '</span>';
+  }
+
+  function addendumUrlCell(url) {
+    if (!url || !/^https?:\/\//i.test(url)) return '<span class="muted">-</span>';
+    return '<a class="btn btn-sm" href="' + API.esc(encodeURI(url)) + '" target="_blank" rel="noopener noreferrer" title="' + API.esc(url) + '">M&#7903;</a>';
+  }
+
+  function openContractAddendumModal(contractId, addendumId) {
+    var row = addendumId ? (contractAddendumCache[addendumId] || {}) : {};
+    var html = ''
+      + input('addendumNo', 'Số phụ lục *', row.addendum_no || '', 'required placeholder="VD: VTPC1-0401-251013001-PL-01"', 'span-4')
+      + input('addendumName', 'Tên phụ lục', row.addendum_name || '', 'placeholder="VD: Phụ lục bổ sung phạm vi"', 'span-5')
+      + input('signedDate', 'Ngày ký', row.signed_date || '', 'type="date"', 'span-3')
+      + input('valueBeforeTax', 'Giá trị trước thuế', row.value_before_tax || '', 'inputmode="numeric" placeholder="0"', 'span-3')
+      + input('taxRate', 'Thuế %', row.tax_rate ?? '', 'type="number" min="0" step="0.01" placeholder="0"', 'span-2')
+      + input('valueAfterTax', 'Giá trị sau thuế', row.value_after_tax || '', 'inputmode="numeric" placeholder="0"', 'span-3')
+      + input('amountDelta', 'Tác động giá trị', row.amount_delta || '', 'inputmode="numeric" placeholder="+/-"', 'span-4')
+      + textarea('note', 'Ghi chú / nội dung', row.note || '', '', 'span-12 compact-ta')
+      + input('externalUrl', 'URL', row.external_url || '', 'type="url" maxlength="2000" placeholder="https://drive.google.com/..."', 'span-12');
+    Utils.openModal(addendumId ? 'Sửa phụ lục hợp đồng' : 'Thêm phụ lục hợp đồng', html, async function (form) {
+      try {
+        form.contractId = contractId;
+        if (addendumId) form.addendumId = addendumId;
+        await API.call(addendumId ? 'updateContractAddendum' : 'createContractAddendum', form);
+        Utils.closeModal();
+        API.toast('Đã lưu phụ lục', 'success');
+        await loadContractAddendums(contractId);
+      } catch (err) {
+        API.error(err);
+      }
+    });
+    Auth.applyRoleUI();
+  }
+
+  async function archiveContractAddendum(addendumId, contractId) {
+    var ok = await Utils.confirmDanger('Lưu trữ phụ lục', 'Lưu trữ phụ lục này? Phụ lục sẽ không còn tính vào tổng giá trị active.', 'Lưu trữ');
+    if (!ok) return;
+    try {
+      await API.call('archiveContractAddendum', { addendumId: addendumId });
+      API.toast('Đã lưu trữ phụ lục', 'success');
+      await loadContractAddendums(contractId);
+    } catch (err) {
+      API.error(err);
+    }
   }
 
   function contractDeadlineDisplay(row) {
@@ -5253,6 +5435,8 @@
     loadContractItems: loadContractItems,
     openContractFromRfqItemModal: openContractFromRfqItemModal,
     openContractItemDeadlineModal: openContractItemDeadlineModal,
+    openContractAddendumModal: openContractAddendumModal,
+    archiveContractAddendum: archiveContractAddendum,
     openRevisionHistory: openRevisionHistory,
     archiveRfqItem: archiveRfqItem,
     exportDeliveryNoteDoc: exportDeliveryNoteDoc,
