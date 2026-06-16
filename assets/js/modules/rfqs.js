@@ -3,6 +3,7 @@
   var sort = { by: '', dir: 'desc' };
   var _setupDone = false;
   var contractAddendumCache = {};
+  var contractPartySuggestions = [];
 
   var STATUSES = ['dang_khao_gia','da_bao','trung','khong_trung','treo','tham_khao'];
   var STATUS_LABELS = {
@@ -547,6 +548,7 @@
 
   function openRfqContractModal(rfqId) {
     var rfq = (state.rows || []).find(function (r) { return r.rfq_id === rfqId; }) || { rfq_id: rfqId };
+    contractPartySuggestions = [];
     var partyA = rfq.client_name || rfq.nha_may_cdt || '';
     var html = ''
       + input('contractNo', 'Mã hợp đồng *', '', 'required placeholder="VD: VTPC1-0401-251013001"', 'span-4')
@@ -565,7 +567,10 @@
         API.error(err);
       }
     });
-    setTimeout(bindContractPartyLookups, 0);
+    setTimeout(function () {
+      bindContractPartyLookups();
+      preloadContractPartySuggestions();
+    }, 0);
     Auth.applyRoleUI();
   }
 
@@ -578,19 +583,83 @@
   }
 
   function bindContractPartyLookups() {
-    bindLookup('rfq-contract-party-a', 'getClients', function (r) {
-      return r.plant_name || r.client_name || r.legal_name || '';
-    }, function (r) {
-      return [r.legal_name, r.tax_code ? 'MST: ' + r.tax_code : '', r.province].filter(Boolean);
-    });
-    bindLookup('rfq-contract-party-b', 'getSuppliers', function (r) {
-      return r.supplier_name || '';
-    }, function (r) {
-      return [r.supplier_type, r.tax_code ? 'MST: ' + r.tax_code : '', r.country].filter(Boolean);
-    });
+    bindLookup('rfq-contract-party-a');
+    bindLookup('rfq-contract-party-b');
   }
 
-  function bindLookup(inputId, action, primaryFn, secondaryFn) {
+  async function preloadContractPartySuggestions() {
+    try {
+      var results = await Promise.all([
+        API.get('getClients', { limit: 200 }).catch(function () { return { rows: [] }; }),
+        API.get('getSuppliers', { limit: 200 }).catch(function () { return { rows: [] }; }),
+      ]);
+      contractPartySuggestions = mergeCompanySuggestions(results[0].rows || [], results[1].rows || []);
+      ['rfq-contract-party-a', 'rfq-contract-party-b'].forEach(function (id) {
+        var inp = document.getElementById(id);
+        if (inp && inp.value.trim()) inp.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+    } catch (_) {}
+  }
+
+  function mergeCompanySuggestions(clients, suppliers) {
+    var seen = {};
+    var rows = [];
+    function add(value, hint, searchParts) {
+      value = String(value || '').trim();
+      if (!value) return;
+      var key = normalizeLookupText(value);
+      if (seen[key]) return;
+      seen[key] = true;
+      rows.push({
+        value: value,
+        hint: (hint || []).filter(Boolean).join(' · '),
+        search: normalizeLookupText([value].concat(searchParts || []).filter(Boolean).join(' ')),
+      });
+    }
+    (clients || []).forEach(function (r) {
+      add(r.legal_name || r.client_name || r.plant_name || '', [r.plant_name, r.tax_code ? 'MST: ' + r.tax_code : '', r.province], [r.legal_name, r.client_name, r.plant_name, r.tax_code, r.province]);
+    });
+    (suppliers || []).forEach(function (r) {
+      add(r.supplier_name || '', [r.tax_code ? 'MST: ' + r.tax_code : '', r.country], [r.supplier_name, r.tax_code, r.country]);
+    });
+    return rows;
+  }
+
+  function normalizeLookupText(value) {
+    return String(value || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function renderLookupRows(drop, rows) {
+    if (!rows.length) { drop.classList.add('dp-hidden'); return; }
+    drop.innerHTML = rows.slice(0, 8).map(function (r) {
+      return '<div class="ac-item" tabindex="0" data-val="' + API.esc(r.value) + '">'
+        + '<strong>' + API.esc(r.value) + '</strong>'
+        + (r.hint ? '<br><small>' + API.esc(r.hint) + '</small>' : '')
+        + '</div>';
+    }).join('');
+    drop.classList.remove('dp-hidden');
+  }
+
+  async function fallbackCompanySuggestions(q) {
+    try {
+      var results = await Promise.all([
+        API.get('getClients', { q: q, limit: 8 }).catch(function () { return { rows: [] }; }),
+        API.get('getSuppliers', { q: q, limit: 8 }).catch(function () { return { rows: [] }; }),
+      ]);
+      return mergeCompanySuggestions(results[0].rows || [], results[1].rows || []);
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function bindLookup(inputId) {
     var inp = document.getElementById(inputId);
     var drop = document.getElementById(inputId + '-drop');
     if (!inp || !drop) return;
@@ -601,7 +670,11 @@
       if (!q) { drop.classList.add('dp-hidden'); return; }
       timer = setTimeout(async function () {
         try {
-          var data = await API.get(action, { q: q, limit: 8 });
+          var needle = normalizeLookupText(q);
+          var primaryFn = function (r) { return r.value || ''; };
+          var secondaryFn = function (r) { return r.hint ? [r.hint] : []; };
+          var localRows = contractPartySuggestions.filter(function (r) { return r.search.indexOf(needle) >= 0; });
+          var data = { rows: localRows.length ? localRows : await fallbackCompanySuggestions(q) };
           var rows = data.rows || [];
           if (!rows.length) { drop.classList.add('dp-hidden'); return; }
           drop.innerHTML = rows.map(function (r) {
