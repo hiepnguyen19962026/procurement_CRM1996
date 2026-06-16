@@ -103,12 +103,13 @@ export async function getDeliveryNoteItemsSQL(db, deliveryNoteId) {
             COALESCE(ci.contract_quantity, ri.so_luong, ri.quantity, 0) AS contract_quantity, ci.contract_unit_price, ci.contract_line_total,
             ci.delivery_deadline_date,
             ri.stt_goc, ri.hang_final, ri.quy_cach_final, ri.vat_lieu, ri.thong_so_ky_thuat,
+            dni.warranty_percent AS saved_warranty_percent,
             ri.warranty_days AS item_warranty_days_override,
             r.warranty_days AS rfq_warranty_days_default,
             COALESCE(ri.warranty_days, r.warranty_days) AS effective_warranty_days,
             ri.warranty_percent AS item_warranty_percent_override,
             r.warranty_percent AS rfq_warranty_percent_default,
-            COALESCE(ri.warranty_percent, r.warranty_percent) AS effective_warranty_percent,
+            COALESCE(dni.warranty_percent, ri.warranty_percent, r.warranty_percent) AS effective_warranty_percent,
             COALESCE(cu.cumulative_delivered_qty, 0) AS cumulative_delivered_qty,
             COALESCE(cs.clarification_count, 0)      AS clarification_count,
             cs.latest_clarification_title
@@ -229,18 +230,18 @@ export async function archiveDeliveryNoteItemSQL(db, deliveryNoteItemId, now) {
 }
 
 // Update acceptance header + all item rows in one batch.
-// header: { acceptance_date, acceptance_status, acceptance_note, payment_request_status, payment_request_date }
-// itemRows: [{ delivery_note_item_id, accepted_quantity, acceptance_status, rejection_reason, warranty_days, warranty_start_date, warranty_end_date }]
+// header: { acceptance_date, acceptance_status, acceptance_note, acceptance_person, payment_request_status, payment_request_date }
+// itemRows: [{ delivery_note_item_id, accepted_quantity, acceptance_status, rejection_reason, warranty_days, warranty_percent, warranty_start_date, warranty_end_date }]
 export async function recordAcceptanceSQL(db, noteId, header, itemRows, now) {
   const stmts = [
     db.prepare(
       `UPDATE delivery_notes SET
-         acceptance_date = ?, acceptance_status = ?, acceptance_note = ?,
+         acceptance_date = ?, acceptance_status = ?, acceptance_note = ?, acceptance_person = ?,
          payment_request_status = ?, payment_request_date = ?,
          updated_at = ?
        WHERE delivery_note_id = ? AND status = 'active'`
     ).bind(
-      header.acceptance_date, header.acceptance_status, header.acceptance_note,
+      header.acceptance_date, header.acceptance_status, header.acceptance_note, header.acceptance_person,
       header.payment_request_status, header.payment_request_date,
       now, noteId
     ),
@@ -250,12 +251,12 @@ export async function recordAcceptanceSQL(db, noteId, header, itemRows, now) {
       db.prepare(
         `UPDATE delivery_note_items SET
            accepted_quantity = ?, acceptance_status = ?, rejection_reason = ?,
-           warranty_days = ?, warranty_start_date = ?, warranty_end_date = ?,
+           warranty_days = ?, warranty_percent = ?, warranty_start_date = ?, warranty_end_date = ?,
            updated_at = ?
          WHERE delivery_note_item_id = ? AND delivery_note_id = ? AND status = 'active'`
       ).bind(
         it.accepted_quantity, it.acceptance_status, it.rejection_reason,
-        it.warranty_days, it.warranty_start_date, it.warranty_end_date,
+        it.warranty_days, it.warranty_percent, it.warranty_start_date, it.warranty_end_date,
         now, it.delivery_note_item_id, noteId
       )
     );

@@ -69,6 +69,14 @@
     if (it.rfq_warranty_days_default != null) return it.rfq_warranty_days_default;
     return it.effective_warranty_days != null ? it.effective_warranty_days : null;
   }
+  function effectiveWarrantyPercent(it) {
+    if (!it) return null;
+    if (it.warranty_percent != null) return it.warranty_percent;
+    if (it.saved_warranty_percent != null) return it.saved_warranty_percent;
+    if (it.item_warranty_percent_override != null) return it.item_warranty_percent_override;
+    if (it.rfq_warranty_percent_default != null) return it.rfq_warranty_percent_default;
+    return it.effective_warranty_percent != null ? it.effective_warranty_percent : null;
+  }
   function isSelectedDetailItem(it) {
     return it && _selectedDetailIds.has(String(it.delivery_note_item_id));
   }
@@ -256,6 +264,7 @@
         ['Ngày NT',    n.acceptance_date ? esc(fmtDate(n.acceptance_date)) : '<span style="color:var(--text-faint)">—</span>'],
         ['Thanh toán', '<span class="badge" style="' + (PAYMENT_STYLE[paymentSt] || '') + '">' + esc(PAYMENT_LABEL[paymentSt] || paymentSt) + '</span>'],
       ];
+      if (n.acceptance_person) acceptKv.push(['Người NT', esc(n.acceptance_person)]);
       if (n.acceptance_note) acceptKv.push(['Ghi chú NT', esc(n.acceptance_note)]);
       var acceptHtml = '<div style="border-top:1px solid var(--border);padding-top:8px;margin-bottom:8px;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:4px 16px">'
         + acceptKv.map(function (p) {
@@ -429,6 +438,18 @@
         commonWarrantyDays = '';
       }
     });
+    var commonWarrantyPercent = '';
+    selectedItems.forEach(function (it, idx) {
+      var percent = effectiveWarrantyPercent(it);
+      var val = percent != null ? String(percent) : '';
+      if (idx === 0) {
+        commonWarrantyPercent = val;
+      } else if (commonWarrantyPercent !== val) {
+        commonWarrantyPercent = '';
+      }
+    });
+    var currentUser = AppState.get('user') || {};
+    var acceptancePerson = n.acceptance_person || currentUser.full_name || currentUser.name || currentUser.username || '';
 
     var summaryRows = selectedItems.map(function (it) {
       return '<tr>'
@@ -439,11 +460,15 @@
     }).join('');
 
     var html = '<div style="display:grid;gap:14px">'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 16px">'
+      + '<div style="display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:8px 16px">'
       + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Ngày nghiệm thu *</label>'
         + '<input id="fnt-date" name="fnt-date" type="date" value="' + today + '" style="width:100%"></div>'
       + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Số ngày bảo hành</label>'
         + '<input id="fnt-warranty" type="text" inputmode="numeric" value="' + esc(commonWarrantyDays) + '" placeholder="(tùy chọn)" style="width:100%"></div>'
+      + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">% bảo hành</label>'
+        + '<input id="fnt-warranty-percent" type="text" inputmode="decimal" value="' + esc(commonWarrantyPercent) + '" placeholder="(tùy chọn)" style="width:100%"></div>'
+      + '<div><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Người nghiệm thu</label>'
+        + '<input id="fnt-acceptance-person" type="text" value="' + esc(acceptancePerson) + '" placeholder="(tùy chọn)" style="width:100%"></div>'
       + '<div style="grid-column:1/-1"><label style="font-size:12px;color:var(--text-muted);display:block;margin-bottom:2px">Ghi chú nghiệm thu</label>'
         + '<input id="fnt-note" type="text" placeholder="(tùy chọn)" style="width:100%"></div>'
       + '</div>'
@@ -468,12 +493,17 @@
 
     var dateVal = normDnDate((document.querySelector('[name="fnt-date"]') || {}).value || '');
     var wDaysRaw = (document.getElementById('fnt-warranty') || {}).value || '';
+    var wPercentRaw = (document.getElementById('fnt-warranty-percent') || {}).value || '';
+    var acceptancePerson = (document.getElementById('fnt-acceptance-person') || {}).value || '';
     var ntNote   = (document.getElementById('fnt-note')    || {}).value || '';
 
     if (!dateVal) { API.toast('Vui lòng chọn ngày nghiệm thu', 'warn'); return; }
     var hasWarrantyOverride = String(wDaysRaw).trim() !== '';
     var warrantyDays = hasWarrantyOverride ? parseInt(wDaysRaw, 10) : null;
     if (hasWarrantyOverride && !Number.isFinite(warrantyDays)) warrantyDays = null;
+    var hasWarrantyPercentOverride = String(wPercentRaw).trim() !== '';
+    var warrantyPercent = hasWarrantyPercentOverride ? parseFloat(String(wPercentRaw).replace(',', '.')) : null;
+    if (hasWarrantyPercentOverride && !Number.isFinite(warrantyPercent)) warrantyPercent = null;
 
     var items = detail.items;
     // Build ALL items — selected get new acceptance, unselected keep current state.
@@ -484,6 +514,7 @@
           acceptanceStatus:   'accepted',
           acceptedQuantity:   Number(it.delivered_quantity) || 0,
           warrantyDays:       hasWarrantyOverride ? warrantyDays : effectiveWarrantyDays(it),
+          warrantyPercent:    hasWarrantyPercentOverride ? warrantyPercent : effectiveWarrantyPercent(it),
           warrantyStartDate:  dateVal,
           warrantyEndDate:    null, // backend computes from days + start
         };
@@ -494,6 +525,7 @@
         acceptedQuantity:   Number(it.accepted_quantity) || 0,
         rejectionReason:    it.rejection_reason   || null,
         warrantyDays:       it.warranty_days       != null ? it.warranty_days : null,
+        warrantyPercent:    it.warranty_percent    != null ? it.warranty_percent : null,
         warrantyStartDate:  it.warranty_start_date || null,
         warrantyEndDate:    it.warranty_end_date   || null,
       };
@@ -503,6 +535,7 @@
       await API.call('recordDeliveryAcceptance', {
         deliveryNoteId: detail.note.delivery_note_id,
         acceptanceDate: dateVal,
+        acceptancePerson: acceptancePerson,
         acceptanceNote: ntNote,
         items: itemRows,
       });

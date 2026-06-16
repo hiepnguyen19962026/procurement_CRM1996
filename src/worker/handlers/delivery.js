@@ -435,6 +435,10 @@ async function recordAcceptance(request, env, ctx, actor) {
     const itemStatus = VALID_ACCEPTANCE_ITEM_STATUSES.has(rawStatus) ? rawStatus : 'pending';
     const acceptedQty = Math.max(0, cleanNumber(raw.acceptedQuantity ?? raw.accepted_quantity ?? 0));
     const warrantyDays  = raw.warrantyDays != null ? Math.max(0, parseInt(raw.warrantyDays, 10) || 0) : null;
+    const warrantyPercentRaw = raw.warrantyPercent ?? raw.warranty_percent;
+    const warrantyPercent = warrantyPercentRaw != null && String(warrantyPercentRaw).trim() !== ''
+      ? Math.max(0, cleanNumber(warrantyPercentRaw))
+      : null;
     const warrantyStart = validateDate(raw.warrantyStartDate || raw.warranty_start_date || '');
     let warrantyEnd     = validateDate(raw.warrantyEndDate   || raw.warranty_end_date   || '');
     if (warrantyDays && warrantyStart && !warrantyEnd) warrantyEnd = addDays(warrantyStart, warrantyDays);
@@ -444,6 +448,7 @@ async function recordAcceptance(request, env, ctx, actor) {
       acceptance_status:     itemStatus,
       rejection_reason:      cleanString(raw.rejectionReason || raw.rejection_reason || '', 500) || null,
       warranty_days:         warrantyDays || null,
+      warranty_percent:      warrantyPercent,
       warranty_start_date:   warrantyStart || null,
       warranty_end_date:     warrantyEnd   || null,
     });
@@ -476,6 +481,7 @@ async function recordAcceptance(request, env, ctx, actor) {
     acceptance_date:        acceptanceDate,
     acceptance_status:      headerStatus,
     acceptance_note:        cleanString(body.acceptanceNote || body.acceptance_note || '', 2000) || null,
+    acceptance_person:      cleanString(body.acceptancePerson || body.acceptance_person || '', 200) || null,
     payment_request_status: paymentStatus,
     payment_request_date:   paymentStatus === 'ready' ? acceptanceDate : null,
   };
