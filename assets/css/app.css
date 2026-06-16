@@ -61,9 +61,9 @@ textarea { min-height: 86px; resize: vertical; }
 .nav button.active { background: var(--primary-bg); border-color: #ffedd5; color: var(--primary-dk); font-weight: 600; }
 .nav button.active span { color: var(--primary); }
 .nav button:hover { background: var(--primary-bg); border-color: #ffedd5; color: var(--primary-dk); }
-.sidebar-foot { margin-top: auto; border-top: 1px solid var(--border); padding: 18px 10px 2px; display: grid; gap: 8px; color: var(--text-muted); font-size: 12px; }
-.topbar-account { display: none; }
-.sidebar-account { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-top: 1px solid var(--border); font-size: 13px; font-weight: 500; color: var(--text); }
+.sidebar-foot { border-top: 1px solid var(--border); padding: 18px 10px 2px; display: grid; gap: 8px; color: var(--text-muted); font-size: 12px; }
+.topbar-account { display: none !important; }
+.sidebar-account { margin-top: auto; display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-top: 1px solid var(--border); font-size: 13px; font-weight: 500; color: var(--text); }
 .sidebar-account button { font-size: 12px; padding: 4px 10px; min-height: 30px; }
 .sidebar-account .user-text { text-align: left; }
 .topbar-row-break { display: none; }
