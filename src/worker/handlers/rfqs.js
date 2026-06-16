@@ -130,6 +130,10 @@ async function saveRfq(request, env, ctx, actor, isUpdate) {
   const rawUrl = body.externalUrl !== undefined ? body.externalUrl
     : body.external_url !== undefined ? body.external_url
     : (oldRow?.external_url || '');
+  const note2Raw = pickPayloadValue(body, ['note2', 'note_2']);
+  const note2 = note2Raw.present
+    ? cleanString(note2Raw.value, 10000)
+    : (oldRow?.note2 || '');
   const warrantyPercentRaw = pickPayloadValue(body, ['warrantyPercent', 'warranty_percent']);
   const warrantyDaysRaw = pickPayloadValue(body, ['warrantyDays', 'warranty_days']);
   const warrantyPercent = warrantyPercentRaw.present
@@ -152,6 +156,7 @@ async function saveRfq(request, env, ctx, actor, isUpdate) {
     trang_thai_goi: cleanString(body.trangThaiGoi || body.trang_thai_goi || 'dang_khao_gia', 40),
     source_file_id: cleanString(body.sourceFileId || body.source_file_id, 120),
     note: cleanString(body.note, 1500),
+    note2,
     external_url: cleanUrl(rawUrl),
     warranty_percent: warrantyPercent.value,
     warranty_days: warrantyDays.value,

@@ -2,6 +2,7 @@
   var state = AppState.list('rfqs');
   var sort = { by: '', dir: 'desc' };
   var _setupDone = false;
+  var contractAddendumCache = {};
 
   var STATUSES = ['dang_khao_gia','da_bao','trung','khong_trung','treo','tham_khao'];
   var STATUS_LABELS = {
@@ -164,7 +165,7 @@
 
   // ─── edit / create ─────────────────────────────────────────────────────────
 
-  function openCreate() { openForm({}, [], []); }
+  function openCreate() { openForm({}, [], [], []); }
 
   async function openEdit(id) {
     var r = (state.rows || []).find(function (r) { return r.rfq_id === id; });
@@ -175,19 +176,21 @@
       } catch (_) { r = r || { rfq_id: id }; }
     }
     try {
-      var fetches = [API.get('getRfqContacts', { rfqId: id })];
+      var fetches = [API.get('getRfqContacts', { rfqId: id }), API.get('getContracts', { rfqId: id, limit: 50 })];
       if (r.client_id) fetches.push(API.get('getClientContacts', { clientId: r.client_id }));
       var results = await Promise.all(fetches);
       state.currentRfqContacts = results[0].rows || [];
-      state.allClientContacts  = r.client_id ? ((results[1] || {}).rows || []) : [];
-      openForm(r, state.currentRfqContacts, state.allClientContacts);
+      state.currentRfqContracts = results[1].rows || [];
+      state.allClientContacts  = r.client_id ? ((results[2] || {}).rows || []) : [];
+      openForm(r, state.currentRfqContacts, state.allClientContacts, state.currentRfqContracts);
     } catch (err) { API.error(err); }
   }
 
-  function openForm(r, rfqContacts, clientContacts) {
+  function openForm(r, rfqContacts, clientContacts, rfqContracts) {
     rfqContacts    = rfqContacts    || [];
     clientContacts = clientContacts || [];
-    Utils.openModal(r.rfq_id ? 'Sửa RFQ: ' + (r.rfq_id) : 'Thêm RFQ', fields(r, rfqContacts, clientContacts), async function (data) {
+    rfqContracts   = rfqContracts   || [];
+    Utils.openModal(r.rfq_id ? 'Sửa RFQ: ' + (r.rfq_id) : 'Thêm RFQ', fields(r, rfqContacts, clientContacts, rfqContracts), async function (data) {
       // Guard: text in picker but no client selected from suggestions
       var cacTxt = document.getElementById('rfq-cac-txt');
       if (cacTxt && cacTxt.value.trim() && !data.clientId) {
@@ -205,12 +208,15 @@
     });
     Auth.applyRoleUI();
     // wire client autocomplete after DOM is ready (Datepicker.init already called by openModal)
-    setTimeout(function () { bindClientAc(r); }, 0);
+    setTimeout(function () {
+      bindClientAc(r);
+      if (r.rfq_id) loadRfqContractAddendums(r.rfq_id, rfqContracts);
+    }, 0);
   }
 
   // ─── form fields ───────────────────────────────────────────────────────────
 
-  function fields(r, rfqContacts, clientContacts) {
+  function fields(r, rfqContacts, clientContacts, rfqContracts) {
     var statSel = '<select name="trangThaiGoi">' + STATUSES.map(function (s) {
       return '<option value="' + s + '"' + ((r.trang_thai_goi || 'dang_khao_gia') === s ? ' selected' : '') + '>' + STATUS_LABELS[s] + '</option>';
     }).join('') + '</select>';
@@ -245,9 +251,10 @@
       + '<label class="span-2">Bảo hành (%)<input name="warrantyPercent" type="number" min="0" step="0.01" value="' + API.esc(r.warranty_percent ?? '') + '"></label>'
       + '<label class="span-2">Số ngày bảo hành<input name="warrantyDays" type="number" min="0" step="1" value="' + API.esc(r.warranty_days ?? '') + '"></label>'
       + '<label class="span-12 compact-ta">Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>'
+      + '<label class="span-12 compact-ta">Ghi chú 2<textarea name="note2" rows="5">' + API.esc(r.note2 || '') + '</textarea></label>'
       + '<label class="span-12">URL thư mục/tài liệu<input name="externalUrl" type="url" maxlength="2000" placeholder="https://drive.google.com/…" value="' + API.esc(r.external_url || '') + '"></label>';
 
-    if (r.rfq_id) base += rfqContactsSection(r.rfq_id, rfqContacts, clientContacts, r.client_id || '');
+    if (r.rfq_id) base += rfqContractsSection(r.rfq_id, rfqContracts) + rfqContactsSection(r.rfq_id, rfqContacts, clientContacts, r.client_id || '');
     return base;
   }
 
@@ -382,6 +389,187 @@
   }
 
   // ─── rfq contacts section ──────────────────────────────────────────────────
+
+  // --- RFQ contract/addendum section ---------------------------------------
+
+  function rfqContractsSection(rfqId, contracts) {
+    contracts = contracts || [];
+    if (!contracts.length) {
+      return '<div class="modal-section">'
+        + '<div class="section-head"><h4>Hợp đồng / Phụ lục</h4></div>'
+        + '<p style="color:var(--text-muted);font-size:13px;margin:4px 0 0">RFQ này chưa có hợp đồng nên chưa thể thêm phụ lục.</p>'
+        + '</div>';
+    }
+    return '<div class="modal-section">'
+      + '<div class="section-head"><h4>Hợp đồng / Phụ lục (' + contracts.length + ')</h4></div>'
+      + contracts.map(function (c) {
+          var contractId = c.contract_id || '';
+          var disabled = c.status === 'archived' ? ' disabled style="opacity:.5;cursor:not-allowed"' : '';
+          return '<div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-top:8px">'
+            + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">'
+              + '<div><strong>' + API.esc(c.contract_no || contractId) + '</strong>'
+              + (c.contract_name ? '<div class="muted" style="font-size:12px">' + API.esc(c.contract_name) + '</div>' : '')
+              + '<div class="muted" style="font-size:12px">Giá trị gốc: ' + API.esc(API.money(c.original_contract_total || c.contract_total || 0) || '0') + '</div>'
+              + '</div>'
+              + '<button type="button" class="btn btn-sm" data-write onclick="RfqsModule.openContractAddendumModal(\'' + API.esc(rfqId) + '\',\'' + API.esc(contractId) + '\')"' + disabled + '>+ Phụ lục</button>'
+            + '</div>'
+            + '<div id="' + rfqAddendumContainerId(contractId) + '" class="empty-state small" style="margin-top:8px">Đang tải phụ lục...</div>'
+          + '</div>';
+        }).join('')
+      + '</div>';
+  }
+
+  function rfqAddendumContainerId(contractId) {
+    return 'rfq_add_' + String(contractId || '').replace(/[^A-Za-z0-9_-]/g, '_');
+  }
+
+  function loadRfqContractAddendums(rfqId, contracts) {
+    (contracts || []).forEach(function (c) {
+      loadRfqContractAddendum(rfqId, c.contract_id);
+    });
+  }
+
+  async function loadRfqContractAddendum(rfqId, contractId) {
+    var container = document.getElementById(rfqAddendumContainerId(contractId));
+    if (!container) return;
+    try {
+      var data = await API.get('getContractAddendums', { contractId: contractId });
+      contractAddendumCache[contractId] = data;
+      (data.rows || []).forEach(function (r) {
+        if (r.addendum_id) contractAddendumCache[r.addendum_id] = r;
+      });
+      container.innerHTML = renderRfqContractAddendums(rfqId, contractId, data);
+      Auth.applyRoleUI();
+    } catch (err) {
+      container.textContent = 'Lỗi tải phụ lục hợp đồng.';
+      API.error(err);
+    }
+  }
+
+  function renderRfqContractAddendums(rfqId, contractId, data) {
+    var rows = data.rows || [];
+    return rfqAddendumSummary(data.summary || {})
+      + '<div class="quotes-table-wrap" style="margin-top:8px">'
+      + '<table class="quotes-mini-table"><thead><tr>'
+      + '<th>Số PL</th><th>Tên phụ lục</th><th>Ngày ký</th>'
+      + '<th>Trước thuế</th><th>Thuế %</th><th>Sau thuế</th>'
+      + '<th>Tác động +/-</th><th>Trạng thái</th><th>URL</th><th></th>'
+      + '</tr></thead><tbody>'
+      + (rows.length ? rows.map(function (r) { return rfqAddendumRow(rfqId, contractId, r); }).join('') : '<tr><td colspan="10" class="empty-state small">Chưa có phụ lục.</td></tr>')
+      + '</tbody></table></div>';
+  }
+
+  function rfqAddendumSummary(summary) {
+    var original = summary.original_contract_total || 0;
+    var addTotal = summary.addendum_total || 0;
+    var current = summary.current_effective_value || (original + addTotal);
+    return '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px">'
+      + rfqSummaryBox('Giá trị HĐ gốc', original)
+      + rfqSummaryBox('Tổng phụ lục', addTotal)
+      + rfqSummaryBox('Giá trị hiện hành', current)
+      + '<div style="border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg)">'
+        + '<div class="muted" style="font-size:11px">Số phụ lục active</div>'
+        + '<strong>' + API.esc(summary.active_addendum_count || 0) + '</strong>'
+      + '</div>'
+      + '</div>';
+  }
+
+  function rfqSummaryBox(label, value) {
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px;background:var(--bg)">'
+      + '<div class="muted" style="font-size:11px">' + API.esc(label) + '</div>'
+      + '<strong>' + API.esc(API.money(value) || '0') + '</strong>'
+      + '</div>';
+  }
+
+  function rfqAddendumRow(rfqId, contractId, r) {
+    var archived = r.status === 'archived';
+    var editBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-write onclick="RfqsModule.openContractAddendumModal(\'' + API.esc(rfqId) + '\',\'' + API.esc(contractId) + '\',\'' + API.esc(r.addendum_id || '') + '\')">Sửa</button>';
+    var archiveBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-role-only="admin,manager" onclick="RfqsModule.archiveContractAddendum(\'' + API.esc(rfqId) + '\',\'' + API.esc(r.addendum_id || '') + '\',\'' + API.esc(contractId) + '\')">Lưu trữ</button>';
+    return '<tr>'
+      + '<td><strong>' + API.esc(r.addendum_no || '') + '</strong></td>'
+      + '<td>' + API.esc(r.addendum_name || '') + (r.note ? '<div class="muted" style="font-size:11px">' + API.esc(r.note) + '</div>' : '') + '</td>'
+      + '<td>' + API.esc(r.signed_date || '') + '</td>'
+      + '<td class="num">' + moneyOrDash(r.value_before_tax) + '</td>'
+      + '<td class="num">' + API.esc(r.tax_rate != null ? r.tax_rate : 0) + '</td>'
+      + '<td class="num"><strong>' + moneyOrDash(r.value_after_tax) + '</strong></td>'
+      + '<td class="num">' + signedMoney(r.amount_delta) + '</td>'
+      + '<td>' + addendumStatusBadge(r.status) + '</td>'
+      + '<td style="text-align:center">' + addendumUrlCell(r.external_url) + '</td>'
+      + '<td style="white-space:nowrap;text-align:center">' + editBtn + archiveBtn + '</td>'
+      + '</tr>';
+  }
+
+  function moneyOrDash(value) {
+    return value ? API.esc(API.money(value)) : '<span class="muted">-</span>';
+  }
+
+  function signedMoney(value) {
+    var n = Number(value || 0);
+    var sign = n > 0 ? '+' : '';
+    var color = n < 0 ? 'var(--red)' : 'inherit';
+    return '<strong style="color:' + color + '">' + API.esc(sign + (API.money(n) || '0')) + '</strong>';
+  }
+
+  function addendumStatusBadge(status) {
+    var labels = { draft: 'Nháp', active: 'Hiệu lực', archived: 'Lưu trữ', cancelled: 'Hủy' };
+    var style = status === 'active'
+      ? 'background:var(--green-bg);border-color:#86efac;color:var(--green)'
+      : status === 'archived'
+        ? 'opacity:.6'
+        : '';
+    return '<span class="badge" style="' + style + '">' + API.esc(labels[status] || status || '') + '</span>';
+  }
+
+  function addendumUrlCell(url) {
+    if (!url || !/^https?:\/\//i.test(url)) return '<span class="muted">-</span>';
+    return '<a class="btn btn-sm" href="' + API.esc(encodeURI(url)) + '" target="_blank" rel="noopener noreferrer" title="' + API.esc(url) + '">Mở</a>';
+  }
+
+  function input(name, label, value, attrs, cls) {
+    return '<label' + (cls ? ' class="' + cls + '"' : '') + '>' + API.esc(label) + '<input name="' + API.esc(name) + '" ' + (attrs || '') + ' value="' + API.esc(value) + '"></label>';
+  }
+
+  function textarea(name, label, value, attrs, cls) {
+    return '<label' + (cls ? ' class="' + cls + '"' : '') + '>' + API.esc(label) + '<textarea name="' + API.esc(name) + '" ' + (attrs || '') + '>' + API.esc(value) + '</textarea></label>';
+  }
+
+  function openContractAddendumModal(rfqId, contractId, addendumId) {
+    var row = addendumId ? (contractAddendumCache[addendumId] || {}) : {};
+    var html = ''
+      + input('addendumNo', 'Số phụ lục *', row.addendum_no || '', 'required placeholder="VD: VTPC1-0401-251013001-PL-01"', 'span-4')
+      + input('addendumName', 'Tên phụ lục', row.addendum_name || '', 'placeholder="VD: Phụ lục bổ sung phạm vi"', 'span-5')
+      + input('signedDate', 'Ngày ký', row.signed_date || '', 'type="date"', 'span-3')
+      + input('valueBeforeTax', 'Giá trị trước thuế', row.value_before_tax || '', 'inputmode="numeric" placeholder="0"', 'span-3')
+      + input('taxRate', 'Thuế %', row.tax_rate ?? '', 'type="number" min="0" step="0.01" placeholder="0"', 'span-2')
+      + input('valueAfterTax', 'Giá trị sau thuế', row.value_after_tax || '', 'inputmode="numeric" placeholder="0"', 'span-3')
+      + input('amountDelta', 'Tác động giá trị', row.amount_delta || '', 'inputmode="numeric" placeholder="+/-"', 'span-4')
+      + textarea('note', 'Ghi chú / nội dung', row.note || '', '', 'span-12 compact-ta')
+      + input('externalUrl', 'URL', row.external_url || '', 'type="url" maxlength="2000" placeholder="https://drive.google.com/..."', 'span-12');
+    Utils.openModal(addendumId ? 'Sửa phụ lục hợp đồng' : 'Thêm phụ lục hợp đồng', html, async function (form) {
+      try {
+        form.contractId = contractId;
+        if (addendumId) form.addendumId = addendumId;
+        await API.call(addendumId ? 'updateContractAddendum' : 'createContractAddendum', form);
+        API.toast('Đã lưu phụ lục', 'success');
+        await openEdit(rfqId);
+      } catch (err) {
+        API.error(err);
+      }
+    });
+    Auth.applyRoleUI();
+  }
+
+  async function archiveContractAddendum(rfqId, addendumId, contractId) {
+    var ok = await Utils.confirmDanger('Lưu trữ phụ lục', 'Lưu trữ phụ lục này? Phụ lục sẽ không còn tính vào tổng giá trị active.', 'Lưu trữ');
+    if (!ok) return;
+    try {
+      await API.call('archiveContractAddendum', { addendumId: addendumId });
+      API.toast('Đã lưu trữ phụ lục', 'success');
+      await loadRfqContractAddendum(rfqId, contractId);
+    } catch (err) {
+      API.error(err);
+    }
+  }
 
   function rfqContactsSection(rfqId, rfqContacts, clientContacts, clientId) {
     if (!clientId) {
@@ -548,6 +736,8 @@
     openContactPicker: openContactPicker,
     _addRfqContact:   _addRfqContact,
     archiveRfqContact: archiveRfqContact,
+    openContractAddendumModal: openContractAddendumModal,
+    archiveContractAddendum: archiveContractAddendum,
     archiveRfq:        archiveRfq,
   };
 })();

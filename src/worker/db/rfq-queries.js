@@ -71,18 +71,18 @@ export async function insertRfqSQL(db, row) {
   return db.prepare(
     `INSERT INTO rfqs (rfq_id, client_id, ma_goi_tbmt, ten_goi, nha_may_cdt, ngay_nhan_hoac_dang_tai, ngay_het_han,
        du_toan, trang_thai_goi, source_file_id, note, normalized_search, created_by, created_at, updated_at,
-       external_url, warranty_percent, warranty_days)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-  ).bind(row.rfq_id, row.client_id, row.ma_goi_tbmt, row.ten_goi, row.nha_may_cdt, row.ngay_nhan_hoac_dang_tai, row.ngay_het_han, row.du_toan, row.trang_thai_goi, row.source_file_id, row.note, row.normalized_search, row.created_by, row.created_at, row.updated_at, row.external_url || null, row.warranty_percent ?? null, row.warranty_days ?? null).run();
+       external_url, warranty_percent, warranty_days, note2)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  ).bind(row.rfq_id, row.client_id, row.ma_goi_tbmt, row.ten_goi, row.nha_may_cdt, row.ngay_nhan_hoac_dang_tai, row.ngay_het_han, row.du_toan, row.trang_thai_goi, row.source_file_id, row.note, row.normalized_search, row.created_by, row.created_at, row.updated_at, row.external_url || null, row.warranty_percent ?? null, row.warranty_days ?? null, row.note2 || null).run();
 }
 
 export async function updateRfqSQL(db, row) {
   return db.prepare(
     `UPDATE rfqs SET client_id = ?, ma_goi_tbmt = ?, ten_goi = ?, nha_may_cdt = ?, ngay_nhan_hoac_dang_tai = ?,
        ngay_het_han = ?, du_toan = ?, trang_thai_goi = ?, source_file_id = ?, note = ?, normalized_search = ?, updated_at = ?,
-       external_url = ?, warranty_percent = ?, warranty_days = ?
+       external_url = ?, warranty_percent = ?, warranty_days = ?, note2 = ?
      WHERE rfq_id = ?`
-  ).bind(row.client_id, row.ma_goi_tbmt, row.ten_goi, row.nha_may_cdt, row.ngay_nhan_hoac_dang_tai, row.ngay_het_han, row.du_toan, row.trang_thai_goi, row.source_file_id, row.note, row.normalized_search, row.updated_at, row.external_url || null, row.warranty_percent ?? null, row.warranty_days ?? null, row.rfq_id).run();
+  ).bind(row.client_id, row.ma_goi_tbmt, row.ten_goi, row.nha_may_cdt, row.ngay_nhan_hoac_dang_tai, row.ngay_het_han, row.du_toan, row.trang_thai_goi, row.source_file_id, row.note, row.normalized_search, row.updated_at, row.external_url || null, row.warranty_percent ?? null, row.warranty_days ?? null, row.note2 || null, row.rfq_id).run();
 }
 
 export async function archiveRfqSQL(db, rfqId, now) {
