@@ -182,7 +182,7 @@ export async function getDashboardV2SQL(db) {
       '      WHEN r.ngay_het_han >= ? THEN 0 ELSE 1 END ASC,' +
       " CASE WHEN r.ngay_het_han >= ? THEN r.ngay_het_han ELSE '0' END ASC," +
       " CASE WHEN r.ngay_het_han < ? AND r.ngay_het_han IS NOT NULL AND r.ngay_het_han != '' THEN r.ngay_het_han ELSE '9' END DESC" +
-      ' LIMIT 30'
+      ' LIMIT 15'
     ).bind(today, today, today).all(),
 
     // ── NEW: won RFQ list with item count, sorted by updated_at DESC (33) ─────
@@ -191,7 +191,7 @@ export async function getDashboardV2SQL(db) {
       ' r.external_url, r.client_id,' +
       ' (SELECT COUNT(*) FROM rfq_items i WHERE i.rfq_id = r.rfq_id) AS item_count' +
       " FROM rfqs r WHERE r.trang_thai_goi = 'trung'" +
-      ' ORDER BY r.updated_at DESC, r.rfq_id DESC LIMIT 15'
+      ' ORDER BY r.updated_at DESC, r.rfq_id DESC LIMIT 10'
     ).all(),
 
     // ── NEW: latest 30 clarifications with rfq_item + rfq names, exclude SMOKE (34) ──
@@ -207,7 +207,7 @@ export async function getDashboardV2SQL(db) {
       ' WHERE tc.deleted_at IS NULL' +
       " AND UPPER(r.rfq_id) NOT LIKE '%SMOKE%'" +
       " AND UPPER(COALESCE(r.ten_goi,'')) NOT LIKE '%SMOKE%'" +
-      ' ORDER BY tc.created_at DESC LIMIT 30'
+      ' ORDER BY tc.created_at DESC LIMIT 15'
     ).all(),
 
     // ── NEW: task summary inline (35) ─────────────────────────────────────────
@@ -231,7 +231,7 @@ export async function getDashboardV2SQL(db) {
       " CASE priority WHEN 'khan' THEN 0 WHEN 'cao' THEN 1 WHEN 'trung_binh' THEN 2 ELSE 3 END ASC," +
       " COALESCE(deadline_date,'9999') ASC," +
       ' COALESCE(last_activity_at,created_at) DESC' +
-      ' LIMIT 20'
+      ' LIMIT 15'
     ).bind(today).all(),
 
     // ── NEW: follow-up tasks — deadline within next 7 days (incl. overdue) (37) ──
@@ -239,7 +239,7 @@ export async function getDashboardV2SQL(db) {
       'SELECT task_id, title, company_name, deadline_date, next_followup_date, status, priority, latest_note, created_by' +
       " FROM tasks WHERE deleted_at IS NULL AND status NOT IN ('hoan_thanh','huy_bo')" +
       " AND deadline_date IS NOT NULL AND deadline_date != '' AND deadline_date <= ?" +
-      ' ORDER BY deadline_date ASC, task_id ASC LIMIT 20'
+      ' ORDER BY deadline_date ASC, task_id ASC LIMIT 15'
     ).bind(d7).all(),
   ]);
 
