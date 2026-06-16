@@ -387,12 +387,20 @@ async function saveAddendum(request, env, ctx, actor, isUpdate) {
   const addendumNo = cleanString(body.addendumNo || body.addendum_no || old?.addendum_no || '', 200);
   if (!addendumNo) return json({ ok: false, error: 'So phu luc la bat buoc' }, 400);
 
-  const valueBeforeTax = nonNegativeMoney(body.valueBeforeTax ?? body.value_before_tax ?? old?.value_before_tax);
+  const valueBeforeTax = signedMoneyValue(body.valueBeforeTax ?? body.value_before_tax ?? old?.value_before_tax);
   const taxRate = nonNegativeNumber(body.taxRate ?? body.tax_rate ?? old?.tax_rate);
-  const valueAfterTax = nonNegativeMoney(body.valueAfterTax ?? body.value_after_tax ?? old?.value_after_tax);
-  if (!valueBeforeTax.ok) return json({ ok: false, error: 'Gia tri truoc thue phai >= 0' }, 400);
+  if (!valueBeforeTax.ok) return json({ ok: false, error: 'Gia tri truoc thue khong hop le' }, 400);
   if (!taxRate.ok) return json({ ok: false, error: 'Thue % phai >= 0' }, 400);
-  if (!valueAfterTax.ok) return json({ ok: false, error: 'Gia tri sau thue phai >= 0' }, 400);
+  const hasValueAfterTaxPayload = hasOwn(body, 'valueAfterTax') || hasOwn(body, 'value_after_tax');
+  const valueAfterTax = hasValueAfterTaxPayload
+    ? signedMoneyValue(body.valueAfterTax ?? body.value_after_tax)
+    : { ok: true, value: Math.round(valueBeforeTax.value * (1 + taxRate.value / 100)) };
+  if (!valueAfterTax.ok) return json({ ok: false, error: 'Gia tri sau thue khong hop le' }, 400);
+  const hasAmountDeltaPayload = hasOwn(body, 'amountDelta') || hasOwn(body, 'amount_delta');
+  const amountDelta = hasAmountDeltaPayload
+    ? signedMoneyValue(body.amountDelta ?? body.amount_delta)
+    : { ok: true, value: valueAfterTax.value };
+  if (!amountDelta.ok) return json({ ok: false, error: 'Tac dong gia tri khong hop le' }, 400);
 
   const rawStatus = cleanString(body.status || old?.status || 'active', 20);
   const status = VALID_ADDENDUM_STATUS.has(rawStatus) ? rawStatus : 'active';
@@ -405,7 +413,7 @@ async function saveAddendum(request, env, ctx, actor, isUpdate) {
     value_before_tax: valueBeforeTax.value,
     tax_rate:         taxRate.value,
     value_after_tax:  valueAfterTax.value,
-    amount_delta:     cleanMoney(body.amountDelta ?? body.amount_delta ?? old?.amount_delta ?? 0),
+    amount_delta:     amountDelta.value,
     note:             cleanString(body.note || old?.note || '', 4000),
     external_url:     cleanUrl(body.externalUrl ?? body.external_url ?? old?.external_url ?? ''),
     status,
@@ -763,6 +771,11 @@ function cleanUrl(raw) {
 function nonNegativeMoney(value) {
   const n = cleanMoney(value ?? 0);
   return Number.isFinite(n) && n >= 0 ? { ok: true, value: n } : { ok: false, value: 0 };
+}
+
+function signedMoneyValue(value) {
+  const n = cleanMoney(value ?? 0);
+  return Number.isFinite(n) ? { ok: true, value: n } : { ok: false, value: 0 };
 }
 
 function nonNegativeNumber(value) {

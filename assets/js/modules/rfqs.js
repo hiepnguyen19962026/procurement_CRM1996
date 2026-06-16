@@ -821,12 +821,16 @@
       + input('signedDate', 'Ngày ký', row.signed_date || '', 'type="date"', 'span-3')
       + input('valueBeforeTax', 'Giá trị trước thuế', row.value_before_tax || '', 'inputmode="numeric" placeholder="0"', 'span-3')
       + input('taxRate', 'Thuế %', row.tax_rate ?? '', 'type="number" min="0" step="0.01" placeholder="0"', 'span-2')
-      + input('valueAfterTax', 'Giá trị sau thuế', row.value_after_tax || '', 'inputmode="numeric" placeholder="0"', 'span-3')
-      + input('amountDelta', 'Tác động giá trị', row.amount_delta || '', 'inputmode="numeric" placeholder="+/-"', 'span-4')
+      + input('valueAfterTax', 'Giá trị sau thuế', row.value_after_tax || '', 'inputmode="numeric" placeholder="0" readonly', 'span-3')
+      + input('amountDelta', 'Tác động giá trị hợp đồng', row.amount_delta || '', 'inputmode="numeric" readonly', 'span-4')
+      + '<div class="span-12 muted" style="font-size:12px;margin-top:-4px">Tự tính từ giá trị sau thuế. Số âm là giảm giá trị hợp đồng.</div>'
       + textarea('note', 'Ghi chú / nội dung', row.note || '', '', 'span-12 compact-ta')
       + input('externalUrl', 'URL', row.external_url || '', 'type="url" maxlength="2000" placeholder="https://drive.google.com/..."', 'span-12');
     Utils.openModal(addendumId ? 'Sửa phụ lục hợp đồng' : 'Thêm phụ lục hợp đồng', html, async function (form) {
       try {
+        var calc = calculateAddendumValues(form);
+        form.valueAfterTax = String(calc.valueAfterTax);
+        form.amountDelta = String(calc.valueAfterTax);
         form.contractId = contractId;
         if (addendumId) form.addendumId = addendumId;
         await API.call(addendumId ? 'updateContractAddendum' : 'createContractAddendum', form);
@@ -836,7 +840,37 @@
         API.error(err);
       }
     });
+    setTimeout(bindAddendumValueCalculator, 0);
     Auth.applyRoleUI();
+  }
+
+  function parseMoneyInput(value) {
+    var n = Number(String(value == null ? '' : value).replace(/[^\d.-]/g, ''));
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function calculateAddendumValues(source) {
+    var beforeTax = parseMoneyInput(source.valueBeforeTax);
+    var taxRate = Number(source.taxRate || 0);
+    if (!Number.isFinite(taxRate) || taxRate < 0) taxRate = 0;
+    return { valueAfterTax: Math.round(beforeTax * (1 + taxRate / 100)) };
+  }
+
+  function bindAddendumValueCalculator() {
+    var body = document.getElementById('modalBody') || document;
+    var beforeEl = body.querySelector('[name="valueBeforeTax"]');
+    var taxEl = body.querySelector('[name="taxRate"]');
+    var afterEl = body.querySelector('[name="valueAfterTax"]');
+    var deltaEl = body.querySelector('[name="amountDelta"]');
+    if (!beforeEl || !taxEl || !afterEl || !deltaEl) return;
+    function sync() {
+      var calc = calculateAddendumValues({ valueBeforeTax: beforeEl.value, taxRate: taxEl.value });
+      afterEl.value = String(calc.valueAfterTax);
+      deltaEl.value = String(calc.valueAfterTax);
+    }
+    beforeEl.addEventListener('input', sync);
+    taxEl.addEventListener('input', sync);
+    sync();
   }
 
   function openContractAddendumItemModal(rfqId, contractId, addendumId, addendumItemId) {
