@@ -138,10 +138,11 @@ async function saveContract(request, env, ctx, actor, isUpdate) {
 
   // Default client_id from RFQ if provided and not overridden.
   const rfqId = cleanString(body.rfqId || body.rfq_id || oldContract?.rfq_id || '', 80);
+  let rfqRow = null;
   let clientId = cleanString(body.clientId || body.client_id || oldContract?.client_id || '', 80);
-  if (rfqId && !clientId) {
-    const rfq = await getRfqSQL(env.DB, rfqId);
-    clientId = rfq?.client_id || '';
+  if (rfqId) {
+    rfqRow = await getRfqSQL(env.DB, rfqId);
+    if (!clientId) clientId = rfqRow?.client_id || '';
   }
 
   const rawCurrency = cleanString(body.currency || oldContract?.currency || 'VND', 10).toUpperCase();
@@ -152,7 +153,7 @@ async function saveContract(request, env, ctx, actor, isUpdate) {
     contract_id:    isUpdate ? oldContract.contract_id : makeId('CTR'),
     rfq_id:         rfqId || null,
     contract_no:    contractNo,
-    contract_name:  cleanString(body.contractName || body.contract_name || oldContract?.contract_name || '', 300),
+    contract_name:  cleanString(isUpdate ? (body.contractName || body.contract_name || oldContract?.contract_name || '') : (rfqRow?.ten_goi || body.contractName || body.contract_name || ''), 300),
     client_id:      clientId || null,
     signed_date:    validateDate(body.signedDate || body.signed_date || oldContract?.signed_date || ''),
     effective_date: validateDate(body.effectiveDate || body.effective_date || oldContract?.effective_date || ''),
@@ -161,6 +162,8 @@ async function saveContract(request, env, ctx, actor, isUpdate) {
     contract_total: initialContractTotal,
     status:         isUpdate ? (oldContract.status || 'active') : 'active',
     note:           cleanString(body.note || oldContract?.note || '', 2000),
+    party_a:        cleanString(body.partyA || body.party_a || oldContract?.party_a || '', 300),
+    party_b:        cleanString(body.partyB || body.party_b || oldContract?.party_b || '', 300),
     created_by:     isUpdate ? oldContract.created_by : actor.id,
     created_at:     isUpdate ? oldContract.created_at : now,
     updated_at:     now,

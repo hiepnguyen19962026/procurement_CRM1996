@@ -70,12 +70,13 @@ export async function insertContractSQL(db, row) {
     `INSERT INTO contracts (
       contract_id, rfq_id, contract_no, contract_name, client_id,
       signed_date, effective_date, expiry_date, currency, contract_total,
-      original_contract_total, status, note, created_by, created_at, updated_at, archived_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      original_contract_total, status, note, party_a, party_b, created_by, created_at, updated_at, archived_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).bind(
     row.contract_id, row.rfq_id, row.contract_no, row.contract_name, row.client_id,
     row.signed_date, row.effective_date, row.expiry_date, row.currency, row.contract_total,
-    row.contract_total, row.status, row.note, row.created_by, row.created_at, row.updated_at, row.archived_at
+    row.contract_total, row.status, row.note, row.party_a || null, row.party_b || null,
+    row.created_by, row.created_at, row.updated_at, row.archived_at
   ).run();
 }
 
@@ -84,12 +85,12 @@ export async function updateContractSQL(db, row) {
     `UPDATE contracts SET
       rfq_id = ?, contract_no = ?, contract_name = ?, client_id = ?,
       signed_date = ?, effective_date = ?, expiry_date = ?,
-      currency = ?, status = ?, note = ?, updated_at = ?
+      currency = ?, status = ?, note = ?, party_a = ?, party_b = ?, updated_at = ?
      WHERE contract_id = ?`
   ).bind(
     row.rfq_id, row.contract_no, row.contract_name, row.client_id,
     row.signed_date, row.effective_date, row.expiry_date,
-    row.currency, row.status, row.note, row.updated_at,
+    row.currency, row.status, row.note, row.party_a || null, row.party_b || null, row.updated_at,
     row.contract_id
   ).run();
 }

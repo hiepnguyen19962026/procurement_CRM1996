@@ -536,13 +536,24 @@
     return '<label' + (cls ? ' class="' + cls + '"' : '') + '>' + API.esc(label) + '<textarea name="' + API.esc(name) + '" ' + (attrs || '') + '>' + API.esc(value) + '</textarea></label>';
   }
 
+  function contractDefaultValue(rfq) {
+    var keys = ['winning_value', 'actual_winning_value', 'gia_trung', 'gia_trung_thau', 'contract_total', 'du_toan'];
+    for (var i = 0; i < keys.length; i++) {
+      var v = rfq[keys[i]];
+      if (v !== undefined && v !== null && String(v).trim() !== '' && Number(v) > 0) return v;
+    }
+    return 0;
+  }
+
   function openRfqContractModal(rfqId) {
     var rfq = (state.rows || []).find(function (r) { return r.rfq_id === rfqId; }) || { rfq_id: rfqId };
+    var partyA = rfq.client_name || rfq.nha_may_cdt || '';
     var html = ''
       + input('contractNo', 'Mã hợp đồng *', '', 'required placeholder="VD: VTPC1-0401-251013001"', 'span-4')
-      + input('contractName', 'Tên hợp đồng', rfq.ten_goi || '', 'placeholder="Tên hợp đồng"', 'span-5')
       + input('signedDate', 'Ngày ký', '', 'type="date"', 'span-3')
-      + input('contractTotal', 'Giá trị hợp đồng', rfq.du_toan || '', 'inputmode="numeric" placeholder="0"', 'span-4')
+      + input('contractTotal', 'Giá trị hợp đồng', contractDefaultValue(rfq), 'inputmode="numeric" placeholder="0"', 'span-5')
+      + lookupInput('partyA', 'Bên A', partyA, 'rfq-contract-party-a', 'span-6')
+      + lookupInput('partyB', 'Bên B', '', 'rfq-contract-party-b', 'span-6')
       + textarea('note', 'Ghi chú', '', '', 'span-12 compact-ta');
     Utils.openModal('Tạo hợp đồng từ RFQ', html, async function (form) {
       try {
@@ -554,7 +565,66 @@
         API.error(err);
       }
     });
+    setTimeout(bindContractPartyLookups, 0);
     Auth.applyRoleUI();
+  }
+
+  function lookupInput(name, label, value, id, cls) {
+    return '<label class="' + API.esc(cls || '') + '">' + API.esc(label)
+      + '<div class="ac-wrap">'
+      + '<input class="ac-input" id="' + API.esc(id) + '" name="' + API.esc(name) + '" autocomplete="off" value="' + API.esc(value || '') + '">'
+      + '<div class="ac-drop dp-hidden" id="' + API.esc(id) + '-drop"></div>'
+      + '</div></label>';
+  }
+
+  function bindContractPartyLookups() {
+    bindLookup('rfq-contract-party-a', 'getClients', function (r) {
+      return r.plant_name || r.client_name || r.legal_name || '';
+    }, function (r) {
+      return [r.legal_name, r.tax_code ? 'MST: ' + r.tax_code : '', r.province].filter(Boolean);
+    });
+    bindLookup('rfq-contract-party-b', 'getSuppliers', function (r) {
+      return r.supplier_name || '';
+    }, function (r) {
+      return [r.supplier_type, r.tax_code ? 'MST: ' + r.tax_code : '', r.country].filter(Boolean);
+    });
+  }
+
+  function bindLookup(inputId, action, primaryFn, secondaryFn) {
+    var inp = document.getElementById(inputId);
+    var drop = document.getElementById(inputId + '-drop');
+    if (!inp || !drop) return;
+    var timer = null;
+    inp.addEventListener('input', function () {
+      clearTimeout(timer);
+      var q = inp.value.trim();
+      if (!q) { drop.classList.add('dp-hidden'); return; }
+      timer = setTimeout(async function () {
+        try {
+          var data = await API.get(action, { q: q, limit: 8 });
+          var rows = data.rows || [];
+          if (!rows.length) { drop.classList.add('dp-hidden'); return; }
+          drop.innerHTML = rows.map(function (r) {
+            var primary = primaryFn(r);
+            var secondary = secondaryFn(r);
+            return '<div class="ac-item" tabindex="0" data-val="' + API.esc(primary) + '">'
+              + '<strong>' + API.esc(primary) + '</strong>'
+              + (secondary.length ? '<br><small>' + secondary.map(function (x) { return API.esc(x); }).join(' · ') + '</small>' : '')
+              + '</div>';
+          }).join('');
+          drop.classList.remove('dp-hidden');
+        } catch (_) {
+          drop.classList.add('dp-hidden');
+        }
+      }, 220);
+    });
+    drop.addEventListener('mousedown', function (e) {
+      var item = e.target.closest('.ac-item');
+      if (!item) return;
+      e.preventDefault();
+      inp.value = item.getAttribute('data-val') || '';
+      drop.classList.add('dp-hidden');
+    });
   }
 
   function openContractAddendumModal(rfqId, contractId, addendumId) {
