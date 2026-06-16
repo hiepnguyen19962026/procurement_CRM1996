@@ -96,6 +96,27 @@ function cleanUrl(raw) {
   return s.slice(0, 2000);
 }
 
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key);
+}
+
+function pickPayloadValue(obj, keys) {
+  for (const key of keys) {
+    if (hasOwn(obj, key)) return { present: true, value: obj[key] };
+  }
+  return { present: false, value: undefined };
+}
+
+function nullableNumberValue(value, fieldName, integer = false) {
+  if (value === undefined || value === null) return { ok: true, value: null };
+  const s = String(value).trim();
+  if (!s) return { ok: true, value: null };
+  const n = Number(s);
+  if (!Number.isFinite(n) || n < 0) return { ok: false, error: `${fieldName} phai la so >= 0` };
+  if (integer && !Number.isInteger(n)) return { ok: false, error: `${fieldName} phai la so nguyen >= 0` };
+  return { ok: true, value: n };
+}
+
 async function saveRfq(request, env, ctx, actor, isUpdate) {
   const denied = requireRole(actor, WRITE_ROLES);
   if (denied) return denied;
@@ -109,6 +130,16 @@ async function saveRfq(request, env, ctx, actor, isUpdate) {
   const rawUrl = body.externalUrl !== undefined ? body.externalUrl
     : body.external_url !== undefined ? body.external_url
     : (oldRow?.external_url || '');
+  const warrantyPercentRaw = pickPayloadValue(body, ['warrantyPercent', 'warranty_percent']);
+  const warrantyDaysRaw = pickPayloadValue(body, ['warrantyDays', 'warranty_days']);
+  const warrantyPercent = warrantyPercentRaw.present
+    ? nullableNumberValue(warrantyPercentRaw.value, 'warranty_percent')
+    : { ok: true, value: oldRow?.warranty_percent ?? null };
+  const warrantyDays = warrantyDaysRaw.present
+    ? nullableNumberValue(warrantyDaysRaw.value, 'warranty_days', true)
+    : { ok: true, value: oldRow?.warranty_days ?? null };
+  if (!warrantyPercent.ok) return json({ ok: false, error: warrantyPercent.error }, 400);
+  if (!warrantyDays.ok) return json({ ok: false, error: warrantyDays.error }, 400);
   const row = {
     rfq_id: isUpdate ? oldRow.rfq_id : await nextEntityId(env.DB, 'rfqs', 'rfq_id', 'RFQ'),
     client_id: cleanString(body.clientId || body.client_id, 80),
@@ -122,6 +153,8 @@ async function saveRfq(request, env, ctx, actor, isUpdate) {
     source_file_id: cleanString(body.sourceFileId || body.source_file_id, 120),
     note: cleanString(body.note, 1500),
     external_url: cleanUrl(rawUrl),
+    warranty_percent: warrantyPercent.value,
+    warranty_days: warrantyDays.value,
     normalized_search: buildSearchText([title, body.maGoiTbmt, body.ma_goi_tbmt, body.nhaMayCdt, body.nha_may_cdt]),
     created_by: oldRow?.created_by || actor.id,
     created_at: oldRow?.created_at || now,

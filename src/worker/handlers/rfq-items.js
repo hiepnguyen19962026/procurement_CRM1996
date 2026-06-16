@@ -104,9 +104,12 @@ async function saveItem(request, env, ctx, actor, isUpdate) {
     rfq_item_id: isUpdate ? oldRow.rfq_item_id : await nextEntityId(env.DB, 'rfq_items', 'rfq_item_id', 'RFQI'),
     rfq_id: rfqId,
     ten_vat_tu: name,
+    warranty_percent: oldRow?.warranty_percent ?? null,
+    warranty_days: oldRow?.warranty_days ?? null,
     created_at: oldRow?.created_at || now,
     updated_at: now,
   });
+  if (row.error) return json({ ok: false, error: row.error }, 400);
   if (isUpdate) await updateRfqItemSQL(env.DB, row);
   else await insertRfqItemSQL(env.DB, row);
   ctx.waitUntil(invalidateKv(env, ['dashboard:v1', 'dashboard:v2']));
@@ -153,6 +156,19 @@ function firstNumber(body, keys) {
   return 0;
 }
 
+function nullableNumber(body, keys, integer = false) {
+  for (const key of keys) {
+    if (body[key] === undefined || body[key] === null) continue;
+    const s = String(body[key]).trim();
+    if (!s) return null;
+    const n = Number(s);
+    if (!Number.isFinite(n) || n < 0) return { error: `${key} phai la so >= 0` };
+    if (integer && !Number.isInteger(n)) return { error: `${key} phai la so nguyen >= 0` };
+    return n;
+  }
+  return undefined;
+}
+
 function normalizeItemRow(body, base) {
   const requiredModel = firstText(body, ['requiredModel', 'required_model', 'quyCachModelYeuCau', 'quy_cach_model_yeu_cau'], 1000);
   const brand = firstText(body, ['brand', 'nhanHieu', 'nhan_hieu'], 120);
@@ -162,6 +178,10 @@ function normalizeItemRow(body, base) {
   const technicalParams = firstText(body, ['technicalParams', 'technical_params', 'thongSoKyThuat', 'thong_so_ky_thuat'], 2000);
   const unit = firstText(body, ['unit', 'donVi', 'don_vi'], 80);
   const quantity = firstNumber(body, ['quantity', 'soLuong', 'so_luong']);
+  const warrantyPercent = nullableNumber(body, ['warrantyPercent', 'warranty_percent']);
+  const warrantyDays = nullableNumber(body, ['warrantyDays', 'warranty_days'], true);
+  if (warrantyPercent?.error) return { error: warrantyPercent.error };
+  if (warrantyDays?.error) return { error: warrantyDays.error };
   const row = {
     ...base,
     stt_goc: v(body, 'sttGoc', 'stt_goc', 40),
@@ -209,6 +229,8 @@ function normalizeItemRow(body, base) {
     source_sheet_name: v(body, 'sourceSheetName', 'source_sheet_name', 120),
     source_row_number: Math.trunc(cleanNumber(body.sourceRowNumber ?? body.source_row_number)),
     external_url: cleanUrl(body.externalUrl ?? body.external_url),
+    warranty_percent: warrantyPercent === undefined ? base.warranty_percent : warrantyPercent,
+    warranty_days: warrantyDays === undefined ? base.warranty_days : warrantyDays,
   };
   row.normalized_search = buildSearchText([
     row.ma_mua_sam, row.ma_vat_tu, row.ten_vat_tu, row.required_model,

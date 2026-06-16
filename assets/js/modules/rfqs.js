@@ -242,6 +242,8 @@
       + '<label class="span-2">Ngày hết hạn<input name="ngayHetHan" type="date" value="' + API.esc(r.ngay_het_han || '') + '"></label>'
       + '<label class="span-3">Dự toán (VNĐ)<input name="duToan" inputmode="numeric" value="' + API.esc(r.du_toan || '') + '"></label>'
       + '<label class="span-2">Trạng thái' + statSel + '</label>'
+      + '<label class="span-2">Bảo hành (%)<input name="warrantyPercent" type="number" min="0" step="0.01" value="' + API.esc(r.warranty_percent ?? '') + '"></label>'
+      + '<label class="span-2">Số ngày bảo hành<input name="warrantyDays" type="number" min="0" step="1" value="' + API.esc(r.warranty_days ?? '') + '"></label>'
       + '<label class="span-12 compact-ta">Ghi chú<textarea name="note">' + API.esc(r.note || '') + '</textarea></label>'
       + '<label class="span-12">URL thư mục/tài liệu<input name="externalUrl" type="url" maxlength="2000" placeholder="https://drive.google.com/…" value="' + API.esc(r.external_url || '') + '"></label>';
 

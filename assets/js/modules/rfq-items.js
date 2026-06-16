@@ -19,6 +19,7 @@
   var deliveryStatusFilters = {};
   var deadlineStatusFilters = {};
   var _donWorkflowState = null;
+  var _beItems = [];
   var DELIVERY_SORT_KEYS = {
     delivered_quantity_total: true,
     remaining_quantity: true,
@@ -352,6 +353,10 @@
       if (noMatchDeliveryBtn) noMatchDeliveryBtn.classList.add('hidden');
       var noMatchDeliveryCnt = document.getElementById('itemDeliveryCount');
       if (noMatchDeliveryCnt) noMatchDeliveryCnt.textContent = '0';
+      var noMatchBulkEditBtn = document.getElementById('itemBulkEditSelected');
+      if (noMatchBulkEditBtn) noMatchBulkEditBtn.classList.add('hidden');
+      var noMatchBulkEditCnt = document.getElementById('itemBulkEditCount');
+      if (noMatchBulkEditCnt) noMatchBulkEditCnt.textContent = '0';
       updateCountInfo();
       syncTopScroll();
       return;
@@ -425,6 +430,10 @@
     if (deliveryBtn) deliveryBtn.classList.add('hidden');
     var deliveryCnt = document.getElementById('itemDeliveryCount');
     if (deliveryCnt) deliveryCnt.textContent = '0';
+    var bulkEditBtn = document.getElementById('itemBulkEditSelected');
+    if (bulkEditBtn) bulkEditBtn.classList.add('hidden');
+    var bulkEditCnt = document.getElementById('itemBulkEditCount');
+    if (bulkEditCnt) bulkEditCnt.textContent = '0';
     updateCountInfo();
     syncTopScroll();
   }
@@ -1197,6 +1206,8 @@
       + textarea('yeuCauKyThuatBoSung', 'Yêu cầu kỹ thuật bổ sung', r.yeu_cau_ky_thuat_bo_sung, '', 'span-12 compact-ta')
       + textarea('note', 'Ghi chú', r.note, '', 'span-12 compact-ta')
       + textarea('originFullText', 'Cột tổng hợp gốc để đối chiếu/export', r.origin_full_text, '', 'span-12 compact-ta')
+      + input('warrantyPercent', 'Bảo hành (%) override - Để trống = dùng mặc định của gói thầu', r.warranty_percent ?? '', 'type="number" min="0" step="0.01"', 'span-6')
+      + input('warrantyDays', 'Số ngày bảo hành override - Để trống = dùng mặc định của gói thầu', r.warranty_days ?? '', 'type="number" min="0" step="1"', 'span-6')
       + input('externalUrl', 'URL thư mục/tài liệu', r.external_url || '', 'placeholder="https://drive.google.com/…" maxlength="2000" type="url"', 'span-12')
       + masterItemSection(r, state.currentMaster || {})
       + itemAttachmentSection(r, (state.currentMedia && state.currentMedia.itemFiles) || [])
@@ -1977,11 +1988,153 @@
     var cnt = document.getElementById('itemDeleteCount');
     var deliveryBtn = document.getElementById('itemCreateDeliverySelected');
     var deliveryCnt = document.getElementById('itemDeliveryCount');
+    var bulkEditBtn = document.getElementById('itemBulkEditSelected');
+    var bulkEditCnt = document.getElementById('itemBulkEditCount');
     var canWrite = Utils.roleCanWrite();
     if (btn) btn.classList.toggle('hidden', !checked.length);
     if (cnt) cnt.textContent = checked.length;
     if (deliveryBtn) deliveryBtn.classList.toggle('hidden', !checked.length || !canWrite);
     if (deliveryCnt) deliveryCnt.textContent = checked.length;
+    if (bulkEditBtn) bulkEditBtn.classList.toggle('hidden', !checked.length || !canWrite);
+    if (bulkEditCnt) bulkEditCnt.textContent = checked.length;
+  }
+
+  function openBulkEditForSelected() {
+    if (!Utils.roleCanWrite()) { API.toast('Không có quyền chỉnh sửa', 'warn'); return; }
+    var items = _getSelectedItems();
+    if (!items.length) { API.toast('Chưa chọn dòng nào', 'warn'); return; }
+    var rfqId = _selectedRfqId;
+    if (!rfqId) { API.toast('Cần lọc theo RFQ trước', 'warn'); return; }
+
+    _beItems = items;
+
+    function beFieldRow(chkId, valId, label, type, placeholder) {
+      var extra = type === 'number' ? ' min="0" step="any"' : '';
+      return '<tr>'
+        + '<td style="padding:6px 10px 6px 0;width:170px;vertical-align:middle">'
+        + '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px">'
+        + '<input type="checkbox" id="' + chkId + '" onchange="RfqItemsModule._beOnFieldChange(\'' + valId + '\', this.checked)">'
+        + label + '</label></td>'
+        + '<td style="padding:6px 0;vertical-align:middle">'
+        + '<input type="' + type + '" id="' + valId + '" disabled placeholder="' + API.esc(placeholder) + '"'
+        + extra + ' oninput="RfqItemsModule._beUpdatePreview()"'
+        + ' style="width:100%;box-sizing:border-box;font-size:13px">'
+        + '</td></tr>';
+    }
+
+    var html = '<div style="font-size:13px">'
+      + '<p style="margin:0 0 10px;color:var(--text-muted)">Đã chọn <strong style="color:var(--text)">' + items.length + ' dòng</strong>. Chọn trường và nhập giá trị mới:</p>'
+      + '<table style="width:100%;border-collapse:collapse;margin-bottom:12px"><tbody>'
+      + beFieldRow('beChkUnit',     'beValUnit',     'ĐVT (đơn vị tính)',     'text',   'Đơn vị tính...')
+      + beFieldRow('beChkQty',      'beValQty',      'Khối lượng',            'number', '0')
+      + beFieldRow('beChkDelivery', 'beValDelivery', 'Thời gian giao hàng',   'text',   'VD: 30 ngày...')
+      + beFieldRow('beChkNote',     'beValNote',     'Ghi chú',               'text',   'Ghi chú...')
+      + '</tbody></table>'
+      + '<div id="bePreviewArea"></div>'
+      + '</div>';
+
+    Utils.openModal('Sửa hàng loạt — ' + items.length + ' dòng', html, async function () {
+      var activeFields = _beGetActiveFields();
+      if (!activeFields.length) { API.toast('Chưa chọn trường nào để cập nhật', 'warn'); return; }
+
+      var overwriteFields = [];
+      var fieldValues = {};
+      var validationError = null;
+      activeFields.forEach(function (f) {
+        if (validationError) return;
+        overwriteFields.push(f.key);
+        if (f.key === 'quantity') {
+          var qty = parseFloat(f.newVal);
+          if (isNaN(qty) || qty < 0) { validationError = 'Khối lượng phải là số >= 0'; return; }
+          fieldValues[f.key] = qty;
+        } else {
+          fieldValues[f.key] = (f.newVal || '').trim();
+        }
+      });
+      if (validationError) { API.toast(validationError, 'warn'); return; }
+
+      var rows = _beItems.map(function (item) {
+        var row = { rfq_item_id: item.rfq_item_id, ten_vat_tu: item.ten_vat_tu || '' };
+        Object.keys(fieldValues).forEach(function (k) { row[k] = fieldValues[k]; });
+        return row;
+      });
+
+      try {
+        var result = await API.call('commitImportRows', {
+          rfqId: rfqId,
+          importMode: 'selective_update',
+          overwriteFields: overwriteFields,
+          sourceFileName: 'bulk-edit-ui',
+          sourceSheetName: 'bulk_edit',
+          rows: rows
+        });
+        var s = result.summary || {};
+        var parts = [(s.updated || 0) + ' đã cập nhật'];
+        if (s.skipped) parts.push(s.skipped + ' bỏ qua');
+        if (s.skippedUnmatched) parts.push(s.skippedUnmatched + ' không tìm thấy');
+        if (s.errors) parts.push(s.errors + ' lỗi');
+        if (s.rowErrors && s.rowErrors.length) console.warn('[BulkEdit] rowErrors:', s.rowErrors.slice(0, 5));
+        Utils.closeModal();
+        API.toast(parts.join(', '), s.errors ? 'warn' : 'success');
+        await load(true);
+      } catch (err) { API.error(err); }
+    });
+  }
+
+  function _beOnFieldChange(valId, checked) {
+    var inp = document.getElementById(valId);
+    if (inp) { inp.disabled = !checked; if (checked) setTimeout(function () { inp.focus(); }, 0); }
+    _beUpdatePreview();
+  }
+
+  function _beGetActiveFields() {
+    var DEFS = [
+      { chkId: 'beChkUnit',     valId: 'beValUnit',     key: 'unit',          oldKey: 'don_vi',        label: 'ĐVT' },
+      { chkId: 'beChkQty',      valId: 'beValQty',      key: 'quantity',      oldKey: 'so_luong',      label: 'Khối lượng' },
+      { chkId: 'beChkDelivery', valId: 'beValDelivery', key: 'delivery_time', oldKey: 'delivery_time', label: 'TG giao' },
+      { chkId: 'beChkNote',     valId: 'beValNote',     key: 'note',          oldKey: 'note',          label: 'Ghi chú' }
+    ];
+    return DEFS.map(function (f) {
+      var chk = document.getElementById(f.chkId);
+      var inp = document.getElementById(f.valId);
+      if (!chk || !chk.checked) return null;
+      return { key: f.key, oldKey: f.oldKey, label: f.label, newVal: inp ? inp.value : '' };
+    }).filter(Boolean);
+  }
+
+  function _beUpdatePreview() {
+    var area = document.getElementById('bePreviewArea');
+    if (!area) return;
+    var activeFields = _beGetActiveFields();
+    if (!activeFields.length) { area.innerHTML = ''; return; }
+    var rows = _beItems;
+    var html = '<p style="font-size:12px;color:var(--text-muted);margin:0 0 6px">Xem trước — ' + rows.length + ' dòng sẽ được cập nhật:</p>'
+      + '<div style="overflow:auto;max-height:240px">'
+      + '<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      + '<thead><tr style="background:var(--bg)">'
+      + '<th style="padding:4px 6px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--border)">Mã VT</th>'
+      + '<th style="padding:4px 6px;text-align:left;border-bottom:1px solid var(--border)">Tên vật tư</th>';
+    activeFields.forEach(function (f) {
+      html += '<th style="padding:4px 6px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--border)">'
+        + API.esc(f.label) + '<br><span style="font-weight:400;color:var(--text-muted)">Cũ → Mới</span></th>';
+    });
+    html += '</tr></thead><tbody>';
+    rows.forEach(function (item, i) {
+      html += '<tr style="border-top:1px solid var(--border)' + (i % 2 ? ';background:var(--bg)' : '') + '">'
+        + '<td style="padding:3px 6px;white-space:nowrap">' + API.esc(item.ma_vat_tu || '') + '</td>'
+        + '<td style="padding:3px 6px;max-width:220px" title="' + API.esc(item.ten_vat_tu || '') + '">'
+        + API.esc((item.ten_vat_tu || '').slice(0, 45)) + '</td>';
+      activeFields.forEach(function (f) {
+        var oldVal = item[f.oldKey];
+        html += '<td style="padding:3px 6px;text-align:center">'
+          + '<span style="color:var(--text-muted)">' + API.esc(oldVal != null && oldVal !== '' ? String(oldVal) : '—') + '</span>'
+          + ' → <strong style="color:var(--primary,#2563eb)">' + API.esc(f.newVal !== '' ? String(f.newVal) : '(trống)') + '</strong>'
+          + '</td>';
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+    area.innerHTML = html;
   }
 
   async function deleteSelected() {
@@ -5111,6 +5264,9 @@
     _syncContractDeadlineFields: _syncContractDeadlineFields,
     toggleSelectAll: toggleSelectAll,
     onCheckChange: onCheckChange,
+    openBulkEditForSelected: openBulkEditForSelected,
+    _beOnFieldChange: _beOnFieldChange,
+    _beUpdatePreview: _beUpdatePreview,
     deleteSelected: deleteSelected,
     deleteAll: deleteAll,
     quickEditBadge: quickEditBadge,
