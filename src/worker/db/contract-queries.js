@@ -259,14 +259,18 @@ export async function searchContractAddendumItemsSQL(db, params) {
     'c.contract_no',
     'ca.addendum_no',
   ];
-  function addKeyword(keyword) {
-    if (!keyword) return;
-    conds.push('(' + searchCols.map(function (col) { return `COALESCE(${col}, '') LIKE ?`; }).join(' OR ') + ')');
-    for (let i = 0; i < searchCols.length; i++) binds.push('%' + keyword + '%');
-  }
-  addKeyword(q);
-  addKeyword(q2);
-  addKeyword(q3);
+  const searchExpr = searchCols.map(normalizeSqlText).join(" || ' ' || ");
+  const tokens = [q, q2, q3]
+    .filter(Boolean)
+    .join(' ')
+    .split(/\s+/)
+    .map(function (token) { return token.trim(); })
+    .filter(Boolean)
+    .slice(0, 20);
+  tokens.forEach(function (token) {
+    conds.push(`(${searchExpr}) LIKE ?`);
+    binds.push('%' + token + '%');
+  });
   if (rfqId) {
     conds.push('c.rfq_id = ?');
     binds.push(rfqId);
@@ -302,6 +306,23 @@ export async function searchContractAddendumItemsSQL(db, params) {
      LIMIT ?`
   ).bind(...binds, limit).all();
   return res.results || [];
+}
+
+function normalizeSqlText(col) {
+  let expr = `lower(COALESCE(${col}, ''))`;
+  const pairs = [
+    ['áàảãạăắằẳẵặâấầẩẫậÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬ', 'a'],
+    ['éèẻẽẹêếềểễệÉÈẺẼẸÊẾỀỂỄỆ', 'e'],
+    ['íìỉĩịÍÌỈĨỊ', 'i'],
+    ['óòỏõọôốồổỗộơớờởỡợÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢ', 'o'],
+    ['úùủũụưứừửữựÚÙỦŨỤƯỨỪỬỮỰ', 'u'],
+    ['ýỳỷỹỵÝỲỶỸỴ', 'y'],
+    ['đĐ', 'd'],
+  ];
+  for (const [chars, replacement] of pairs) {
+    for (const ch of chars) expr = `replace(${expr}, '${ch}', '${replacement}')`;
+  }
+  return expr;
 }
 
 export async function getContractAddendumItemSQL(db, addendumItemId) {

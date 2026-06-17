@@ -30,7 +30,7 @@ import { getSupplierQuoteSQL } from '../db/supplier-quote-queries.js';
 import { getRfqSQL } from '../db/rfq-queries.js';
 import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
-import { cleanMoney, cleanNumber, cleanString } from '../lib/normalize.js';
+import { cleanMoney, cleanNumber, cleanString, normalizeText } from '../lib/normalize.js';
 import { clampLimit, json, makeId, nowIso, readJson } from '../lib/utils.js';
 
 const VALID_CURRENCY = new Set(['VND', 'USD', 'EUR', 'JPY', 'CNY', 'SGD', 'KRW']);
@@ -480,9 +480,9 @@ async function searchAddendumItems(request, env, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
   const body = await readJson(request);
-  const q = cleanString(body.q || '', 200);
-  const q2 = cleanString(body.q2 || '', 200);
-  const q3 = cleanString(body.q3 || '', 200);
+  const q = normalizeText(cleanString(body.q || '', 200));
+  const q2 = normalizeText(cleanString(body.q2 || '', 200));
+  const q3 = normalizeText(cleanString(body.q3 || '', 200));
   if (!q && !q2 && !q3) return json({ ok: true, rows: [] });
   const rows = await searchContractAddendumItemsSQL(env.DB, {
     q,
