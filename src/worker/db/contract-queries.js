@@ -249,17 +249,6 @@ export async function searchContractAddendumItemsSQL(db, params) {
   const { q, q2, q3, rfqId, limit } = params;
   const conds = ["cai.status = 'active'"];
   const binds = [];
-  const searchCols = [
-    'cai.item_name',
-    'cai.item_code',
-    'cai.spec',
-    'cai.note',
-    'r.ma_goi_tbmt',
-    'r.ten_goi',
-    'c.contract_no',
-    'ca.addendum_no',
-  ];
-  const searchExpr = searchCols.map(normalizeSqlText).join(" || ' ' || ");
   const tokens = [q, q2, q3]
     .filter(Boolean)
     .join(' ')
@@ -267,10 +256,6 @@ export async function searchContractAddendumItemsSQL(db, params) {
     .map(function (token) { return token.trim(); })
     .filter(Boolean)
     .slice(0, 20);
-  tokens.forEach(function (token) {
-    conds.push(`(${searchExpr}) LIKE ?`);
-    binds.push('%' + token + '%');
-  });
   if (rfqId) {
     conds.push('c.rfq_id = ?');
     binds.push(rfqId);
@@ -304,25 +289,33 @@ export async function searchContractAddendumItemsSQL(db, params) {
      ${where}
      ORDER BY COALESCE(ca.signed_date, ca.created_at) DESC, cai.created_at DESC, cai.addendum_item_id DESC
      LIMIT ?`
-  ).bind(...binds, limit).all();
-  return res.results || [];
+  ).bind(...binds, Math.max(300, Math.min(500, limit * 5))).all();
+  const rows = res.results || [];
+  if (!tokens.length) return rows.slice(0, limit);
+  return rows.filter(function (row) {
+    const haystack = normalizeSearchText([
+      row.item_name,
+      row.item_code,
+      row.spec,
+      row.note,
+      row.ma_goi_tbmt,
+      row.ten_goi,
+      row.contract_no,
+      row.addendum_no,
+    ].filter(Boolean).join(' '));
+    return tokens.every(function (token) { return haystack.includes(token); });
+  }).slice(0, limit);
 }
 
-function normalizeSqlText(col) {
-  let expr = `lower(COALESCE(${col}, ''))`;
-  const pairs = [
-    ['áàảãạăắằẳẵặâấầẩẫậÁÀẢÃẠĂẮẰẲẴẶÂẤẦẨẪẬ', 'a'],
-    ['éèẻẽẹêếềểễệÉÈẺẼẸÊẾỀỂỄỆ', 'e'],
-    ['íìỉĩịÍÌỈĨỊ', 'i'],
-    ['óòỏõọôốồổỗộơớờởỡợÓÒỎÕỌÔỐỒỔỖỘƠỚỜỞỠỢ', 'o'],
-    ['úùủũụưứừửữựÚÙỦŨỤƯỨỪỬỮỰ', 'u'],
-    ['ýỳỷỹỵÝỲỶỸỴ', 'y'],
-    ['đĐ', 'd'],
-  ];
-  for (const [chars, replacement] of pairs) {
-    for (const ch of chars) expr = `replace(${expr}, '${ch}', '${replacement}')`;
-  }
-  return expr;
+function normalizeSearchText(value) {
+  return String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export async function getContractAddendumItemSQL(db, addendumItemId) {
