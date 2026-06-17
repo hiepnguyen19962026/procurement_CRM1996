@@ -514,18 +514,9 @@ async function saveAddendumItem(request, env, ctx, actor, isUpdate) {
   const unitPrice = nonNegativeMoney(body.unitPrice ?? body.unit_price ?? old?.unit_price ?? 0);
   if (!qty.ok) return json({ ok: false, error: 'So luong phai >= 0' }, 400);
   if (!unitPrice.ok) return json({ ok: false, error: 'Don gia phai >= 0' }, 400);
-
-  const hasQtyPayload = hasOwn(body, 'quantity');
-  const hasPricePayload = hasOwn(body, 'unitPrice') || hasOwn(body, 'unit_price');
-  const hasLineTotalPayload = hasOwn(body, 'lineTotal') || hasOwn(body, 'line_total');
-  const rawLineTotal = cleanMoney(hasLineTotalPayload ? (body.lineTotal ?? body.line_total) : 0);
-  const lineTotal = rawLineTotal > 0
-    ? rawLineTotal
-    : (isUpdate && !hasQtyPayload && !hasPricePayload && old?.line_total > 0)
-      ? old.line_total
-      : Math.round(qty.value * unitPrice.value);
   const taxRate = nonNegativeNumber(body.taxRate ?? body.tax_rate ?? old?.tax_rate ?? 0);
   if (!taxRate.ok) return json({ ok: false, error: 'Thue % phai >= 0' }, 400);
+  const lineTotal = Math.round(qty.value * unitPrice.value * (1 + taxRate.value / 100));
 
   const row = {
     addendum_item_id: isUpdate ? old.addendum_item_id : makeId('ADI'),

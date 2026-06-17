@@ -3007,7 +3007,7 @@
       + input('unit', 'ĐVT', row.unit || '', 'maxlength="80"', 'span-2')
       + input('quantity', 'SL', row.quantity ?? '', 'type="number" min="0" step="0.001"', 'span-2')
       + input('unitPrice', 'Đơn giá', row.unit_price || '', 'inputmode="numeric"', 'span-3')
-      + input('lineTotal', 'Thành tiền', row.line_total || '', 'inputmode="numeric"', 'span-3')
+      + input('lineTotal', 'Thành tiền', row.line_total || '', 'inputmode="numeric" readonly', 'span-3')
       + input('taxRate', 'Thuế %', row.tax_rate ?? '', 'type="number" min="0" step="0.01"', 'span-2')
       + textarea('note', 'Ghi chú', row.note || '', '', 'span-12 compact-ta');
     Utils.openModal(addendumItemId ? 'Sửa dòng chi tiết phụ lục' : 'Thêm dòng chi tiết phụ lục', html, async function (form) {
@@ -3022,7 +3022,37 @@
         API.error(err);
       }
     });
+    setTimeout(bindAddendumItemTotalCalculator, 0);
     Auth.applyRoleUI();
+  }
+
+  function calculateAddendumItemTotal(source) {
+    var quantity = Number(String(source.quantity == null ? '' : source.quantity).replace(',', '.'));
+    var unitPrice = parseMoneyInput(source.unitPrice);
+    var taxRate = Number(String(source.taxRate == null ? '' : source.taxRate).replace(',', '.'));
+    if (!Number.isFinite(quantity)) quantity = 0;
+    if (!Number.isFinite(taxRate) || taxRate < 0) taxRate = 0;
+    return Math.round(quantity * unitPrice * (1 + taxRate / 100));
+  }
+
+  function bindAddendumItemTotalCalculator() {
+    var body = document.getElementById('modalBody') || document;
+    var qtyEl = body.querySelector('[name="quantity"]');
+    var priceEl = body.querySelector('[name="unitPrice"]');
+    var taxEl = body.querySelector('[name="taxRate"]');
+    var totalEl = body.querySelector('[name="lineTotal"]');
+    if (!qtyEl || !priceEl || !taxEl || !totalEl) return;
+    function sync() {
+      totalEl.value = String(calculateAddendumItemTotal({
+        quantity: qtyEl.value,
+        unitPrice: priceEl.value,
+        taxRate: taxEl.value,
+      }));
+    }
+    qtyEl.addEventListener('input', sync);
+    priceEl.addEventListener('input', sync);
+    taxEl.addEventListener('input', sync);
+    sync();
   }
 
   async function archiveContractAddendumItem(contractId, addendumId, addendumItemId) {
