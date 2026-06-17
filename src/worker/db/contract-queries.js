@@ -245,6 +245,65 @@ export async function getContractAddendumItemsSQL(db, addendumId) {
   return res.results || [];
 }
 
+export async function searchContractAddendumItemsSQL(db, params) {
+  const { q, q2, q3, rfqId, limit } = params;
+  const conds = ["cai.status = 'active'"];
+  const binds = [];
+  const searchCols = [
+    'cai.item_name',
+    'cai.item_code',
+    'cai.spec',
+    'cai.note',
+    'r.ma_goi_tbmt',
+    'r.ten_goi',
+    'c.contract_no',
+    'ca.addendum_no',
+  ];
+  function addKeyword(keyword) {
+    if (!keyword) return;
+    conds.push('(' + searchCols.map(function (col) { return `COALESCE(${col}, '') LIKE ?`; }).join(' OR ') + ')');
+    for (let i = 0; i < searchCols.length; i++) binds.push('%' + keyword + '%');
+  }
+  addKeyword(q);
+  addKeyword(q2);
+  addKeyword(q3);
+  if (rfqId) {
+    conds.push('c.rfq_id = ?');
+    binds.push(rfqId);
+  }
+  const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+  const res = await db.prepare(
+    `SELECT
+       'addendum_item' AS source_type,
+       cai.addendum_item_id,
+       c.rfq_id,
+       r.ma_goi_tbmt,
+       r.ten_goi,
+       cai.contract_id,
+       c.contract_no,
+       cai.addendum_id,
+       ca.addendum_no,
+       cai.item_type,
+       cai.item_code,
+       cai.item_name,
+       cai.spec,
+       cai.unit,
+       cai.quantity,
+       cai.unit_price,
+       cai.line_total,
+       cai.tax_rate,
+       cai.note
+     FROM contract_addendum_items cai
+     JOIN contract_addendums ca ON ca.addendum_id = cai.addendum_id
+     JOIN contracts c ON c.contract_id = cai.contract_id
+     LEFT JOIN rfqs r ON r.rfq_id = c.rfq_id
+     ${where}
+     ORDER BY COALESCE(ca.signed_date, ca.created_at) DESC, cai.created_at DESC, cai.addendum_item_id DESC
+     LIMIT ?`
+  ).bind(...binds, limit).all();
+  return res.results || [];
+}
+
 export async function getContractAddendumItemSQL(db, addendumItemId) {
   return db.prepare('SELECT * FROM contract_addendum_items WHERE addendum_item_id = ?')
     .bind(addendumItemId).first();

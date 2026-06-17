@@ -15,6 +15,7 @@
   var _rfqAutocompleteInit = false;
   var _exportColPanelInit = false;
   var _lastFilterParams = {};
+  var _addendumSearchRows = [];
   var contractItemRowCache = {};
   var contractAddendumCache = {};
   var contractAddendumItemCache = {};
@@ -254,6 +255,18 @@
         sortBy: isDeliverySortKey(sort.by) ? '' : (sort.by || ''), sortDir: sort.dir || '',
       };
       var data = await API.get('getRfqItems', params);
+      if (hasKeywordSearch()) {
+        var addendumData = await API.get('searchContractAddendumItems', {
+          q: state.q,
+          q2: state.q2,
+          q3: state.q3,
+          rfqId: _selectedRfqId,
+          limit: 50,
+        });
+        _addendumSearchRows = addendumData.rows || [];
+      } else {
+        _addendumSearchRows = [];
+      }
       state.rows = reset ? data.rows : state.rows.concat(data.rows || []);
       state.cursor = data.nextCursor || '';
       state.hasMore = !!data.hasMore;
@@ -317,6 +330,7 @@
     syncDeadlineFilterLabel();
     var baseRows = state.rows || [];
     var rows = sortDeliveryRows(filterDeadlineRows(filterDeliveryRows(baseRows)));
+    renderAddendumSearchResults();
     var rfqFilter = _selectedRfqId;
     if (!baseRows.length && rfqFilter) {
       var rfqMeta = (AppState.list('rfqs').rows || []).find(function (r) { return r.rfq_id === rfqFilter; }) || null;
@@ -1070,6 +1084,77 @@
     });
     setTimeout(bindRfqItemTotalCalculator, 0);
     Auth.applyRoleUI();
+  }
+
+  function hasKeywordSearch() {
+    return !!String(state.q || '').trim() || !!String(state.q2 || '').trim() || !!String(state.q3 || '').trim();
+  }
+
+  function ensureAddendumSearchContainer() {
+    var el = document.getElementById('itemAddendumSearchResults');
+    if (el) return el;
+    var screen = document.getElementById('screen-items');
+    if (!screen) return null;
+    var topScroll = document.getElementById('itemsTopScroll');
+    if (!topScroll || !topScroll.parentNode) return null;
+    el = document.createElement('div');
+    el.id = 'itemAddendumSearchResults';
+    topScroll.parentNode.insertBefore(el, topScroll);
+    return el;
+  }
+
+  function renderAddendumSearchResults() {
+    var el = ensureAddendumSearchContainer();
+    if (!el) return;
+    if (!hasKeywordSearch()) {
+      el.innerHTML = '';
+      el.classList.add('hidden');
+      return;
+    }
+    el.classList.remove('hidden');
+    var rows = _addendumSearchRows || [];
+    if (!rows.length) {
+      el.innerHTML = '<div class="muted" style="font-size:12px;margin:8px 0 10px">Không có dòng phụ lục phù hợp.</div>';
+      return;
+    }
+    el.innerHTML = '<div style="margin:8px 0 12px;border:1px solid var(--border);border-radius:8px;background:#fff;overflow:hidden">'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:var(--bg);border-bottom:1px solid var(--border)">'
+      + '<strong style="font-size:13px">Kết quả phụ lục hợp đồng</strong>'
+      + '<span class="muted" style="font-size:12px">' + API.esc(rows.length) + ' dòng</span>'
+      + '</div>'
+      + '<div class="quotes-table-wrap">'
+      + '<table class="quotes-mini-table" style="min-width:980px"><thead><tr>'
+      + '<th>Nguồn</th><th>Nội dung / mã / quy cách</th><th>RFQ</th><th>Hợp đồng / Phụ lục</th><th>SL</th><th>Đơn giá</th><th>Thành tiền</th><th></th>'
+      + '</tr></thead><tbody>'
+      + rows.map(addendumSearchRow).join('')
+      + '</tbody></table></div></div>';
+    Auth.applyRoleUI();
+  }
+
+  function addendumSearchRow(r) {
+    var rfqLabel = r.ma_goi_tbmt || r.rfq_id || '-';
+    return '<tr>'
+      + '<td><span class="badge">Phụ lục HĐ</span></td>'
+      + '<td><strong>' + hlEsc(r.item_name || '', state.q) + '</strong>'
+      + (r.item_code ? '<div class="muted" style="font-size:11px">' + hlEsc(r.item_code, state.q) + '</div>' : '')
+      + (r.spec ? '<div class="muted" style="font-size:11px">' + hlEsc(r.spec, state.q) + '</div>' : '')
+      + '</td>'
+      + '<td>' + hlEsc(rfqLabel, state.q) + (r.ten_goi ? '<div class="muted" style="font-size:11px">' + hlEsc(r.ten_goi, state.q) + '</div>' : '') + '</td>'
+      + '<td>' + hlEsc(r.contract_no || '', state.q) + (r.addendum_no ? '<div class="muted" style="font-size:11px">PL: ' + hlEsc(r.addendum_no, state.q) + '</div>' : '') + '</td>'
+      + '<td class="num">' + API.esc(r.quantity != null ? Number(r.quantity).toLocaleString('vi-VN') : '0') + '</td>'
+      + '<td class="num">' + API.esc(r.unit_price ? API.money(r.unit_price) : '-') + '</td>'
+      + '<td class="num"><strong>' + API.esc(r.line_total ? API.money(r.line_total) : '-') + '</strong></td>'
+      + '<td style="text-align:center;white-space:nowrap">' + (r.rfq_id ? '<button type="button" class="btn btn-sm" onclick="RfqItemsModule.openRfqForAddendum(\'' + API.esc(r.rfq_id) + '\')">Mở RFQ</button>' : '<span class="muted">-</span>') + '</td>'
+      + '</tr>';
+  }
+
+  function openRfqForAddendum(rfqId) {
+    if (window.RfqsModule && typeof window.RfqsModule.openEdit === 'function') {
+      window.RfqsModule.openEdit(rfqId);
+      return;
+    }
+    filterByRfq(rfqId);
+    load(true);
   }
 
   async function loadQuoteMedia(quotes) {
@@ -5667,6 +5752,7 @@
     _checkAndConfirmModeC: _checkAndConfirmModeC,
     _commitSimpleUpdate: _commitSimpleUpdate,
     filterByRfq: filterByRfq,
+    openRfqForAddendum: openRfqForAddendum,
     loadPriceHistory: loadPriceHistory,
     exportPriceHistory: exportPriceHistory,
     loadContractItems: loadContractItems,

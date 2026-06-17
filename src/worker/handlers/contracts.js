@@ -19,6 +19,7 @@ import {
   listContractAddendumsSQL,
   listContractsSQL,
   recalcContractTotalSQL,
+  searchContractAddendumItemsSQL,
   updateContractAddendumItemSQL,
   updateContractAddendumSQL,
   updateContractItemSQL,
@@ -54,6 +55,7 @@ export async function handleContracts(action, request, env, ctx, actor) {
   if (action === 'createContractAddendum')     return saveAddendum(request, env, ctx, actor, false);
   if (action === 'updateContractAddendum')     return saveAddendum(request, env, ctx, actor, true);
   if (action === 'archiveContractAddendum')    return archiveAddendum(request, env, ctx, actor);
+  if (action === 'searchContractAddendumItems') return searchAddendumItems(request, env, actor);
   if (action === 'getContractAddendumItems')   return listAddendumItems(request, env, actor);
   if (action === 'createContractAddendumItem') return saveAddendumItem(request, env, ctx, actor, false);
   if (action === 'updateContractAddendumItem') return saveAddendumItem(request, env, ctx, actor, true);
@@ -472,6 +474,24 @@ async function listAddendumItems(request, env, actor) {
   const rows = await getContractAddendumItemsSQL(env.DB, addendumId);
   const summary = await getContractAddendumItemSummarySQL(env.DB, addendumId);
   return json({ ok: true, addendum, rows, summary });
+}
+
+async function searchAddendumItems(request, env, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const q = cleanString(body.q || '', 200);
+  const q2 = cleanString(body.q2 || '', 200);
+  const q3 = cleanString(body.q3 || '', 200);
+  if (!q && !q2 && !q3) return json({ ok: true, rows: [] });
+  const rows = await searchContractAddendumItemsSQL(env.DB, {
+    q,
+    q2,
+    q3,
+    rfqId: cleanString(body.rfqId || body.rfq_id || '', 80),
+    limit: clampLimit(body.limit, 50, 100),
+  });
+  return json({ ok: true, rows });
 }
 
 async function saveAddendumItem(request, env, ctx, actor, isUpdate) {
