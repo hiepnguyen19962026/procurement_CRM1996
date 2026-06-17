@@ -2971,7 +2971,7 @@
   function addendumItemRow(contractId, addendumId, r) {
     var archived = r.status === 'archived';
     var editBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-write onclick="RfqItemsModule.openContractAddendumItemModal(\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\',\'' + API.esc(r.addendum_item_id || '') + '\')">S&#7917;a</button>';
-    var archiveBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-role-only="admin,manager" onclick="RfqItemsModule.archiveContractAddendumItem(\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\',\'' + API.esc(r.addendum_item_id || '') + '\')">L&#432;u tr&#7919;</button>';
+    var archiveBtn = archived ? '' : '<button type="button" class="btn btn-sm" data-role-only="admin,manager" onclick="RfqItemsModule.archiveContractAddendumItem(\'' + API.esc(contractId) + '\',\'' + API.esc(addendumId) + '\',\'' + API.esc(r.addendum_item_id || '') + '\')">X&#243;a</button>';
     return '<tr' + (archived ? ' style="opacity:.65"' : '') + '>'
       + '<td>' + API.esc(addendumItemTypeLabel(r.item_type)) + '</td>'
       + '<td>' + API.esc(r.item_code || '') + '</td>'
@@ -3056,11 +3056,11 @@
   }
 
   async function archiveContractAddendumItem(contractId, addendumId, addendumItemId) {
-    var ok = await Utils.confirmDanger('Lưu trữ dòng chi tiết', 'Lưu trữ dòng chi tiết phụ lục này?', 'Lưu trữ');
+    var ok = await Utils.confirmDanger('Xóa dòng chi tiết', 'Xóa dòng chi tiết phụ lục này?', 'Xóa');
     if (!ok) return;
     try {
       await API.call('archiveContractAddendumItem', { addendumItemId: addendumItemId });
-      API.toast('Đã lưu trữ dòng chi tiết', 'success');
+      API.toast('Đã xóa dòng chi tiết.', 'success');
       await loadContractAddendumItems(contractId, addendumId);
     } catch (err) {
       API.error(err);
