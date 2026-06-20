@@ -1435,14 +1435,14 @@
       + mediaList(pdfFiles, 'Chưa có file PDF.')
       + '<div data-write class="upload-row">'
       + '<label>Upload tài liệu PDF</label>'
-      + '<input id="' + pdfInputId + '" type="file" accept="application/pdf,.pdf">'
+      + '<input id="' + pdfInputId + '" type="file" accept="application/pdf,.pdf" multiple>'
       + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'rfq_item\', \'' + escId + '\', \'document_pdf\', \'' + pdfInputId + '\', \'' + escId + '\')">Upload PDF</button>'
       + '</div>'
       + '<div class="media-subhead" style="margin-top:16px"><strong style="font-size:13px">Ảnh vật tư</strong></div>'
       + imageGallery(imageFiles)
       + '<div data-write class="upload-row">'
       + '<label>Upload ảnh vật tư</label>'
-      + '<input id="' + imageInputId + '" type="file" accept="image/jpeg,image/png,image/webp">'
+      + '<input id="' + imageInputId + '" type="file" accept="image/jpeg,image/png,image/webp" multiple>'
       + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'rfq_item\', \'' + escId + '\', \'item_image\', \'' + imageInputId + '\', \'' + escId + '\')">Upload ảnh</button>'
       + '</div>'
       + '</section>';
@@ -1903,13 +1903,13 @@
       + '<div class="media-label">File PDF</div>'
       + mediaList(pdfFiles, 'Chưa có file PDF.')
       + '<div data-write style="margin-top:6px">'
-      + '<input id="' + pdfInputId + '" type="file" accept="application/pdf,.pdf" style="max-width:170px">'
+      + '<input id="' + pdfInputId + '" type="file" accept="application/pdf,.pdf" multiple style="max-width:170px">'
       + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'quote\', \'' + API.esc(quoteId) + '\', \'quote_pdf\', \'' + pdfInputId + '\', \'' + API.esc(rfqItemId) + '\')">Upload</button>'
       + '</div>'
       + '<div class="media-label" style="margin-top:8px">Minh chứng báo giá</div>'
       + imageGallery(imageFiles)
       + '<div data-write style="margin-top:6px">'
-      + '<input id="' + imageInputId + '" type="file" accept="image/jpeg,image/png,image/webp" style="max-width:170px">'
+      + '<input id="' + imageInputId + '" type="file" accept="image/jpeg,image/png,image/webp" multiple style="max-width:170px">'
       + '<button type="button" onclick="RfqItemsModule.uploadMediaFile(\'quote\', \'' + API.esc(quoteId) + '\', \'quote_evidence_image\', \'' + imageInputId + '\', \'' + API.esc(rfqItemId) + '\')">Upload ảnh</button>'
       + '</div></div>';
   }
@@ -1945,9 +1945,9 @@
 
   async function uploadMediaFile(ownerType, ownerId, fileKind, inputId, rfqItemId) {
     var input = document.getElementById(inputId);
-    var file = input && input.files && input.files[0];
+    var files = input && input.files ? Array.from(input.files) : [];
     var isImage = fileKind === 'item_image' || fileKind === 'quote_evidence_image';
-    if (!file) {
+    if (!files.length) {
       if (isImage) {
         API.toast('Chọn ảnh trước khi upload', 'warn');
         return;
@@ -1955,31 +1955,38 @@
       API.toast('Chọn file PDF trước khi upload', 'warn');
       return;
     }
-    var form = new FormData();
-    form.append('ownerType', ownerType);
-    form.append('ownerId', ownerId);
-    form.append('fileKind', fileKind);
-    form.append('file', file);
+    var succeeded = 0;
+    var failed = [];
+    var overTarget = 0;
     try {
-      await API.upload(form);
-      if (isImage) {
-        var origSz = Number(form.get('_origSize') || 0);
-        var compSz = Number(form.get('_compSize') || 0);
-        var overTgt = form.get('_overTarget') === '1';
-        var sizeHint = (compSz > 0 && origSz > 0 && compSz < origSz)
-          ? ' (' + Math.round(compSz / 1024) + ' KB sau nén)' : '';
-        if (overTgt) {
-          API.toast('Đã upload ảnh' + sizeHint + ' — lớn hơn khuyến nghị', 'warn');
-        } else {
-          API.toast('Đã upload ảnh' + sizeHint, 'success');
+      for (var i = 0; i < files.length; i++) {
+        var file = files[i];
+        API.toast('Đang upload ' + (i + 1) + '/' + files.length + ': ' + file.name, 'info');
+        var form = new FormData();
+        form.append('ownerType', ownerType);
+        form.append('ownerId', ownerId);
+        form.append('fileKind', fileKind);
+        form.append('file', file);
+        try {
+          await API.upload(form);
+          succeeded++;
+          if (form.get('_overTarget') === '1') overTarget++;
+        } catch (err) {
+          failed.push(file.name + ': ' + (err.message || 'Lỗi upload'));
+          API.toast('Lỗi file ' + file.name + ': ' + (err.message || 'Lỗi upload'), 'error');
         }
-        await openEdit(rfqItemId);
-        return;
       }
-      API.toast('Đã upload file PDF', 'success');
+    } finally {
+      input.value = '';
+    }
+    if (succeeded) {
+      var successText = 'Đã upload ' + succeeded + '/' + files.length + (isImage ? ' ảnh' : ' file PDF');
+      if (overTarget) successText += ' (' + overTarget + ' ảnh lớn hơn khuyến nghị)';
+      API.toast(successText, failed.length || overTarget ? 'warn' : 'success');
       await openEdit(rfqItemId);
-    } catch (err) {
-      API.error(err);
+    }
+    if (failed.length) {
+      API.toast('Không upload được: ' + failed.join('; '), 'error');
     }
   }
 
