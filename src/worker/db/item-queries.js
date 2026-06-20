@@ -102,7 +102,7 @@ export async function unlinkRfqItemFromItemSQL(db, rfqItemId, updatedAt) {
 }
 
 export async function suggestItemsSQL(db, params) {
-  const { maVatTu, normalizedNeedle, nameLike, modelLike, manufacturerLike, brandLike, originLike, unitLike, limit } = params;
+  const { maVatTu, tokens, unitLike, limit } = params;
   const conds = [];
   const binds = [];
 
@@ -110,31 +110,9 @@ export async function suggestItemsSQL(db, params) {
     conds.push('ma_vat_tu = ?');
     binds.push(maVatTu);
   }
-  // Cap needle length to avoid oversized LIKE patterns
-  const needle = normalizedNeedle ? normalizedNeedle.slice(0, 120) : '';
-  if (needle) {
-    conds.push('normalized_search LIKE ?');
-    binds.push(`%${needle}%`);
-  }
-  if (nameLike) {
-    conds.push('ten_vat_tu LIKE ?');
-    binds.push(`%${nameLike}%`);
-  }
-  if (modelLike) {
-    conds.push('required_model LIKE ?');
-    binds.push(`%${modelLike}%`);
-  }
-  if (manufacturerLike) {
-    conds.push('manufacturer LIKE ?');
-    binds.push(`%${manufacturerLike}%`);
-  }
-  if (brandLike) {
-    conds.push('brand LIKE ?');
-    binds.push(`%${brandLike}%`);
-  }
-  if (originLike) {
-    conds.push('origin_country LIKE ?');
-    binds.push(`%${originLike}%`);
+  for (const token of (tokens || []).slice(0, 8)) {
+    conds.push("normalized_search LIKE ? ESCAPE '\\'");
+    binds.push(`%${escapeLikeToken(token.slice(0, 60))}%`);
   }
   if (unitLike) {
     conds.push('unit = ?');
@@ -153,21 +131,18 @@ export async function suggestItemsSQL(db, params) {
 
   const rows = res.results || [];
   // Score and re-sort in JS
-  const needleLower = needle.toLowerCase();
-  const nameLower = (nameLike || '').toLowerCase();
-  const modelLower = (modelLike || '').toLowerCase();
-  const mfgLower = (manufacturerLike || '').toLowerCase();
-  const brandLower = (brandLike || '').toLowerCase();
+  const safeTokens = (tokens || []).slice(0, 8).map((token) => token.toLowerCase());
   return rows
     .map(function (row) {
       var score = 0;
       if (maVatTu && row.ma_vat_tu === maVatTu) score += 100;
-      if (needleLower && (row.normalized_search || '').includes(needleLower)) score += 30;
-      if (nameLower && (row.ten_vat_tu || '').toLowerCase().includes(nameLower)) score += 15;
-      if (modelLower && (row.required_model || '').toLowerCase().includes(modelLower)) score += 12;
-      if (mfgLower && (row.manufacturer || '').toLowerCase().includes(mfgLower)) score += 8;
-      if (brandLower && (row.brand || '').toLowerCase().includes(brandLower)) score += 6;
+      const searchText = (row.normalized_search || '').toLowerCase();
+      score += safeTokens.filter((token) => searchText.includes(token)).length * 10;
       return Object.assign({}, row, { match_score: score });
     })
     .sort(function (a, b) { return b.match_score - a.match_score; });
+}
+
+function escapeLikeToken(value) {
+  return String(value || '').replace(/[\\%_]/g, '\\$&');
 }

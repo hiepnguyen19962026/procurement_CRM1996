@@ -74,8 +74,16 @@ async function suggestMasterItemsForRfqItem(request, env, actor) {
   if (!rfqItemId) return json({ ok: false, error: 'Thieu ma dong vat tu' }, 400);
   const rfqItem = await getRfqItemSQL(env.DB, rfqItemId);
   if (!rfqItem) return json({ ok: false, error: 'Khong tim thay dong vat tu' }, 404);
-  const rows = await suggestItemsSQL(env.DB, suggestionParamsFromRfqItem(rfqItem));
-  return json({ ok: true, rows });
+  try {
+    const rows = await suggestItemsSQL(env.DB, suggestionParamsFromRfqItem(rfqItem));
+    return json({ ok: true, rows });
+  } catch (err) {
+    const message = `${err?.message || ''} ${err?.cause?.message || ''}`;
+    if (/LIKE or GLOB pattern too complex/i.test(message)) {
+      return json({ ok: true, rows: [], warning: 'Du lieu goi y qua phuc tap, da bo qua an toan' });
+    }
+    throw err;
+  }
 }
 
 async function createMasterItem(request, env, ctx, actor) {
@@ -233,13 +241,26 @@ function suggestionParamsFromRfqItem(row) {
   const unit = cleanString(row.unit || row.don_vi, 80);
   return {
     maVatTu: cleanString(row.ma_vat_tu, 120),
-    normalizedNeedle: buildSearchText([row.ma_vat_tu, name, model, manufacturer, brand, origin, unit]),
-    nameLike: name,
-    modelLike: model,
-    manufacturerLike: manufacturer,
-    brandLike: brand,
-    originLike: origin,
-    unitLike: unit,
+    tokens: safeSuggestionTokens([
+      row.ma_vat_tu, name, model, manufacturer, brand, origin, unit,
+    ]),
+    unitLike: normalizeText(unit).length >= 2 ? cleanString(unit, 60) : '',
     limit: 10,
   };
+}
+
+function safeSuggestionTokens(fields) {
+  const tokens = [];
+  const seen = new Set();
+  for (const field of fields) {
+    const parts = normalizeText(field).split(/[^a-z0-9]+/);
+    for (const part of parts) {
+      const token = part.slice(0, 60);
+      if (token.length < 2 || seen.has(token)) continue;
+      seen.add(token);
+      tokens.push(token);
+      if (tokens.length >= 8) return tokens;
+    }
+  }
+  return tokens;
 }
