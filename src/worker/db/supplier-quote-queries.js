@@ -67,6 +67,18 @@ export async function deleteSupplierQuoteSQL(db, quoteId) {
   ).bind(quoteId).run();
 }
 
+export async function getSupplierQuoteUsageCountsSQL(db, quoteId) {
+  const row = await db.prepare(
+    `SELECT
+      (SELECT COUNT(*) FROM pricing_decisions WHERE base_quote_id = ?) AS pricing_count,
+      (SELECT COUNT(*) FROM contract_items WHERE source_quote_id = ?) AS contract_item_count`
+  ).bind(quoteId, quoteId).first();
+  return {
+    pricing_count: Number(row?.pricing_count || 0),
+    contract_item_count: Number(row?.contract_item_count || 0),
+  };
+}
+
 // Report active quotes whose valid_until has passed. Read-only — no mutation.
 export async function getExpiredQuotesReportSQL(db, today) {
   const [countRow, samplesRes] = await Promise.all([

@@ -69,39 +69,46 @@ export async function handlePricingDecisions(action, request, env, ctx, actor) {
     const quantity            = cleanNumber(item.quantity ?? item.so_luong);
     const proposedLineTotal   = Math.round(proposedUnitPrice * quantity);
 
-    const version    = await getNextPricingVersionSQL(env.DB, rfqItemId);
-    const pricingId  = makeId('PDC');
-    const createdAt  = nowIso();
-    const createdBy  = actor?.id || '';
-
-    const row = {
-      pricing_id:              pricingId,
-      rfq_item_id:             rfqItemId,
-      base_quote_id:           baseQuoteId,
-      base_price_vnd_incl_tax: basePriceVndInclTax,
-      markup_rate:             markupRate,
-      selection_reason:        selectionReason || null,
-      risk_level:              riskLevel || null,
-      risk_note:               cleanString(body.riskNote, 1000) || null,
-      proposed_unit_price:     proposedUnitPrice,
-      proposed_line_total:     proposedLineTotal,
-      pricing_note:            pricingNote || null,
-      version,
-      created_by:              createdBy,
-      created_at:              createdAt,
-    };
-
-    await insertPricingDecisionSQL(env.DB, row);
+    const createdBy = actor?.id || '';
+    let row = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const version = await getNextPricingVersionSQL(env.DB, rfqItemId);
+      row = {
+        pricing_id:              makeId('PDC'),
+        rfq_item_id:             rfqItemId,
+        base_quote_id:           baseQuoteId,
+        base_price_vnd_incl_tax: basePriceVndInclTax,
+        markup_rate:             markupRate,
+        selection_reason:        selectionReason || null,
+        risk_level:              riskLevel || null,
+        risk_note:               cleanString(body.riskNote, 1000) || null,
+        proposed_unit_price:     proposedUnitPrice,
+        proposed_line_total:     proposedLineTotal,
+        pricing_note:            pricingNote || null,
+        version,
+        created_by:              createdBy,
+        created_at:              nowIso(),
+      };
+      try {
+        await insertPricingDecisionSQL(env.DB, row);
+        break;
+      } catch (err) {
+        if (!isPricingVersionConflict(err)) throw err;
+        if (attempt >= 2) {
+          return json({ ok: false, error: 'Co nguoi vua tao can gia cho dong nay. Vui long thu lai.' }, 409);
+        }
+      }
+    }
 
     const actorName = publicActorName(actor);
     ctx.waitUntil(writeActionLog(env, {
       action: 'createPricingDecision',
       entityType: 'pricing_decision',
-      entityId: pricingId,
+      entityId: row.pricing_id,
       oldJson: null,
       newJson: row,
       actor,
-      message: actorName + ' tao can gia v' + version + ' cho ' + rfqItemId
+      message: actorName + ' tao can gia v' + row.version + ' cho ' + rfqItemId
         + ': base ' + baseQuoteId + ', markup x' + markupRate
         + ', de xuat ' + proposedUnitPrice + ' VND',
     }));
@@ -110,4 +117,14 @@ export async function handlePricingDecisions(action, request, env, ctx, actor) {
   }
 
   return json({ ok: false, error: 'Unknown action' }, 400);
+}
+
+function isPricingVersionConflict(err) {
+  const msg = String(err?.message || err || '');
+  return msg.includes('idx_pricing_rfq_item_version_unique')
+    || (
+      msg.includes('UNIQUE constraint failed')
+      && msg.includes('pricing_decisions.rfq_item_id')
+      && msg.includes('pricing_decisions.version')
+    );
 }

@@ -13,7 +13,7 @@ import {
 } from '../db/import-queries.js';
 import { getRfqSQL } from '../db/rfq-queries.js';
 import { getRfqItemSQL, insertRfqItemSQL, updateRfqItemSQL } from '../db/rfq-item-queries.js';
-import { ALL_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
+import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
 import { consumeKvRateLimit, invalidateKv } from '../lib/cache.js';
 import { buildSearchText, cleanMoney, cleanNumber, cleanString } from '../lib/normalize.js';
@@ -203,6 +203,19 @@ async function commitRows(request, env, ctx, actor) {
   // importMode: 'update_changed' (default) | 'skip_all_existing' | 'force_insert' | 'selective_update' | 'clear_and_reimport'
   const importMode = ['update_changed', 'skip_all_existing', 'force_insert', 'selective_update', 'clear_and_reimport'].includes(body.importMode)
     ? body.importMode : 'update_changed';
+  if (importMode === 'clear_and_reimport' && (!actor?.role || !MANAGE_ROLES.has(actor.role))) {
+    return json({ ok: false, error: 'Chi quan ly moi duoc xoa va import lai toan bo goi RFQ.' }, 403);
+  }
+  if (importMode === 'clear_and_reimport') {
+    const linked = await getRfqLinkedHistoryCounts(env.DB, rfqId);
+    if (hasLinkedHistory(linked)) {
+      return json({
+        ok: false,
+        error: 'Goi RFQ nay da co bao gia, can gia, hop dong, lam ro ky thuat, lich su revision hoac media. Hay archive/cap nhat tung dong thay vi xoa va import lai.',
+        counts: linked,
+      }, 409);
+    }
+  }
 
   // overwriteFields: field-level overwrite list for selective_update mode
   const rawOverwriteFields = Array.isArray(body.overwriteFields) ? body.overwriteFields : [];
@@ -348,6 +361,46 @@ async function commitRows(request, env, ctx, actor) {
     actor,
   }));
   return json({ ok: true, summary });
+}
+
+async function getRfqLinkedHistoryCounts(db, rfqId) {
+  const row = await db.prepare(
+    `SELECT
+      (SELECT COUNT(*) FROM supplier_quotes sq
+       JOIN rfq_items i ON i.rfq_item_id = sq.rfq_item_id
+       WHERE i.rfq_id = ?) AS quote_count,
+      (SELECT COUNT(*) FROM pricing_decisions pd
+       JOIN rfq_items i ON i.rfq_item_id = pd.rfq_item_id
+       WHERE i.rfq_id = ?) AS pricing_count,
+      (SELECT COUNT(*) FROM contract_items ci
+       JOIN rfq_items i ON i.rfq_item_id = ci.rfq_item_id
+       WHERE i.rfq_id = ?) AS contract_item_count,
+      (SELECT COUNT(*) FROM technical_clarifications tc
+       JOIN rfq_items i ON i.rfq_item_id = tc.rfq_item_id
+       WHERE i.rfq_id = ? AND tc.deleted_at IS NULL) AS clarification_count,
+      (SELECT COUNT(*) FROM rfq_item_revisions rev
+       JOIN rfq_items i ON i.rfq_item_id = rev.rfq_item_id
+       WHERE i.rfq_id = ?) AS revision_count,
+      (SELECT COUNT(*) FROM media_files mf
+       JOIN rfq_items i ON i.rfq_item_id = mf.owner_id
+       WHERE mf.owner_type = 'rfq_item' AND i.rfq_id = ?) AS media_count`
+  ).bind(rfqId, rfqId, rfqId, rfqId, rfqId, rfqId).first();
+  return normalizeLinkedCounts(row);
+}
+
+function normalizeLinkedCounts(row = {}) {
+  return {
+    quote_count: Number(row.quote_count || 0),
+    pricing_count: Number(row.pricing_count || 0),
+    contract_item_count: Number(row.contract_item_count || 0),
+    clarification_count: Number(row.clarification_count || 0),
+    revision_count: Number(row.revision_count || 0),
+    media_count: Number(row.media_count || 0),
+  };
+}
+
+function hasLinkedHistory(counts) {
+  return Object.values(counts || {}).some((n) => Number(n || 0) > 0);
 }
 
 async function previewRows(request, env, actor) {

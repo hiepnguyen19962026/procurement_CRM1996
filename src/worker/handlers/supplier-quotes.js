@@ -2,6 +2,7 @@ import {
   archiveSupplierQuoteSQL,
   deleteSupplierQuoteSQL,
   getSupplierQuoteSQL,
+  getSupplierQuoteUsageCountsSQL,
   insertSupplierQuoteSQL,
   listSupplierQuotesSQL,
   searchSupplierQuotesSQL,
@@ -125,6 +126,16 @@ async function saveQuote(request, env, ctx, actor, isUpdate) {
   if (isUpdate && (!oldRow || oldRow.status !== 'active')) {
     return json({ ok: false, error: 'Khong tim thay bao gia hoac da luu tru' }, 404);
   }
+  if (isUpdate) {
+    const usage = await getSupplierQuoteUsageCountsSQL(env.DB, quoteId);
+    if ((usage.pricing_count || 0) > 0 || (usage.contract_item_count || 0) > 0) {
+      return json({
+        ok: false,
+        error: 'Bao gia da duoc dung cho can gia/hop dong. Vui long tao bao gia moi hoac archive bao gia cu thay vi sua.',
+        counts: usage,
+      }, 409);
+    }
+  }
 
   const rfqItemId = cleanString(body.rfqItemId || body.rfq_item_id || (oldRow && oldRow.rfq_item_id) || '', 80);
   const item = await getRfqItemSQL(env.DB, rfqItemId);
@@ -187,6 +198,14 @@ async function deleteQuote(request, env, ctx, actor) {
   if (!quoteId) return json({ ok: false, error: 'Thieu ma bao gia' }, 400);
   const oldRow = await getSupplierQuoteSQL(env.DB, quoteId);
   if (!oldRow) return json({ ok: false, error: 'Khong tim thay bao gia' }, 404);
+  const usage = await getSupplierQuoteUsageCountsSQL(env.DB, quoteId);
+  if ((usage.pricing_count || 0) > 0 || (usage.contract_item_count || 0) > 0) {
+    return json({
+      ok: false,
+      error: 'Bao gia nay da duoc dung trong can gia hoac hop dong. Hay luu tru bao gia thay vi xoa vinh vien.',
+      counts: usage,
+    }, 409);
+  }
   await deleteSupplierQuoteSQL(env.DB, quoteId);
   ctx.waitUntil(writeActionLog(env, {
     action: 'deleteSupplierQuote',

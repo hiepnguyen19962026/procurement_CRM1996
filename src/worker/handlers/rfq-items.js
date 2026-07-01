@@ -253,6 +253,14 @@ async function hardDelete(request, env, ctx, actor) {
   if (!ids.length) return json({ ok: false, error: 'Khong co dong nao duoc chon' }, 400);
   if (ids.length > 500) return json({ ok: false, error: 'Toi da 500 dong moi lan xoa' }, 400);
   const ph = ids.map(() => '?').join(',');
+  const childCounts = await getRfqItemChildCounts(env.DB, ids);
+  if (hasBusinessChildren(childCounts)) {
+    return json({
+      ok: false,
+      error: 'Khong the xoa vinh vien dong da co bao gia, can gia, hop dong, lam ro ky thuat, revision hoac media. Hay luu tru dong nay thay vi xoa.',
+      counts: childCounts,
+    }, 409);
+  }
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM technical_clarifications WHERE rfq_item_id IN (${ph})`).bind(...ids),
     env.DB.prepare(`DELETE FROM supplier_quotes WHERE rfq_item_id IN (${ph})`).bind(...ids),
@@ -263,8 +271,93 @@ async function hardDelete(request, env, ctx, actor) {
     env.DB.prepare(`DELETE FROM rfq_items WHERE rfq_item_id IN (${ph})`).bind(...ids),
   ]);
   ctx.waitUntil(invalidateKv(env, ['dashboard:v1', 'dashboard:v2']));
-  ctx.waitUntil(writeActionLog(env, { action: 'hardDeleteRfqItems', entityType: 'rfq_item', entityId: ids.join(','), actor }));
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'hardDeleteRfqItems',
+    entityType: 'rfq_item',
+    entityId: ids.join(','),
+    oldJson: { rfq_item_ids: ids, child_counts: childCounts },
+    actor,
+  }));
   return json({ ok: true, deleted: ids.length });
+}
+
+async function getRfqItemChildCounts(db, ids) {
+  if (!ids.length) return emptyChildCounts();
+  const ph = ids.map(() => '?').join(',');
+  const [
+    quoteRow,
+    pricingRow,
+    contractItemRow,
+    clarificationRow,
+    revisionRow,
+    mediaRow,
+  ] = await Promise.all([
+    db.prepare(`SELECT COUNT(*) AS n FROM supplier_quotes WHERE rfq_item_id IN (${ph})`).bind(...ids).first(),
+    db.prepare(`SELECT COUNT(*) AS n FROM pricing_decisions WHERE rfq_item_id IN (${ph})`).bind(...ids).first(),
+    db.prepare(`SELECT COUNT(*) AS n FROM contract_items WHERE rfq_item_id IN (${ph})`).bind(...ids).first(),
+    db.prepare(`SELECT COUNT(*) AS n FROM technical_clarifications WHERE rfq_item_id IN (${ph}) AND deleted_at IS NULL`).bind(...ids).first(),
+    db.prepare(`SELECT COUNT(*) AS n FROM rfq_item_revisions WHERE rfq_item_id IN (${ph})`).bind(...ids).first(),
+    db.prepare(`SELECT COUNT(*) AS n FROM media_files WHERE owner_type = 'rfq_item' AND owner_id IN (${ph})`).bind(...ids).first(),
+  ]);
+  return {
+    quote_count: Number(quoteRow?.n || 0),
+    pricing_count: Number(pricingRow?.n || 0),
+    contract_item_count: Number(contractItemRow?.n || 0),
+    clarification_count: Number(clarificationRow?.n || 0),
+    revision_count: Number(revisionRow?.n || 0),
+    media_count: Number(mediaRow?.n || 0),
+  };
+}
+
+async function getRfqChildCounts(db, rfqId) {
+  const row = await db.prepare(
+    `SELECT
+      (SELECT COUNT(*) FROM supplier_quotes sq
+       JOIN rfq_items i ON i.rfq_item_id = sq.rfq_item_id
+       WHERE i.rfq_id = ?) AS quote_count,
+      (SELECT COUNT(*) FROM pricing_decisions pd
+       JOIN rfq_items i ON i.rfq_item_id = pd.rfq_item_id
+       WHERE i.rfq_id = ?) AS pricing_count,
+      (SELECT COUNT(*) FROM contract_items ci
+       JOIN rfq_items i ON i.rfq_item_id = ci.rfq_item_id
+       WHERE i.rfq_id = ?) AS contract_item_count,
+      (SELECT COUNT(*) FROM technical_clarifications tc
+       JOIN rfq_items i ON i.rfq_item_id = tc.rfq_item_id
+       WHERE i.rfq_id = ? AND tc.deleted_at IS NULL) AS clarification_count,
+      (SELECT COUNT(*) FROM rfq_item_revisions rev
+       JOIN rfq_items i ON i.rfq_item_id = rev.rfq_item_id
+       WHERE i.rfq_id = ?) AS revision_count,
+      (SELECT COUNT(*) FROM media_files mf
+       JOIN rfq_items i ON i.rfq_item_id = mf.owner_id
+       WHERE mf.owner_type = 'rfq_item' AND i.rfq_id = ?) AS media_count`
+  ).bind(rfqId, rfqId, rfqId, rfqId, rfqId, rfqId).first();
+  return normalizeChildCounts(row);
+}
+
+function emptyChildCounts() {
+  return {
+    quote_count: 0,
+    pricing_count: 0,
+    contract_item_count: 0,
+    clarification_count: 0,
+    revision_count: 0,
+    media_count: 0,
+  };
+}
+
+function normalizeChildCounts(row = {}) {
+  return {
+    quote_count: Number(row.quote_count || 0),
+    pricing_count: Number(row.pricing_count || 0),
+    contract_item_count: Number(row.contract_item_count || 0),
+    clarification_count: Number(row.clarification_count || 0),
+    revision_count: Number(row.revision_count || 0),
+    media_count: Number(row.media_count || 0),
+  };
+}
+
+function hasBusinessChildren(counts) {
+  return Object.values(counts || {}).some((n) => Number(n || 0) > 0);
 }
 
 const EXPORT_MAX_ROWS = 5000;
@@ -610,6 +703,14 @@ async function hardDeleteAll(request, env, ctx, actor) {
   const countRow = await env.DB.prepare('SELECT COUNT(*) AS n FROM rfq_items WHERE rfq_id = ?').bind(rfqId).first();
   const totalCount = countRow?.n || 0;
   if (!totalCount) return json({ ok: true, deleted: 0 });
+  const childCounts = await getRfqChildCounts(env.DB, rfqId);
+  if (hasBusinessChildren(childCounts)) {
+    return json({
+      ok: false,
+      error: 'Khong the xoa vinh vien cac dong RFQ da co bao gia, can gia, hop dong, lam ro ky thuat, revision hoac media. Hay luu tru dong thay vi xoa.',
+      counts: childCounts,
+    }, 409);
+  }
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM technical_clarifications WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
     env.DB.prepare(`DELETE FROM supplier_quotes WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
@@ -620,6 +721,12 @@ async function hardDeleteAll(request, env, ctx, actor) {
     env.DB.prepare(`DELETE FROM rfq_items WHERE rfq_id = ?`).bind(rfqId),
   ]);
   ctx.waitUntil(invalidateKv(env, ['dashboard:v1', 'dashboard:v2']));
-  ctx.waitUntil(writeActionLog(env, { action: 'hardDeleteAllRfqItems', entityType: 'rfq', entityId: rfqId, actor }));
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'hardDeleteAllRfqItems',
+    entityType: 'rfq',
+    entityId: rfqId,
+    oldJson: { rfq_id: rfqId, item_count: totalCount, child_counts: childCounts },
+    actor,
+  }));
   return json({ ok: true, deleted: totalCount });
 }
