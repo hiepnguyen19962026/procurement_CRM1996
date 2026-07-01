@@ -173,6 +173,11 @@
     e.preventDefault();
     e.stopPropagation();
     var el = e.currentTarget;
+    var eventRect = el.getBoundingClientRect();
+    var dayColumns = Array.from(document.querySelectorAll('#calendarRoot .calendar-day-col')).map(function (column) {
+      return { el: column, date: column.getAttribute('data-date'), rect: column.getBoundingClientRect() };
+    });
+    var originDay = dayColumns.find(function (column) { return column.date === ev.event_date; });
     _drag = {
       event: ev,
       el: el,
@@ -182,7 +187,16 @@
       originDate: ev.event_date,
       originStart: ev.start_time,
       originEnd: ev.end_time,
+      originStartMinute: Number(ev.start_minutes || 0),
+      pointerOffsetY: e.clientY - eventRect.top,
+      dayColumns: dayColumns,
+      originDayLeft: originDay ? originDay.rect.left : eventRect.left,
+      target: null,
+      targetKey: '',
+      targetSlot: null,
     };
+    var root = document.getElementById('calendarRoot');
+    if (root) clearGridHover(root);
     el.classList.add('dragging');
     if (el.setPointerCapture) el.setPointerCapture(e.pointerId);
   }
@@ -192,31 +206,25 @@
     var dx = e.clientX - _drag.startX;
     var dy = e.clientY - _drag.startY;
     if (Math.abs(dx) + Math.abs(dy) > 5) _drag.moved = true;
-    _drag.el.style.transform = 'translate(' + dx + 'px,' + dy + 'px)';
+    if (!_drag.moved) return;
+    updateSnappedDragPreview(e.clientX, e.clientY);
   }
 
   async function onPointerUp(e) {
     if (!_drag) return;
     var d = _drag;
     _drag = null;
+    clearDragTarget(d);
     d.el.classList.remove('dragging');
     d.el.style.transform = '';
     if (!d.moved) return;
-    _suppressClickUntil = Date.now() + 350;
-    var hit = document.elementFromPoint(e.clientX, e.clientY);
-    var dayCol = hit && hit.closest ? hit.closest('.calendar-day-col') : null;
-    if (!dayCol) return renderGrid();
-    var rect = dayCol.getBoundingClientRect();
-    var minute = activeDayStart() + Math.round(((e.clientY - rect.top) / SLOT_HEIGHT) * SLOT / SLOT) * SLOT;
-    minute = clampMinute(Math.round(minute / SLOT) * SLOT);
+    _suppressClickUntil = Date.now() + 700;
+    if (!d.target) return;
+    var minute = d.target.minute;
     var duration = Math.max(SLOT, Number(d.event.duration_minutes || 30));
-    var scheduleEnd = activeScheduleEnd();
-    var end = Math.min(scheduleEnd, minute + duration);
-    if (end <= minute) {
-      minute = Math.max(activeDayStart(), scheduleEnd - duration);
-      end = minute + duration;
-    }
-    var newDate = dayCol.getAttribute('data-date');
+    var end = minute + duration;
+    var newDate = d.target.date;
+    if (newDate === d.originDate && timeLabel(minute) === d.originStart) return;
     try {
       await API.call('updateCalendarEventSchedule', {
         eventId: d.event.event_id,
@@ -230,6 +238,47 @@
       API.error(err);
       await load(true);
     }
+  }
+
+  function updateSnappedDragPreview(clientX, clientY) {
+    var d = _drag;
+    if (!d || !d.dayColumns.length) return;
+    var targetDay = d.dayColumns.find(function (column) {
+      return clientX >= column.rect.left && clientX <= column.rect.right;
+    });
+    if (!targetDay) {
+      targetDay = d.dayColumns.reduce(function (best, column) {
+        var distance = Math.abs(clientX - (column.rect.left + column.rect.width / 2));
+        return !best || distance < best.distance ? { column: column, distance: distance } : best;
+      }, null).column;
+    }
+
+    var rawTop = clientY - d.pointerOffsetY - targetDay.rect.top;
+    var slotIndex = Math.round(rawTop / SLOT_HEIGHT);
+    var snappedMinute = activeDayStart() + slotIndex * SLOT;
+    var duration = Math.max(SLOT, Number(d.event.duration_minutes || SLOT));
+    var latestStart = Math.max(activeDayStart(), activeScheduleEnd() - duration);
+    snappedMinute = Math.max(activeDayStart(), Math.min(latestStart, snappedMinute));
+    snappedMinute = Math.round(snappedMinute / SLOT) * SLOT;
+    var targetKey = targetDay.date + '|' + snappedMinute;
+    if (targetKey === d.targetKey) return;
+
+    clearDragTarget(d);
+    d.targetKey = targetKey;
+    d.target = { date: targetDay.date, minute: snappedMinute };
+    d.targetSlot = targetDay.el.querySelector('.calendar-slot[data-minute="' + snappedMinute + '"]');
+    if (d.targetSlot) d.targetSlot.classList.add('calendar-drag-target');
+
+    var originTop = (d.originStartMinute - activeDayStart()) / SLOT * SLOT_HEIGHT;
+    var targetTop = (snappedMinute - activeDayStart()) / SLOT * SLOT_HEIGHT;
+    var snappedX = targetDay.rect.left - d.originDayLeft;
+    var snappedY = targetTop - originTop;
+    d.el.style.transform = 'translate(' + snappedX + 'px,' + snappedY + 'px)';
+  }
+
+  function clearDragTarget(dragState) {
+    if (dragState && dragState.targetSlot) dragState.targetSlot.classList.remove('calendar-drag-target');
+    if (dragState) dragState.targetSlot = null;
   }
 
   function openCreate(date, minute) {
