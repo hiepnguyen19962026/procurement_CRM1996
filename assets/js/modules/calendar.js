@@ -2,12 +2,15 @@
   var state = AppState.list('calendar');
   state.weekStart = state.weekStart || startOfWeek(vnToday());
   state.rows = state.rows || [];
+  state.expanded = state.expanded === true;
   var _setupDone = false;
   var _drag = null;
   var _suppressClickUntil = 0;
 
-  var DAY_START = 7 * 60;
-  var DAY_END = 18 * 60;
+  var COLLAPSED_START = 7 * 60;
+  var COLLAPSED_END = 19 * 60;
+  var EXPANDED_START = 4 * 60;
+  var EXPANDED_END = 24 * 60;
   var SLOT = 30;
   var SLOT_HEIGHT = 34;
   var OWNER_COLORS = ['#6f8fbf', '#6f9d83', '#bd8b62', '#679b99', '#8c7fb2', '#b57d7d', '#6f91a8', '#a48868'];
@@ -26,7 +29,7 @@
     setupOnce();
     if (reset) state.rows = [];
     var fromDate = state.weekStart;
-    var toDate = addDays(fromDate, 6);
+    var toDate = addDays(fromDate, 13);
     try {
       var data = await API.get('getCalendarEvents', { fromDate: fromDate, toDate: toDate });
       state.rows = data.rows || [];
@@ -58,7 +61,12 @@
   }
 
   function renderDayColumn(date) {
-    var events = layoutEvents((state.rows || []).filter(function (r) { return r.event_date === date; }));
+    var rangeStart = activeDayStart();
+    var rangeEnd = activeDayEnd();
+    var events = layoutEvents((state.rows || []).filter(function (r) {
+      var start = Number(r.start_minutes || 0);
+      return r.event_date === date && start >= rangeStart && start < rangeEnd;
+    }));
     var slotHtml = timeSlots().map(function (m) {
       return '<button type="button" class="calendar-slot" data-date="' + API.esc(date) + '" data-minute="' + m + '" onclick="CalendarModule.openCreate(\'' + API.esc(date) + '\',' + m + ')"></button>';
     }).join('');
@@ -72,8 +80,9 @@
   function renderEventBlock(ev) {
     var start = Number(ev.start_minutes || 0);
     var end = Number(ev.end_minutes || start + Number(ev.duration_minutes || 30));
-    var top = Math.max(0, (start - DAY_START) / SLOT * SLOT_HEIGHT);
-    var height = Math.max(24, (end - start) / SLOT * SLOT_HEIGHT - 3);
+    var visibleEnd = Math.min(end, activeDayEnd());
+    var top = (start - activeDayStart()) / SLOT * SLOT_HEIGHT;
+    var height = Math.max(24, (visibleEnd - start) / SLOT * SLOT_HEIGHT - 3);
     var laneCount = Math.max(1, Number(ev._laneCount || 1));
     var lane = Math.max(0, Number(ev._lane || 0));
     var gap = 3;
@@ -169,12 +178,13 @@
     var dayCol = hit && hit.closest ? hit.closest('.calendar-day-col') : null;
     if (!dayCol) return renderGrid();
     var rect = dayCol.getBoundingClientRect();
-    var minute = DAY_START + Math.round(((e.clientY - rect.top) / SLOT_HEIGHT) * SLOT / SLOT) * SLOT;
+    var minute = activeDayStart() + Math.round(((e.clientY - rect.top) / SLOT_HEIGHT) * SLOT / SLOT) * SLOT;
     minute = clampMinute(Math.round(minute / SLOT) * SLOT);
     var duration = Math.max(SLOT, Number(d.event.duration_minutes || 30));
-    var end = Math.min(DAY_END, minute + duration);
+    var scheduleEnd = activeScheduleEnd();
+    var end = Math.min(scheduleEnd, minute + duration);
     if (end <= minute) {
-      minute = Math.max(DAY_START, DAY_END - duration);
+      minute = Math.max(activeDayStart(), scheduleEnd - duration);
       end = minute + duration;
     }
     var newDate = dayCol.getAttribute('data-date');
@@ -195,7 +205,9 @@
 
   function openCreate(date, minute) {
     var start = Number.isFinite(Number(minute)) ? Number(minute) : 9 * 60;
-    var end = Math.min(DAY_END, start + 60);
+    var scheduleEnd = activeScheduleEnd();
+    if (start >= scheduleEnd) start = Math.max(activeDayStart(), scheduleEnd - SLOT);
+    var end = Math.min(scheduleEnd, start + 60);
     openForm({
       event_date: date || vnToday(),
       start_time: timeLabel(start),
@@ -343,6 +355,11 @@
   function nextWeek() { state.weekStart = addDays(state.weekStart, 7); load(true); }
   function today() { state.weekStart = startOfWeek(vnToday()); load(true); }
 
+  function toggleExpanded() {
+    state.expanded = !state.expanded;
+    renderGrid();
+  }
+
   function jumpToDate(value) {
     var match = String(value || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (!match) return API.toast('Nhập ngày theo định dạng dd/mm/yyyy', 'warn');
@@ -355,20 +372,28 @@
 
   function updateWeekLabel(days) {
     var label = document.getElementById('calendarWeekLabel');
-    if (label) label.textContent = fmtDay(days[0]) + ' - ' + fmtDay(days[6]);
+    if (label) label.textContent = fmtDay(days[0]) + ' - ' + fmtDay(days[13]);
+    var button = document.getElementById('calendarExpandButton');
+    if (button) button.textContent = state.expanded ? 'Thu gọn' : 'Mở rộng';
   }
 
   function timeSlots() {
     var out = [];
-    for (var m = DAY_START; m < DAY_END; m += SLOT) out.push(m);
+    for (var m = activeDayStart(); m < activeDayEnd(); m += SLOT) out.push(m);
     return out;
   }
 
   function weekDays(start) {
     var out = [];
-    for (var i = 0; i < 7; i++) out.push(addDays(start, i));
+    for (var i = 0; i < 14; i++) out.push(addDays(start, i));
     return out;
   }
+
+  function activeDayStart() { return state.expanded ? EXPANDED_START : COLLAPSED_START; }
+  function activeDayEnd() { return state.expanded ? EXPANDED_END : COLLAPSED_END; }
+
+  // The backend stores same-day HH:MM values, so the latest schedulable end is 23:30.
+  function activeScheduleEnd() { return Math.min(activeDayEnd(), 23 * 60 + 30); }
 
   function startOfWeek(dateStr) {
     var d = partsToUtc(dateStr);
@@ -419,7 +444,7 @@
   }
 
   function clampMinute(minutes) {
-    return Math.max(DAY_START, Math.min(DAY_END - SLOT, minutes));
+    return Math.max(activeDayStart(), Math.min(activeScheduleEnd() - SLOT, minutes));
   }
 
   function ownerColor(ownerId) {
@@ -445,6 +470,7 @@
     prevWeek: prevWeek,
     nextWeek: nextWeek,
     today: today,
+    toggleExpanded: toggleExpanded,
     jumpToDate: jumpToDate,
     uploadAttachments: uploadAttachments,
   };
