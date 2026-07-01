@@ -124,3 +124,17 @@ export async function getMediaFileSQL(db, fileId, ownerType = '', ownerId = '') 
   ).bind(...binds).first();
   return res || null;
 }
+
+export async function getCalendarEventOwnerSQL(db, eventId) {
+  return db.prepare(
+    `SELECT owner_id FROM calendar_events
+     WHERE event_id = ? AND deleted_at IS NULL`
+  ).bind(eventId).first();
+}
+
+export async function deleteMediaFileSQL(db, fileId, ownerType, ownerId) {
+  return db.prepare(
+    `DELETE FROM media_files
+     WHERE file_id = ? AND owner_type = ? AND owner_id = ?`
+  ).bind(fileId, ownerType, ownerId).run();
+}

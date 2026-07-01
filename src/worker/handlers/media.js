@@ -1,11 +1,12 @@
-import { getMediaFileSQL, insertMediaFileSQL, listMediaFilesSQL, mediaOwnerExistsSQL } from '../db/media-queries.js';
-import { ALL_ROLES, requireRole } from '../lib/auth.js';
+import { deleteMediaFileSQL, getCalendarEventOwnerSQL, getMediaFileSQL, insertMediaFileSQL, listMediaFilesSQL, mediaOwnerExistsSQL } from '../db/media-queries.js';
+import { ALL_ROLES, MANAGE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
 import { consumeKvRateLimit } from '../lib/cache.js';
 import { cleanString } from '../lib/normalize.js';
 import { clampLimit, json, makeId, nowIso, readJson } from '../lib/utils.js';
 
 const UPLOAD_ROLES = new Set(['admin', 'manager', 'purchasing']);
+const DELETE_MEDIA_ROLES = new Set(['admin', 'manager', 'purchasing']);
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 const ALLOWED_UPLOADS = new Set([
   'quote:quote_pdf',
@@ -22,6 +23,7 @@ export async function handleMedia(action, request, env, ctx, actor) {
   if (action === 'getMediaFiles') return listMedia(request, env, actor);
   if (action === 'uploadMedia') return uploadMedia(request, env, ctx, actor);
   if (action === 'getMediaFileContent') return getMediaContent(request, env, ctx, actor);
+  if (action === 'deleteMediaFile') return deleteMediaFile(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown media action' }, 400);
 }
 
@@ -140,6 +142,42 @@ async function getMediaContent(request, env, ctx, actor) {
       'x-content-type-options': 'nosniff',
     },
   });
+}
+
+async function deleteMediaFile(request, env, ctx, actor) {
+  const denied = requireRole(actor, DELETE_MEDIA_ROLES);
+  if (denied) return denied;
+  if (!env.MEDIA) return json({ ok: false, error: 'R2 MEDIA binding chua cau hinh' }, 500);
+  const p = await readJson(request);
+  const fileId = cleanString(p.fileId || p.file_id, 80);
+  const ownerType = cleanString(p.ownerType || p.owner_type, 40);
+  const ownerId = cleanString(p.ownerId || p.owner_id, 120);
+  if (!fileId || !ownerType || !ownerId) {
+    return json({ ok: false, error: 'Thieu ownerType, ownerId hoac fileId' }, 400);
+  }
+  if (ownerType !== 'calendar_event') {
+    return json({ ok: false, error: 'Loai file nay chua ho tro xoa rieng' }, 400);
+  }
+  const row = await getMediaFileSQL(env.DB, fileId, ownerType, ownerId);
+  if (!row) return json({ ok: false, error: 'Khong tim thay file' }, 404);
+  const event = await getCalendarEventOwnerSQL(env.DB, ownerId);
+  if (!event) return json({ ok: false, error: 'Khong tim thay lich' }, 404);
+  if (!MANAGE_ROLES.has(actor.role) && event.owner_id !== actor.id) {
+    return json({ ok: false, error: 'Khong co quyen xoa file cua lich nay' }, 403);
+  }
+
+  await env.MEDIA.delete(row.r2_key);
+  await deleteMediaFileSQL(env.DB, fileId, ownerType, ownerId);
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'deleteMediaFile',
+    entityType: 'media_file',
+    entityId: fileId,
+    message: `${actor.displayName || actor.username || actor.id} deleted ${ownerType}/${ownerId}/${row.file_name || fileId}`,
+    oldJson: compactMediaRow(row),
+    newJson: null,
+    actor,
+  }));
+  return json({ ok: true, fileId });
 }
 
 function validateUploadType(fileKind, browserType, detected) {

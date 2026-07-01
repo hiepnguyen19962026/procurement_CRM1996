@@ -21,6 +21,8 @@ export async function listCalendarEventsSQL(db, { fromDate, toDate }) {
        e.start_time,
        e.end_time,
        e.duration_minutes,
+       (SELECT COUNT(*) FROM media_files mf
+        WHERE mf.owner_type = 'calendar_event' AND mf.owner_id = e.event_id) AS media_count,
        (CAST(substr(e.start_time, 1, 2) AS INTEGER) * 60 + CAST(substr(e.start_time, 4, 2) AS INTEGER)) AS start_minutes,
        (CAST(substr(e.end_time, 1, 2) AS INTEGER) * 60 + CAST(substr(e.end_time, 4, 2) AS INTEGER)) AS end_minutes,
        e.owner_id,
@@ -117,6 +119,7 @@ function normalizeEventRow(row) {
     start_minutes: startMinutes,
     end_minutes: endMinutes,
     duration_minutes: Number(row.duration_minutes || duration || 30),
+    media_count: Number(row.media_count || 0),
     owner_id: row.owner_id || '',
     owner_name: row.owner_name || row.owner_id || '',
   };

@@ -6,6 +6,10 @@
   var _setupDone = false;
   var _drag = null;
   var _suppressClickUntil = 0;
+  var _calendarMediaRows = [];
+  var _calendarLightboxImages = [];
+  var _calendarLightboxIndex = 0;
+  var _calendarLightboxEl = null;
 
   var COLLAPSED_START = 7 * 60;
   var COLLAPSED_END = 19 * 60;
@@ -21,6 +25,7 @@
     document.addEventListener('pointermove', onPointerMove);
     document.addEventListener('pointerup', onPointerUp);
     document.addEventListener('pointercancel', onPointerUp);
+    document.addEventListener('keydown', onCalendarLightboxKeydown);
   }
 
   function init() { load(true); }
@@ -94,7 +99,7 @@
     return '<div class="' + cls + '" data-event-id="' + API.esc(ev.event_id) + '" style="top:' + top + 'px;height:' + height + 'px;left:' + left + ';width:' + width + ';border-color:' + color + ';background:' + tint(color) + '"' +
       (editable ? ' onpointerdown="CalendarModule.startDrag(event,\'' + API.esc(ev.event_id) + '\')"' : '') +
       ' onclick="CalendarModule.openEdit(\'' + API.esc(ev.event_id) + '\',event)">' +
-        '<div class="cal-ev-time">' + API.esc(ev.start_time) + ' - ' + API.esc(ev.end_time) + '</div>' +
+        '<div class="cal-ev-time">' + API.esc(ev.start_time) + ' - ' + API.esc(ev.end_time) + (Number(ev.media_count || 0) > 0 ? '<span class="cal-media-indicator" title="Có file đính kèm">📎</span>' : '') + '</div>' +
         '<div class="cal-ev-title">' + API.esc(ev.title) + '</div>' +
         '<div class="cal-ev-meta">' + API.esc(ev.owner_name || '') + (ev.company_name ? ' · ' + API.esc(ev.company_name) : '') + '</div>' +
       '</div>';
@@ -233,12 +238,12 @@
       + '<label class="span-3">Công ty<input name="companyName" maxlength="200" value="' + API.esc(row.company_name || '') + '"' + (editable ? '' : ' readonly') + '></label>'
       + '<label class="span-3">Ngày<input name="eventDate" type="date" required value="' + API.esc(row.event_date || vnToday()) + '"' + (editable ? '' : ' readonly') + '></label>'
       + '<label class="span-3">Thời gian<div class="calendar-time-group"><input name="startTime" type="time" step="1800" required aria-label="Bắt đầu" value="' + API.esc(row.start_time || '09:00') + '"' + (editable ? '' : ' readonly') + '><input name="endTime" type="time" step="1800" required aria-label="Kết thúc" value="' + API.esc(row.end_time || '10:00') + '"' + (editable ? '' : ' readonly') + '></div></label>'
-      + '<label class="span-3">Trạng thái<select name="status"' + (editable ? '' : ' disabled') + '>'
+      + '<label class="span-3 calendar-status-field">Trạng thái<select name="status"' + (editable ? '' : ' disabled') + '>'
         + '<option value="scheduled"' + (status === 'scheduled' ? ' selected' : '') + '>Đã lên lịch</option>'
         + '<option value="done"' + (status === 'done' ? ' selected' : '') + '>Hoàn thành</option>'
         + '<option value="cancelled"' + (status === 'cancelled' ? ' selected' : '') + '>Đã hủy</option>'
       + '</select></label>'
-      + '<label class="span-9">Ghi chú<textarea name="note" style="min-height:120px;resize:vertical"' + (editable ? '' : ' readonly') + '>' + API.esc(row.note || '') + '</textarea></label>'
+      + '<label class="span-9 calendar-note-field">Ghi chú<textarea name="note" rows="2"' + (editable ? '' : ' readonly') + '>' + API.esc(row.note || '') + '</textarea></label>'
       + '<label class="span-12">Link tài liệu / Google Drive<input name="externalUrl" type="url" maxlength="1500" placeholder="https://..." value="' + API.esc(row.external_url || '') + '"' + (editable ? '' : ' readonly') + '></label>'
       + '<div class="span-12 calendar-media-box">' + (isEdit
         ? '<div class="calendar-media-upload"><input id="calendarMediaInput" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" multiple' + (editable ? '' : ' disabled') + '><button type="button"' + (editable ? ' onclick="CalendarModule.uploadAttachments(\'' + API.esc(row.event_id) + '\')"' : ' disabled') + '>Upload ảnh / tài liệu</button></div><div id="calendarMediaList" class="calendar-media-list"><span class="muted">Đang tải file...</span></div>'
@@ -285,9 +290,19 @@
       var data = await API.get('getMediaFiles', { ownerType: 'calendar_event', ownerId: eventId, limit: 100 });
       if (document.getElementById('calendarMediaList') !== box) return;
       var rows = data.rows || [];
-      box.innerHTML = rows.length ? rows.map(function (file) {
-        return '<a href="' + API.esc(API.mediaUrl(file.file_id, file.owner_type, file.owner_id)) + '" target="_blank" rel="noopener">' + API.esc(file.file_name || file.file_id) + '</a>';
-      }).join('') : '<span class="muted">Chưa có file đính kèm.</span>';
+      _calendarMediaRows = rows;
+      _calendarLightboxImages = rows.filter(function (file) { return /^image\//i.test(file.mime_type || ''); });
+      var editable = canEdit(findEvent(eventId));
+      box.innerHTML = rows.length ? '<div class="calendar-media-grid">' + rows.map(function (file) {
+        var name = API.esc(file.file_name || file.file_id);
+        var url = API.esc(API.mediaUrl(file.file_id, file.owner_type, file.owner_id));
+        var deleteButton = editable ? '<button type="button" class="calendar-media-delete" title="Xóa file" aria-label="Xóa ' + name + '" onclick="event.stopPropagation();CalendarModule.deleteMediaFile(\'' + API.esc(eventId) + '\',\'' + API.esc(file.file_id) + '\')">×</button>' : '';
+        if (/^image\//i.test(file.mime_type || '')) {
+          var imageIndex = _calendarLightboxImages.findIndex(function (image) { return image.file_id === file.file_id; });
+          return '<div class="calendar-media-item">' + deleteButton + '<button type="button" class="calendar-media-thumb" onclick="CalendarModule.openMediaPreview(' + imageIndex + ')" title="' + name + '"><img src="' + url + '" alt="' + name + '" loading="lazy"><span>' + name + '</span></button></div>';
+        }
+        return '<div class="calendar-media-item calendar-media-document">' + deleteButton + '<a href="' + url + '" target="_blank" rel="noopener" title="' + name + '"><span class="calendar-document-icon">PDF</span><span>' + name + '</span></a></div>';
+      }).join('') + '</div>' : '<span class="muted">Chưa có file đính kèm.</span>';
     } catch (err) {
       box.textContent = err.message || 'Không tải được file đính kèm';
     }
@@ -321,8 +336,78 @@
       }
     }
     input.value = '';
-    if (succeeded) await loadCalendarMedia(eventId);
+    if (succeeded) {
+      await load(true);
+      await loadCalendarMedia(eventId);
+    }
     API.toast(failed.length ? 'Đã upload ' + succeeded + '/' + files.length + '. Lỗi: ' + failed.join('; ') : 'Đã upload ' + succeeded + ' file', failed.length ? 'warn' : 'success');
+  }
+
+  async function deleteMediaFile(eventId, fileId) {
+    var row = _calendarMediaRows.find(function (file) { return file.file_id === fileId; });
+    if (!row || !canEdit(findEvent(eventId))) return;
+    try {
+      await API.call('deleteMediaFile', { ownerType: 'calendar_event', ownerId: eventId, fileId: fileId });
+      API.toast('Đã xóa file ' + (row.file_name || fileId), 'success');
+      await load(true);
+      await loadCalendarMedia(eventId);
+    } catch (err) {
+      API.error(err);
+    }
+  }
+
+  function ensureCalendarLightbox() {
+    if (_calendarLightboxEl) return;
+    _calendarLightboxEl = document.createElement('div');
+    _calendarLightboxEl.className = 'calendar-lightbox hidden';
+    _calendarLightboxEl.innerHTML = '<button type="button" class="calendar-lightbox-close" onclick="CalendarModule.closeMediaPreview()" aria-label="Đóng">×</button>' +
+      '<button type="button" class="calendar-lightbox-prev" onclick="CalendarModule.prevMediaPreview()" aria-label="Ảnh trước">‹</button>' +
+      '<div class="calendar-lightbox-content"><img alt="Ảnh lịch"><div class="calendar-lightbox-caption"></div></div>' +
+      '<button type="button" class="calendar-lightbox-next" onclick="CalendarModule.nextMediaPreview()" aria-label="Ảnh sau">›</button>';
+    _calendarLightboxEl.addEventListener('click', function (event) {
+      if (event.target === _calendarLightboxEl) closeMediaPreview();
+    });
+    document.body.appendChild(_calendarLightboxEl);
+  }
+
+  function openMediaPreview(index) {
+    if (!_calendarLightboxImages.length || index < 0) return;
+    ensureCalendarLightbox();
+    _calendarLightboxIndex = index;
+    renderCalendarLightbox();
+    _calendarLightboxEl.classList.remove('hidden');
+  }
+
+  function renderCalendarLightbox() {
+    var file = _calendarLightboxImages[_calendarLightboxIndex];
+    if (!file || !_calendarLightboxEl) return;
+    _calendarLightboxEl.querySelector('img').src = API.mediaUrl(file.file_id, file.owner_type, file.owner_id);
+    _calendarLightboxEl.querySelector('.calendar-lightbox-caption').textContent = (file.file_name || file.file_id) + ' · ' + (_calendarLightboxIndex + 1) + '/' + _calendarLightboxImages.length;
+    _calendarLightboxEl.querySelector('.calendar-lightbox-prev').disabled = _calendarLightboxImages.length < 2;
+    _calendarLightboxEl.querySelector('.calendar-lightbox-next').disabled = _calendarLightboxImages.length < 2;
+  }
+
+  function closeMediaPreview() {
+    if (_calendarLightboxEl) _calendarLightboxEl.classList.add('hidden');
+  }
+
+  function prevMediaPreview() {
+    if (!_calendarLightboxImages.length) return;
+    _calendarLightboxIndex = (_calendarLightboxIndex - 1 + _calendarLightboxImages.length) % _calendarLightboxImages.length;
+    renderCalendarLightbox();
+  }
+
+  function nextMediaPreview() {
+    if (!_calendarLightboxImages.length) return;
+    _calendarLightboxIndex = (_calendarLightboxIndex + 1) % _calendarLightboxImages.length;
+    renderCalendarLightbox();
+  }
+
+  function onCalendarLightboxKeydown(event) {
+    if (!_calendarLightboxEl || _calendarLightboxEl.classList.contains('hidden')) return;
+    if (event.key === 'Escape') closeMediaPreview();
+    if (event.key === 'ArrowLeft') prevMediaPreview();
+    if (event.key === 'ArrowRight') nextMediaPreview();
   }
 
   async function deleteEvent(eventId) {
@@ -473,5 +558,10 @@
     toggleExpanded: toggleExpanded,
     jumpToDate: jumpToDate,
     uploadAttachments: uploadAttachments,
+    deleteMediaFile: deleteMediaFile,
+    openMediaPreview: openMediaPreview,
+    closeMediaPreview: closeMediaPreview,
+    prevMediaPreview: prevMediaPreview,
+    nextMediaPreview: nextMediaPreview,
   };
 })();
