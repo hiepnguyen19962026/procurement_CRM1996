@@ -21,6 +21,7 @@ import { handleDelivery } from './handlers/delivery.js';
 import { handleDashboard } from './handlers/dashboard.js';
 import { handleOcr } from './handlers/ocr.js';
 import { handleTasks } from './handlers/tasks.js';
+import { handleCalendar } from './handlers/calendar.js';
 import { actorFromRequest, validateActorSession, validateSecret } from './lib/auth.js';
 import { json, readJson } from './lib/utils.js';
 import { runScheduledTasks } from './handlers/scheduled.js';
@@ -48,6 +49,7 @@ const DELIVERY_ACTIONS = ['getDeliveryNotes', 'getDeliveryNoteDetail', 'getDeliv
 const DASHBOARD_V2_ACTIONS = ['getDashboardV2'];
 const OCR_ACTIONS = ['ocrImage'];
 const TASK_ACTIONS = ['getTasks', 'getTask', 'createTask', 'updateTask', 'deleteTask', 'quickUpdateTaskStatus', 'quickUpdateTaskPriority', 'suggestTaskCompanies'];
+const CALENDAR_ACTIONS = ['getCalendarEvents', 'createCalendarEvent', 'updateCalendarEvent', 'updateCalendarEventSchedule', 'deleteCalendarEvent'];
 const PUBLIC_ACTIONS = ['authLogin', 'initSetup'];
 
 export default {
@@ -94,6 +96,7 @@ export default {
       else if (DASHBOARD_V2_ACTIONS.includes(action)) res = await handleDashboard(action, request, env, ctx, actor);
       else if (OCR_ACTIONS.includes(action)) res = await handleOcr(action, request, env, ctx, actor);
       else if (TASK_ACTIONS.includes(action)) res = await handleTasks(action, request, env, ctx, actor);
+      else if (CALENDAR_ACTIONS.includes(action)) res = await handleCalendar(action, request, env, ctx, actor);
       else res = json({ ok: false, error: 'Unknown action' }, 400);
     } catch (err) {
       const message = String(err?.message || err);

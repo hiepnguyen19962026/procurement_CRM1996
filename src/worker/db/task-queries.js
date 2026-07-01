@@ -123,6 +123,10 @@ export async function getTaskSQL(db, taskId) {
 }
 
 export async function insertTaskSQL(db, row) {
+  return prepareInsertTaskSQL(db, row).run();
+}
+
+export function prepareInsertTaskSQL(db, row) {
   return db.prepare(
     `INSERT INTO tasks (
       task_id, company_name, company_normalized, title, description,
@@ -137,7 +141,7 @@ export async function insertTaskSQL(db, row) {
     row.status, row.priority, row.progress_percent, row.task_type,
     row.latest_note, row.completed_at, row.last_activity_at,
     row.created_by, row.created_at, row.updated_at
-  ).run();
+  );
 }
 
 export async function updateTaskSQL(db, row) {
