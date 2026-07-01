@@ -1,6 +1,7 @@
-import { getMediaFileSQL, insertMediaFileSQL, listMediaFilesSQL } from '../db/media-queries.js';
+import { getMediaFileSQL, insertMediaFileSQL, listMediaFilesSQL, mediaOwnerExistsSQL } from '../db/media-queries.js';
 import { ALL_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
+import { consumeKvRateLimit } from '../lib/cache.js';
 import { cleanString } from '../lib/normalize.js';
 import { clampLimit, json, makeId, nowIso, readJson } from '../lib/utils.js';
 
@@ -41,6 +42,8 @@ async function uploadMedia(request, env, ctx, actor) {
   const denied = requireRole(actor, UPLOAD_ROLES);
   if (denied) return denied;
   if (!env.MEDIA) return json({ ok: false, error: 'R2 MEDIA binding chua cau hinh' }, 500);
+  const rate = await consumeKvRateLimit(env, `s2b1:uploadMedia:actor:${actor.id}`, 20, 600);
+  if (!rate.allowed) return json({ ok: false, error: 'Qua nhieu yeu cau upload', retryAfter: rate.retryAfter }, 429, { 'retry-after': String(rate.retryAfter) });
   const form = await request.formData();
   const file = form.get('file');
   if (!file || typeof file.arrayBuffer !== 'function') return json({ ok: false, error: 'Thieu file upload' }, 400);
@@ -55,6 +58,9 @@ async function uploadMedia(request, env, ctx, actor) {
   }
   if (!ALLOWED_UPLOADS.has(`${ownerType}:${fileKind}`)) {
     return json({ ok: false, error: 'Loai file upload khong duoc ho tro' }, 400);
+  }
+  if (!await mediaOwnerExistsSQL(env.DB, ownerType, ownerId)) {
+    return json({ ok: false, error: 'Khong tim thay doi tuong so huu file' }, 404);
   }
 
   const bytes = await file.arrayBuffer();
@@ -86,7 +92,12 @@ async function uploadMedia(request, env, ctx, actor) {
     created_by: actor.id,
     created_at: nowIso(),
   };
-  await insertMediaFileSQL(env.DB, row);
+  try {
+    await insertMediaFileSQL(env.DB, row);
+  } catch (err) {
+    await env.MEDIA.delete(key).catch(() => null);
+    throw err;
+  }
   ctx.waitUntil(writeActionLog(env, {
     action: 'uploadMedia',
     entityType: 'media_file',

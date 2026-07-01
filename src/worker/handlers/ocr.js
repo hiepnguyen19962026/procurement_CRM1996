@@ -1,5 +1,6 @@
 import { WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { cleanString } from '../lib/normalize.js';
+import { consumeKvRateLimit } from '../lib/cache.js';
 import { json } from '../lib/utils.js';
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -15,6 +16,8 @@ export async function handleOcr(action, request, env, _ctx, actor) {
       error: 'OCR chưa cấu hình. Thêm [ai] binding = "AI" vào wrangler.toml rồi chạy wrangler deploy.',
     }, 503);
   }
+  const rate = await consumeKvRateLimit(env, `s2b1:ocrImage:actor:${actor.id}`, 10, 600);
+  if (!rate.allowed) return json({ ok: false, error: 'Qua nhieu yeu cau OCR', retryAfter: rate.retryAfter }, 429, { 'retry-after': String(rate.retryAfter) });
 
   const form = await request.formData().catch(() => null);
   if (!form) return json({ ok: false, error: 'Không đọc được form' }, 400);

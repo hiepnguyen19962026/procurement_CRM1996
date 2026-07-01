@@ -3,6 +3,11 @@ import { ADMIN_ROLES, ALL_ROLES, hashPassword, requireRole, safeUser, verifyPass
 import { writeActionLog } from '../lib/action-log.js';
 import { cleanString } from '../lib/normalize.js';
 import { clampLimit, json, makeId, nowIso, readJson } from '../lib/utils.js';
+import { consumeKvRateLimit } from '../lib/cache.js';
+
+const LOGIN_LIMIT = 5;
+const LOGIN_IP_LIMIT = 20;
+const LOGIN_WINDOW_SECONDS = 15 * 60;
 
 export async function handleAccounts(action, request, env, ctx, actor) {
   if (action === 'authLogin') return authLogin(request, env);
@@ -51,11 +56,31 @@ async function authLogin(request, env) {
   const username = cleanString(body.username, 80).toLowerCase();
   const password = String(body.password || '');
   if (!username || !password) return json({ ok: false, error: 'Thieu tai khoan hoac mat khau' }, 400);
+  const usernameHash = await hashRateLimitValue(username, env.WORKER_SECRET);
+  const ipHash = cleanString(request.headers.get('X-Login-IP-Hash') || 'unknown', 80);
+  const [userLimit, ipLimit] = await Promise.all([
+    consumeKvRateLimit(env, `login:user:${usernameHash}`, LOGIN_LIMIT, LOGIN_WINDOW_SECONDS),
+    consumeKvRateLimit(env, `login:ip:${ipHash}`, LOGIN_IP_LIMIT, LOGIN_WINDOW_SECONDS),
+  ]);
+  if (!userLimit.allowed || !ipLimit.allowed) {
+    const retryAfter = Math.max(userLimit.retryAfter || 1, ipLimit.retryAfter || 1);
+    return json(
+      { ok: false, error: 'Qua nhieu lan dang nhap. Vui long thu lai sau.', retryAfter },
+      429,
+      { 'retry-after': String(retryAfter) }
+    );
+  }
   const row = await getUserByUsernameSQL(env.DB, username);
-  if (!row || row.status !== 'active') return json({ ok: false, error: 'Tai khoan khong hop le' }, 401);
+  if (!row || row.status !== 'active') return json({ ok: false, error: 'Sai tai khoan hoac mat khau' }, 401);
   const ok = await verifyPassword(password, row.password_hash);
   if (!ok) return json({ ok: false, error: 'Sai tai khoan hoac mat khau' }, 401);
   return json({ ok: true, user: safeUser(row) });
+}
+
+async function hashRateLimitValue(value, secret) {
+  const bytes = new TextEncoder().encode(`${secret || ''}:${String(value)}`);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 async function listAccounts(request, env, actor) {

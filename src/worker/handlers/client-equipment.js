@@ -7,6 +7,7 @@ import {
 } from '../db/client-equipment-queries.js';
 import { ALL_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
+import { consumeKvRateLimit } from '../lib/cache.js';
 import { buildSearchText, cleanString, normalizeText } from '../lib/normalize.js';
 import { json, makeId, nowIso, readJson } from '../lib/utils.js';
 
@@ -135,6 +136,8 @@ async function archiveEquipment(request, env, ctx, actor) {
 async function importEquipment(request, env, ctx, actor) {
   const denied = requireRole(actor, WRITE_ROLES);
   if (denied) return denied;
+  const rate = await consumeKvRateLimit(env, `s2b1:importClientEquipment:actor:${actor.id}`, 10, 600);
+  if (!rate.allowed) return json({ ok: false, error: 'Qua nhieu yeu cau import', retryAfter: rate.retryAfter }, 429, { 'retry-after': String(rate.retryAfter) });
   const body = await readJson(request);
   const clientId = cleanString(body.clientId || body.client_id, 50);
   if (!clientId) return json({ ok: false, error: 'clientId la bat buoc' }, 400);

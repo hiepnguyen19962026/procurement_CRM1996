@@ -45,7 +45,16 @@ async function listRfqs(request, env, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
   const p = await readJson(request);
-  const data = await listRfqsSQL(env.DB, { q: normalizeText(p.q), status: p.status || '', cursor: p.cursor || '', sortBy: p.sortBy || '', sortDir: p.sortDir || '', limit: clampLimit(p.limit) });
+  const autocomplete = p.autocomplete === '1' || p.autocomplete === 'true' || p.autocomplete === true;
+  const data = await listRfqsSQL(env.DB, {
+    q: normalizeText(p.q),
+    status: p.status || '',
+    cursor: p.cursor || '',
+    sortBy: p.sortBy || '',
+    sortDir: p.sortDir || '',
+    limit: clampLimit(p.limit, autocomplete ? 20 : 50, autocomplete ? 50 : 200),
+    autocomplete,
+  });
   return json({ ok: true, ...data });
 }
 

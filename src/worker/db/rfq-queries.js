@@ -16,7 +16,7 @@ const RFQ_SORT = {
   trang_thai:    { col: 'r.trang_thai_goi',          rowKey: 'trang_thai_goi',          type: 'text' },
 };
 
-export async function listRfqsSQL(db, { q, status, cursor, sortBy, sortDir, limit }) {
+export async function listRfqsSQL(db, { q, status, cursor, sortBy, sortDir, limit, autocomplete = false }) {
   const sort = RFQ_SORT[sortBy] || null;
   const dir = sortDir === 'asc' ? 'ASC' : 'DESC';
   const op  = dir === 'ASC' ? '>' : '<';
@@ -24,8 +24,8 @@ export async function listRfqsSQL(db, { q, status, cursor, sortBy, sortDir, limi
   const binds = [];
   const where = [];
   if (q) {
-    where.push('(r.normalized_search LIKE ? OR r.ten_goi LIKE ? OR r.ma_goi_tbmt LIKE ?)');
-    binds.push(`%${q}%`, `%${q}%`, `%${q}%`);
+    where.push('(r.normalized_search LIKE ? OR r.ten_goi LIKE ? OR r.ma_goi_tbmt LIKE ? OR r.rfq_id LIKE ?)');
+    binds.push(`%${q}%`, `%${q}%`, `%${q}%`, `%${q}%`);
   }
   if (status) {
     where.push('r.trang_thai_goi = ?'); binds.push(status);
@@ -45,9 +45,12 @@ export async function listRfqsSQL(db, { q, status, cursor, sortBy, sortDir, limi
   }
 
   const orderBy = sort ? `${sort.col} ${dir}, r.rfq_id ${dir}` : `r.rfq_id ${dir}`;
+  const selectFields = autocomplete
+    ? 'r.rfq_id, r.client_id, r.ma_goi_tbmt, r.ten_goi, r.nha_may_cdt, r.ngay_het_han, r.trang_thai_goi, c.client_name'
+    : `r.*, c.client_name,
+       (SELECT COUNT(*) FROM rfq_items i WHERE i.rfq_id = r.rfq_id) AS item_count`;
   const res = await db.prepare(
-    `SELECT r.*, c.client_name,
-       (SELECT COUNT(*) FROM rfq_items i WHERE i.rfq_id = r.rfq_id) AS item_count
+    `SELECT ${selectFields}
      FROM rfqs r LEFT JOIN clients c ON c.client_id = r.client_id
      ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
      ORDER BY ${orderBy} LIMIT ?`

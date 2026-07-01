@@ -40,16 +40,33 @@ export default async function handler(request) {
       signal: AbortSignal.timeout(30000),
     });
     const data = await res.json().catch(() => ({ ok: false, error: `Worker HTTP ${res.status}` }));
-    return json(data, res.status);
-  } catch (err) {
-    return json({ ok: false, error: err.message || 'Upload gateway error' }, 500);
+    return json(safeGatewayBody(data, res.status), res.status, retryAfterHeaders(res));
+  } catch {
+    return json({ ok: false, error: 'Lỗi hệ thống. Vui lòng thử lại sau.', status: 500 }, 500);
   }
 }
 
-function json(data, status = 200) {
+function safeGatewayBody(data, status) {
+  if (status >= 500) {
+    return { ok: false, error: 'Lỗi hệ thống. Vui lòng thử lại sau.', status };
+  }
+  return data;
+}
+
+function retryAfterHeaders(response) {
+  const retryAfter = response.headers.get('retry-after');
+  return retryAfter ? { 'retry-after': retryAfter } : {};
+}
+
+function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      ...headers,
+    },
   });
 }
 

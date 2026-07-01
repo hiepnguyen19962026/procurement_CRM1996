@@ -15,7 +15,7 @@ import { getRfqSQL } from '../db/rfq-queries.js';
 import { getRfqItemSQL, insertRfqItemSQL, updateRfqItemSQL } from '../db/rfq-item-queries.js';
 import { ALL_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
-import { invalidateKv } from '../lib/cache.js';
+import { consumeKvRateLimit, invalidateKv } from '../lib/cache.js';
 import { buildSearchText, cleanMoney, cleanNumber, cleanString } from '../lib/normalize.js';
 import { clampLimit, json, makeId, nextEntityId, nowIso, readJson } from '../lib/utils.js';
 
@@ -190,6 +190,8 @@ async function saveTemplate(request, env, actor) {
 async function commitRows(request, env, ctx, actor) {
   const denied = requireRole(actor, WRITE_ROLES);
   if (denied) return denied;
+  const rate = await consumeKvRateLimit(env, `s2b1:commitImportRows:actor:${actor.id}`, 10, 600);
+  if (!rate.allowed) return json({ ok: false, error: 'Qua nhieu yeu cau import', retryAfter: rate.retryAfter }, 429, { 'retry-after': String(rate.retryAfter) });
   const body = await readJson(request);
   const rfqId = cleanString(body.rfqId || body.rfq_id, 80);
   const rfq = rfqId ? await getRfqSQL(env.DB, rfqId) : null;
@@ -351,6 +353,8 @@ async function commitRows(request, env, ctx, actor) {
 async function previewRows(request, env, actor) {
   const denied = requireRole(actor, WRITE_ROLES);
   if (denied) return denied;
+  const rate = await consumeKvRateLimit(env, `s2b1:previewImportRows:actor:${actor.id}`, 20, 600);
+  if (!rate.allowed) return json({ ok: false, error: 'Qua nhieu yeu cau xem truoc import', retryAfter: rate.retryAfter }, 429, { 'retry-after': String(rate.retryAfter) });
   const body = await readJson(request);
   const rfqId = cleanString(body.rfqId || body.rfq_id, 80);
   const rfq = rfqId ? await getRfqSQL(env.DB, rfqId) : null;

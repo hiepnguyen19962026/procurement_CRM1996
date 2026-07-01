@@ -32,7 +32,7 @@ export default async function handler(request) {
 
     if (!res.ok) {
       const data = await res.json().catch(() => ({ ok: false, error: `Worker HTTP ${res.status}` }));
-      return json(data, res.status);
+      return json(safeGatewayBody(data, res.status), res.status, retryAfterHeaders(res));
     }
 
     const headers = new Headers();
@@ -41,8 +41,8 @@ export default async function handler(request) {
     headers.set('cache-control', 'private, no-store');
     headers.set('x-content-type-options', 'nosniff');
     return new Response(res.body, { status: res.status, headers });
-  } catch (err) {
-    return json({ ok: false, error: err.message || 'Media gateway error' }, 500);
+  } catch {
+    return json({ ok: false, error: 'Lỗi hệ thống. Vui lòng thử lại sau.', status: 500 }, 500);
   }
 }
 
@@ -51,10 +51,27 @@ function copyHeader(from, to, name) {
   if (value) to.set(name, value);
 }
 
-function json(data, status = 200) {
+function safeGatewayBody(data, status) {
+  if (status >= 500) {
+    return { ok: false, error: 'Lỗi hệ thống. Vui lòng thử lại sau.', status };
+  }
+  return data;
+}
+
+function retryAfterHeaders(response) {
+  const retryAfter = response.headers.get('retry-after');
+  return retryAfter ? { 'retry-after': retryAfter } : {};
+}
+
+function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      ...headers,
+    },
   });
 }
 

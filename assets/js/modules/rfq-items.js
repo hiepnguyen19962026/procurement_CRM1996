@@ -11,8 +11,10 @@
   var _supDebounce = null;
   var _pendingRfqFilter = '';
   var _selectedRfqId = '';
-  var _rfqListCache = [];
+  var _rfqAutocompleteRows = [];
   var _rfqAutocompleteInit = false;
+  var _rfqAutocompleteTimer = null;
+  var _rfqAutocompleteSeq = 0;
   var _exportColPanelInit = false;
   var _lastFilterParams = {};
   var _addendumSearchRows = [];
@@ -60,19 +62,16 @@
   async function initRfqAutocomplete() {
     if (!_rfqAutocompleteInit) {
       _rfqAutocompleteInit = true;
-      var rfqs = AppState.list('rfqs').rows || [];
-      if (!rfqs.length) {
-        try {
-          var data = await API.get('getRfqs', { limit: 2000 });
-          AppState.list('rfqs').rows = data.rows || [];
-        } catch (e) { /* ignore — combobox stays empty */ }
-      }
-      _rfqListCache = AppState.list('rfqs').rows || [];
     }
     var pending = _pendingRfqFilter;
     if (pending) {
       _pendingRfqFilter = '';
-      var rfqRow = _rfqListCache.find(function (r) { return r.rfq_id === pending; });
+      var rfqRow = null;
+      try {
+        var data = await API.get('getRfqs', { q: pending, limit: 20, autocomplete: '1' });
+        _rfqAutocompleteRows = data.rows || [];
+        rfqRow = _rfqAutocompleteRows.find(function (r) { return r.rfq_id === pending; }) || null;
+      } catch (e) { /* keep the RFQ ID as fallback label */ }
       _selectedRfqId = pending;
       var inp = document.getElementById('itemRfqInput');
       if (inp) inp.value = rfqRow ? (rfqRow.ten_goi || rfqRow.rfq_id) : pending;
@@ -88,28 +87,59 @@
   }
 
   function _hideRfqSuggestions() {
+    clearTimeout(_rfqAutocompleteTimer);
+    _rfqAutocompleteSeq++;
     var sug = document.getElementById('itemRfqSuggestions');
     if (sug) { sug.innerHTML = ''; sug.classList.add('hidden'); }
   }
 
-  function _onRfqInput(el) {
-    _selectedRfqId = '';
-    var q = (el.value || '').toLowerCase().trim();
+  function _renderRfqSuggestions(rows) {
     var sug = document.getElementById('itemRfqSuggestions');
     if (!sug) return;
-    if (!q) { _hideRfqSuggestions(); return; }
-    var matches = _rfqListCache.filter(function (r) {
-      return (_rfqLabel(r) + ' ' + r.rfq_id).toLowerCase().indexOf(q) >= 0;
-    }).slice(0, 40);
-    if (!matches.length) {
+    if (!rows.length) {
       sug.innerHTML = '<div class="rfq-sug-item" style="color:var(--text-muted)">Không tìm thấy</div>';
     } else {
-      sug.innerHTML = matches.map(function (r) {
+      sug.innerHTML = rows.map(function (r) {
         var lbl = _rfqLabel(r);
         return '<div class="rfq-sug-item" onmousedown="RfqItemsModule._selectRfq(\'' + r.rfq_id.replace(/'/g, "\\'") + '\',\'' + lbl.replace(/'/g, "\\'") + '\')">' + API.esc(lbl) + '</div>';
       }).join('');
     }
     sug.classList.remove('hidden');
+  }
+
+  async function _searchRfqSuggestions(q, seq) {
+    var sug = document.getElementById('itemRfqSuggestions');
+    if (!sug) return;
+    sug.innerHTML = '<div class="rfq-sug-item" style="color:var(--text-muted)">Đang tải...</div>';
+    sug.classList.remove('hidden');
+    try {
+      var data = await API.get('getRfqs', { q: q, limit: 20, autocomplete: '1' });
+      if (seq !== _rfqAutocompleteSeq) return;
+      _rfqAutocompleteRows = data.rows || [];
+      _renderRfqSuggestions(_rfqAutocompleteRows);
+    } catch (err) {
+      if (seq !== _rfqAutocompleteSeq) return;
+      sug.innerHTML = '<div class="rfq-sug-item" style="color:var(--red)">Không tải được danh sách RFQ</div>';
+      sug.classList.remove('hidden');
+    }
+  }
+
+  function _queueRfqSearch(el) {
+    clearTimeout(_rfqAutocompleteTimer);
+    var q = (el && el.value || '').trim();
+    var seq = ++_rfqAutocompleteSeq;
+    _rfqAutocompleteTimer = setTimeout(function () {
+      _searchRfqSuggestions(q, seq);
+    }, 275);
+  }
+
+  function _onRfqInput(el) {
+    _selectedRfqId = '';
+    _queueRfqSearch(el);
+  }
+
+  function _onRfqFocus(el) {
+    _queueRfqSearch(el);
   }
 
   function _onRfqKeydown(e) {
@@ -1015,7 +1045,7 @@
     state.currentMaster = {};
     var rfqSeed = {};
     if (_selectedRfqId) {
-      var cached = _rfqListCache.find(function (r) { return r.rfq_id === _selectedRfqId; });
+      var cached = _rfqAutocompleteRows.find(function (r) { return r.rfq_id === _selectedRfqId; });
       rfqSeed = cached
         ? { rfq_id: cached.rfq_id, ma_goi_tbmt: cached.ma_goi_tbmt, ten_goi: cached.ten_goi, client_name: cached.client_name, trang_thai_goi: cached.trang_thai_goi }
         : { rfq_id: _selectedRfqId };
@@ -5790,6 +5820,7 @@
     _togglePicker: togglePicker,
     _pickOption: pickOption,
     _onRfqInput: _onRfqInput,
+    _onRfqFocus: _onRfqFocus,
     _onRfqKeydown: _onRfqKeydown,
     _selectRfq: _selectRfq,
     _clarPickRecent: _clarPickRecent,

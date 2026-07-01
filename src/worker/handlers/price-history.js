@@ -6,6 +6,7 @@ import {
 import { ALL_ROLES, requireRole } from '../lib/auth.js';
 import { cleanNumber, cleanString } from '../lib/normalize.js';
 import { clampLimit, json, readJson } from '../lib/utils.js';
+import { consumeKvRateLimit } from '../lib/cache.js';
 
 const VALID_SOURCE_CHANNEL = new Set(['', 'zalo', 'wechat', 'email', 'phone', 'direct', 'other']);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -71,6 +72,8 @@ async function summaryHistory(request, env, actor) {
 async function exportHistoryCsv(request, env, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
+  const rate = await consumeKvRateLimit(env, `s2b1:exports:actor:${actor.id}`, 5, 600);
+  if (!rate.allowed) return json({ ok: false, error: 'Qua nhieu yeu cau xuat du lieu', retryAfter: rate.retryAfter }, 429, { 'retry-after': String(rate.retryAfter) });
   const body = await readJson(request);
   const filters = parseFilters(body);
   const err = validateFilters(filters);
@@ -117,7 +120,8 @@ function validateFilters(f) {
 
 // CSV helpers.
 function csvQuote(value) {
-  const s = String(value == null ? '' : value);
+  const raw = String(value == null ? '' : value);
+  const s = typeof value === 'string' && /^[=+\-@\t]/.test(raw) ? `'${raw}` : raw;
   if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
     return '"' + s.replace(/"/g, '""') + '"';
   }

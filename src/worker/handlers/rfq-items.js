@@ -1,7 +1,7 @@
 import { archiveRfqItemSQL, exportRfqItemsSQL, getRfqItemSQL, insertRfqItemSQL, listRfqItemsSQL, updateRfqItemSQL } from '../db/rfq-item-queries.js';
 import { getRfqSQL } from '../db/rfq-queries.js';
 import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
-import { invalidateKv } from '../lib/cache.js';
+import { consumeKvRateLimit, invalidateKv } from '../lib/cache.js';
 import { writeActionLog } from '../lib/action-log.js';
 import { buildSearchText, cleanMoney, cleanNumber, cleanString, normalizeText } from '../lib/normalize.js';
 import { clampLimit, json, nextEntityId, nowIso, readJson } from '../lib/utils.js';
@@ -280,7 +280,7 @@ const EXPORT_COL_HEADERS = [
 ];
 
 function maVatTuExcel(v) {
-  // Force Excel to treat numeric-looking material codes as text (prevents 1E+ scientific notation)
+  // Force Excel to treat numeric-looking material codes as text (csvQ neutralizes the formula marker).
   if (v == null || v === '') return '';
   return '="' + String(v).replace(/"/g, '""') + '"';
 }
@@ -416,7 +416,8 @@ const EXPORT_TEMPLATES = {
 };
 
 function csvQ(value) {
-  const s = String(value == null ? '' : value);
+  const raw = String(value == null ? '' : value);
+  const s = typeof value === 'string' && /^[=+\-@\t]/.test(raw) ? `'${raw}` : raw;
   if (s.includes(',') || s.includes('"') || s.includes('\n') || s.includes('\r')) {
     return '"' + s.replace(/"/g, '""') + '"';
   }
@@ -451,6 +452,8 @@ function buildExportCsv(rows, opts) {
 async function exportItems(request, env, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
+  const rate = await consumeKvRateLimit(env, `s2b1:exports:actor:${actor.id}`, 5, 600);
+  if (!rate.allowed) return json({ ok: false, error: 'Qua nhieu yeu cau xuat du lieu', retryAfter: rate.retryAfter }, 429, { 'retry-after': String(rate.retryAfter) });
   const p = await readJson(request);
   const VALID_TECH_FILTERS = new Set(['has_clarification','no_clarification','khong_can','dang_hoi','da_xac_nhan','bi_tu_choi']);
   const VALID_TEMPLATES = new Set(['chung', 'vt1_lam_ro_1', 'vt1_lam_ro_2', 'kq_muasamcong']);
@@ -555,6 +558,8 @@ function buildExportJson(rows, opts) {
 async function exportItemsJson(request, env, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
+  const rate = await consumeKvRateLimit(env, `s2b1:exports:actor:${actor.id}`, 5, 600);
+  if (!rate.allowed) return json({ ok: false, error: 'Qua nhieu yeu cau xuat du lieu', retryAfter: rate.retryAfter }, 429, { 'retry-after': String(rate.retryAfter) });
   const p = await readJson(request);
   const VALID_TECH_FILTERS = new Set(['has_clarification','no_clarification','khong_can','dang_hoi','da_xac_nhan','bi_tu_choi']);
   const VALID_TEMPLATES = new Set(['chung', 'vt1_lam_ro_1', 'vt1_lam_ro_2', 'kq_muasamcong', 'don_giao_hang', 'don_tra_hang']);

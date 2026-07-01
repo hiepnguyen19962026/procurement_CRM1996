@@ -6,6 +6,16 @@ export async function insertMediaFileSQL(db, row) {
   ).bind(row.file_id, row.owner_type, row.owner_id, row.file_kind, row.r2_key, row.public_url, row.file_name, row.mime_type, row.size_bytes, row.width, row.height, row.variant, row.is_primary, row.created_by, row.created_at).run();
 }
 
+export async function mediaOwnerExistsSQL(db, ownerType, ownerId) {
+  if (ownerType === 'quote') {
+    return Boolean(await db.prepare('SELECT 1 FROM supplier_quotes WHERE quote_id = ? LIMIT 1').bind(ownerId).first());
+  }
+  if (ownerType === 'rfq_item') {
+    return Boolean(await db.prepare('SELECT 1 FROM rfq_items WHERE rfq_item_id = ? LIMIT 1').bind(ownerId).first());
+  }
+  return false;
+}
+
 export async function listMediaFilesSQL(db, { ownerType, ownerId, limit }) {
   const res = await db.prepare(
     `SELECT file_id, owner_type, owner_id, file_kind, file_name, mime_type, size_bytes,

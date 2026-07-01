@@ -55,6 +55,7 @@ export default {
     // Worker is called only by Vercel gateway (server-to-server).
     // All requests must carry X-Worker-Secret. ALLOWED_ORIGIN restricts CORS if set.
     const allowedOrigin = env.ALLOWED_ORIGIN || null;
+    if (!allowedOrigin) return json({ ok: false, error: 'ALLOWED_ORIGIN chua cau hinh' }, 500);
     if (request.method === 'OPTIONS') return cors(json({ ok: true }), allowedOrigin);
     if (!validateSecret(request, env)) return cors(json({ ok: false, error: 'Forbidden' }, 403), allowedOrigin);
 
@@ -114,11 +115,10 @@ async function getActionAndBody(request) {
   return { action: parsedBody.action || '', parsedBody };
 }
 
-// allowedOrigin: set ALLOWED_ORIGIN in Cloudflare Worker secrets to restrict to your Vercel domain.
-// If not set, falls back to '*'. Worker is still protected by X-Worker-Secret on every request.
+// ALLOWED_ORIGIN is required so production never falls back to a wildcard origin.
 function cors(response, allowedOrigin) {
   const headers = new Headers(response.headers);
-  headers.set('Access-Control-Allow-Origin', allowedOrigin || '*');
+  headers.set('Access-Control-Allow-Origin', allowedOrigin);
   headers.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
   headers.set('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-Worker-Secret,X-App-Actor');
   return new Response(response.body, { status: response.status, headers });

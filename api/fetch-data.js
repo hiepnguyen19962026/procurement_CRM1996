@@ -17,12 +17,18 @@ export default async function handler(request) {
     if (!action) return json({ ok: false, error: 'Missing action' }, 400);
 
     if (action === 'initSetup') {
-      return json(await callWorker(action, body));
+      const data = await callWorker(action, body);
+      const status = data.status || (data.ok === false ? 400 : 200);
+      return json(safeGatewayBody(data, status), status, retryAfterHeaders(data));
     }
 
     if (action === 'authLogin') {
-      const data = await callWorker(action, body);
-      if (!data.ok) return json(data, data.status || 401);
+      const loginIpHash = await hashIdentifier(clientIp(request), process.env.JWT_SECRET || process.env.WORKER_SECRET);
+      const data = await callWorker(action, body, null, { 'X-Login-IP-Hash': loginIpHash });
+      if (!data.ok) {
+        const status = data.status || 401;
+        return json(safeGatewayBody(data, status), status, retryAfterHeaders(data));
+      }
       const token = await signJWT(data.user, process.env.JWT_SECRET, JWT_EXPIRES);
       return json(data, 200, { 'set-cookie': sessionCookie(token) });
     }
@@ -32,9 +38,10 @@ export default async function handler(request) {
     if (!isAllowed(actor.role, action)) return json({ ok: false, error: 'Khong co quyen' }, 403);
 
     const data = await callWorker(action, body, actor);
-    return json(data, data.ok === false ? 400 : 200);
-  } catch (err) {
-    return json({ ok: false, error: err.message || 'Gateway error' }, 500);
+    const status = data.status || (data.ok === false ? 400 : 200);
+    return json(safeGatewayBody(data, status), status, retryAfterHeaders(data));
+  } catch {
+    return json({ ok: false, error: 'Lỗi hệ thống. Vui lòng thử lại sau.', status: 500 }, 500);
   }
 }
 
@@ -46,12 +53,13 @@ function isAllowed(role, action) {
   return PUBLIC_ACTIONS.has(action);
 }
 
-async function callWorker(action, body, actor) {
+async function callWorker(action, body, actor, extraHeaders = {}) {
   const url = process.env.WORKER_URL;
   if (!url || !process.env.WORKER_SECRET) throw new Error('Missing WORKER_URL or WORKER_SECRET');
   const headers = {
     'content-type': 'application/json',
     'X-Worker-Secret': process.env.WORKER_SECRET,
+    ...extraHeaders,
   };
   if (actor) headers['X-App-Actor'] = encodeActor(actor);
   const res = await fetch(url, {
@@ -61,13 +69,42 @@ async function callWorker(action, body, actor) {
     signal: AbortSignal.timeout(10000),
   });
   const data = await res.json().catch(() => ({ ok: false, error: `Worker HTTP ${res.status}` }));
-  return { ...data, status: res.status };
+  return { ...data, status: res.status, retryAfter: res.headers.get('retry-after') || data.retryAfter };
+}
+
+function retryAfterHeaders(data) {
+  return data?.retryAfter ? { 'retry-after': String(data.retryAfter) } : {};
+}
+
+function safeGatewayBody(data, status) {
+  if (status >= 500) {
+    return { ok: false, error: 'Lỗi hệ thống. Vui lòng thử lại sau.', status };
+  }
+  return data;
+}
+
+function clientIp(request) {
+  return (request.headers.get('x-forwarded-for') || '').split(',')[0].trim()
+    || request.headers.get('x-real-ip')
+    || 'unknown';
+}
+
+async function hashIdentifier(value, secret) {
+  if (!secret) throw new Error('Missing secret for login rate limit');
+  const bytes = new TextEncoder().encode(`${secret}:${value}`);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'content-type': 'application/json; charset=utf-8', ...headers },
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+      ...headers,
+    },
   });
 }
 

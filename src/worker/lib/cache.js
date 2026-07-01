@@ -23,3 +23,21 @@ export async function invalidateKv(env, keys = []) {
     [keys].flat().filter(Boolean).map((key) => env.KV?.delete(key).catch(() => null))
   );
 }
+
+export async function consumeKvRateLimit(env, key, limit, windowSeconds) {
+  const kv = env.KV;
+  if (!kv) return { allowed: false, retryAfter: windowSeconds, error: 'KV binding chua cau hinh' };
+  const now = Math.floor(Date.now() / 1000);
+  const windowStart = Math.floor(now / windowSeconds) * windowSeconds;
+  const retryAfter = Math.max(1, windowStart + windowSeconds - now);
+  const storageKey = `rate:v1:${key}:${windowStart}`;
+  try {
+    const current = Number(await kv.get(storageKey)) || 0;
+    if (current >= limit) return { allowed: false, retryAfter };
+    await kv.put(storageKey, String(current + 1), { expirationTtl: windowSeconds + 60 });
+    return { allowed: true, retryAfter };
+  } catch {
+    // Login protection must fail closed when its KV dependency is unavailable.
+    return { allowed: false, retryAfter: windowSeconds, error: 'Khong the kiem tra gioi han dang nhap' };
+  }
+}
