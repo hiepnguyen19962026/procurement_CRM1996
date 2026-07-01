@@ -27,6 +27,7 @@ export async function listCalendarEventsSQL(db, { fromDate, toDate }) {
        COALESCE(u.display_name, u.username, e.owner_id, '') AS owner_name,
        e.company_name,
        e.note,
+       e.external_url,
        e.task_id,
        e.status,
        e.created_by,
@@ -64,12 +65,12 @@ export function prepareInsertCalendarEventSQL(db, row) {
   return db.prepare(
     `INSERT INTO calendar_events (
       event_id, title, event_date, start_time, end_time, duration_minutes,
-      owner_id, company_name, note, task_id, status, created_by,
+      owner_id, company_name, note, external_url, task_id, status, created_by,
       created_at, updated_at, deleted_at
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)`
   ).bind(
     row.event_id, row.title, row.event_date, row.start_time, row.end_time, row.duration_minutes,
-    row.owner_id, row.company_name, row.note, row.task_id, row.status, row.created_by,
+    row.owner_id, row.company_name, row.note, row.external_url, row.task_id, row.status, row.created_by,
     row.created_at, row.updated_at
   );
 }
@@ -77,10 +78,10 @@ export function prepareInsertCalendarEventSQL(db, row) {
 export async function updateCalendarEventSQL(db, row) {
   return db.prepare(
     `UPDATE calendar_events SET
-       title = ?, company_name = ?, note = ?, status = ?, updated_at = ?
+       title = ?, company_name = ?, note = ?, external_url = ?, status = ?, updated_at = ?
      WHERE event_id = ? AND deleted_at IS NULL`
   ).bind(
-    row.title, row.company_name, row.note, row.status, row.updated_at, row.event_id
+    row.title, row.company_name, row.note, row.external_url, row.status, row.updated_at, row.event_id
   ).run();
 }
 

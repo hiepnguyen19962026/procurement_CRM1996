@@ -8,6 +8,7 @@ import {
   updateCalendarEventScheduleSQL,
 } from '../db/calendar-queries.js';
 import { nextTaskId, prepareInsertTaskSQL } from '../db/task-queries.js';
+import { deleteMediaFilesByOwnerSQL, getMediaKeysByOwnerSQL } from '../db/media-queries.js';
 import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { invalidateKv } from '../lib/cache.js';
 import { writeActionLog } from '../lib/action-log.js';
@@ -104,9 +105,13 @@ async function updateEvent(request, env, ctx, actor) {
     title,
     company_name: cleanString(body.companyName || body.company_name || oldRow.company_name || '', 200),
     note: cleanString(body.note ?? oldRow.note ?? '', 1500),
+    external_url: oldRow.external_url || '',
     status: VALID_EVENT_STATUS.has(body.status) ? body.status : oldRow.status,
     updated_at: nowIso(),
   };
+  const externalUrl = normalizeExternalUrl(body.externalUrl ?? body.external_url ?? row.external_url);
+  if (!externalUrl.ok) return json({ ok: false, error: externalUrl.error }, 400);
+  row.external_url = externalUrl.value;
   await updateCalendarEventSQL(env.DB, row);
   await invalidateCalendarCaches(env, oldRow.event_date);
   const newRow = await getCalendarEventSQL(env.DB, eventId);
@@ -173,6 +178,14 @@ async function deleteEvent(request, env, ctx, actor) {
   if (ownerDenied) return ownerDenied;
 
   const now = nowIso();
+  const mediaRows = await getMediaKeysByOwnerSQL(env.DB, 'calendar_event', eventId);
+  if (mediaRows.length && !env.MEDIA) {
+    return json({ ok: false, error: 'R2 MEDIA binding chua cau hinh nen khong the xoa sach file lich' }, 500);
+  }
+  if (mediaRows.length) {
+    await Promise.all(mediaRows.map((row) => env.MEDIA.delete(row.r2_key)));
+    await deleteMediaFilesByOwnerSQL(env.DB, 'calendar_event', eventId);
+  }
   await softDeleteCalendarEventSQL(env.DB, eventId, now);
   await invalidateCalendarCaches(env, oldRow.event_date);
   ctx.waitUntil(writeActionLog(env, {
@@ -181,7 +194,7 @@ async function deleteEvent(request, env, ctx, actor) {
     entityId: eventId,
     message: `Xoa lich "${oldRow.title}"`,
     oldJson: oldRow,
-    newJson: null,
+    newJson: { deleted_media_ids: mediaRows.map((row) => row.file_id) },
     actor,
   }));
   return json({ ok: true });
@@ -193,8 +206,10 @@ function normalizeEventPayload(body) {
   const startTime = normalizeTime(body.startTime || body.start_time || '');
   const endTime = normalizeTime(body.endTime || body.end_time || '');
   const checked = validateSchedule(eventDate, startTime, endTime);
+  const externalUrl = normalizeExternalUrl(body.externalUrl ?? body.external_url ?? '');
   if (!title) return { ok: false, error: 'Ten lich la bat buoc' };
   if (!checked.ok) return checked;
+  if (!externalUrl.ok) return externalUrl;
   const status = body.status && VALID_EVENT_STATUS.has(body.status) ? body.status : 'scheduled';
   return {
     ok: true,
@@ -205,8 +220,23 @@ function normalizeEventPayload(body) {
     duration_minutes: checked.duration,
     company_name: cleanString(body.companyName || body.company_name || '', 200),
     note: cleanString(body.note || '', 1500),
+    external_url: externalUrl.value,
     status,
   };
+}
+
+function normalizeExternalUrl(value) {
+  const raw = cleanString(value || '', 1500);
+  if (!raw) return { ok: true, value: '' };
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      return { ok: false, error: 'Link tai lieu phai dung http hoac https' };
+    }
+    return { ok: true, value: parsed.toString() };
+  } catch {
+    return { ok: false, error: 'Link tai lieu khong hop le' };
+  }
 }
 
 function buildAutoTaskRow({ taskId, title, eventDate, companyName, note, actor, now }) {

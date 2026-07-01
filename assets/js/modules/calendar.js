@@ -10,7 +10,7 @@
   var DAY_END = 18 * 60;
   var SLOT = 30;
   var SLOT_HEIGHT = 34;
-  var OWNER_COLORS = ['#1d4ed8', '#15803d', '#d97706', '#0d7a5f', '#7c3aed', '#dc2626', '#0369a1', '#b45309'];
+  var OWNER_COLORS = ['#6f8fbf', '#6f9d83', '#bd8b62', '#679b99', '#8c7fb2', '#b57d7d', '#6f91a8', '#a48868'];
 
   function setupOnce() {
     if (_setupDone) return;
@@ -41,12 +41,6 @@
     if (!root) return;
     var days = weekDays(state.weekStart);
     root.innerHTML =
-      '<div class="calendar-toolbar">' +
-        '<button type="button" onclick="CalendarModule.prevWeek()">‹ Tuần trước</button>' +
-        '<button type="button" onclick="CalendarModule.today()">Hôm nay</button>' +
-        '<button type="button" onclick="CalendarModule.nextWeek()">Tuần sau ›</button>' +
-        '<strong>' + fmtDay(days[0]) + ' - ' + fmtDay(days[6]) + '</strong>' +
-      '</div>' +
       '<div class="calendar-scroll">' +
         '<div class="calendar-grid">' +
           '<div class="calendar-time-head"></div>' +
@@ -59,6 +53,7 @@
           days.map(renderDayColumn).join('') +
         '</div>' +
       '</div>';
+    updateWeekLabel(days);
     Auth.applyRoleUI();
   }
 
@@ -222,17 +217,20 @@
     var editable = !isEdit || canEdit(row);
     var status = row.status || 'scheduled';
     var html = ''
-      + '<label class="span-5">Tiêu đề<input name="title" required maxlength="300" value="' + API.esc(row.title || '') + '"' + (editable ? '' : ' readonly') + '></label>'
+      + '<label class="span-3">Tiêu đề<input name="title" required maxlength="300" value="' + API.esc(row.title || '') + '"' + (editable ? '' : ' readonly') + '></label>'
       + '<label class="span-3">Công ty<input name="companyName" maxlength="200" value="' + API.esc(row.company_name || '') + '"' + (editable ? '' : ' readonly') + '></label>'
-      + '<label class="span-2">Ngày<input name="eventDate" type="date" required value="' + API.esc(row.event_date || vnToday()) + '"' + (editable ? '' : ' readonly') + '></label>'
-      + '<label class="span-1">Bắt đầu<input name="startTime" type="time" step="1800" required value="' + API.esc(row.start_time || '09:00') + '"' + (editable ? '' : ' readonly') + '></label>'
-      + '<label class="span-1">Kết thúc<input name="endTime" type="time" step="1800" required value="' + API.esc(row.end_time || '10:00') + '"' + (editable ? '' : ' readonly') + '></label>'
+      + '<label class="span-3">Ngày<input name="eventDate" type="date" required value="' + API.esc(row.event_date || vnToday()) + '"' + (editable ? '' : ' readonly') + '></label>'
+      + '<label class="span-3">Thời gian<div class="calendar-time-group"><input name="startTime" type="time" step="1800" required aria-label="Bắt đầu" value="' + API.esc(row.start_time || '09:00') + '"' + (editable ? '' : ' readonly') + '><input name="endTime" type="time" step="1800" required aria-label="Kết thúc" value="' + API.esc(row.end_time || '10:00') + '"' + (editable ? '' : ' readonly') + '></div></label>'
       + '<label class="span-3">Trạng thái<select name="status"' + (editable ? '' : ' disabled') + '>'
         + '<option value="scheduled"' + (status === 'scheduled' ? ' selected' : '') + '>Đã lên lịch</option>'
         + '<option value="done"' + (status === 'done' ? ' selected' : '') + '>Hoàn thành</option>'
         + '<option value="cancelled"' + (status === 'cancelled' ? ' selected' : '') + '>Đã hủy</option>'
       + '</select></label>'
       + '<label class="span-9">Ghi chú<textarea name="note" style="min-height:120px;resize:vertical"' + (editable ? '' : ' readonly') + '>' + API.esc(row.note || '') + '</textarea></label>'
+      + '<label class="span-12">Link tài liệu / Google Drive<input name="externalUrl" type="url" maxlength="1500" placeholder="https://..." value="' + API.esc(row.external_url || '') + '"' + (editable ? '' : ' readonly') + '></label>'
+      + '<div class="span-12 calendar-media-box">' + (isEdit
+        ? '<div class="calendar-media-upload"><input id="calendarMediaInput" type="file" accept="image/jpeg,image/png,image/webp,application/pdf,.pdf" multiple' + (editable ? '' : ' disabled') + '><button type="button"' + (editable ? ' onclick="CalendarModule.uploadAttachments(\'' + API.esc(row.event_id) + '\')"' : ' disabled') + '>Upload ảnh / tài liệu</button></div><div id="calendarMediaList" class="calendar-media-list"><span class="muted">Đang tải file...</span></div>'
+        : '<span class="muted">Lưu lịch trước, sau đó mở lại để đính kèm nhiều ảnh hoặc PDF.</span>') + '</div>'
       + (isEdit && row.task_id ? '<div class="span-12 calendar-linked-task">Task tự tạo: <strong>' + API.esc(row.task_id) + '</strong></div>' : '')
       + (isEdit && editable ? '<div class="span-12 calendar-form-actions"><button type="button" class="btn-danger" onclick="CalendarModule.deleteEvent(\'' + API.esc(row.event_id) + '\')">Xóa lịch</button></div>' : '');
     Utils.openModal(isEdit ? 'Lịch: ' + (row.title || row.event_id) : 'Thêm lịch', html, editable ? async function (data) {
@@ -244,6 +242,7 @@
             companyName: data.companyName,
             note: data.note,
             status: data.status,
+            externalUrl: data.externalUrl,
           });
           if (data.eventDate !== row.event_date || data.startTime !== row.start_time || data.endTime !== row.end_time) {
             await API.call('updateCalendarEventSchedule', {
@@ -263,7 +262,55 @@
         API.error(err);
       }
     } : null);
+    if (isEdit) loadCalendarMedia(row.event_id);
     Auth.applyRoleUI();
+  }
+
+  async function loadCalendarMedia(eventId) {
+    var box = document.getElementById('calendarMediaList');
+    if (!box) return;
+    try {
+      var data = await API.get('getMediaFiles', { ownerType: 'calendar_event', ownerId: eventId, limit: 100 });
+      if (document.getElementById('calendarMediaList') !== box) return;
+      var rows = data.rows || [];
+      box.innerHTML = rows.length ? rows.map(function (file) {
+        return '<a href="' + API.esc(API.mediaUrl(file.file_id, file.owner_type, file.owner_id)) + '" target="_blank" rel="noopener">' + API.esc(file.file_name || file.file_id) + '</a>';
+      }).join('') : '<span class="muted">Chưa có file đính kèm.</span>';
+    } catch (err) {
+      box.textContent = err.message || 'Không tải được file đính kèm';
+    }
+  }
+
+  async function uploadAttachments(eventId) {
+    var input = document.getElementById('calendarMediaInput');
+    var files = input && input.files ? Array.from(input.files) : [];
+    if (!files.length) return API.toast('Chọn ảnh hoặc PDF trước khi upload', 'warn');
+    var succeeded = 0;
+    var failed = [];
+    for (var i = 0; i < files.length; i++) {
+      var file = files[i];
+      var isPdf = file.type === 'application/pdf' || /\.pdf$/i.test(file.name || '');
+      var isImage = /^image\/(jpeg|png|webp)$/i.test(file.type || '');
+      if (!isPdf && !isImage) {
+        failed.push(file.name);
+        continue;
+      }
+      var form = new FormData();
+      form.append('ownerType', 'calendar_event');
+      form.append('ownerId', eventId);
+      form.append('fileKind', isPdf ? 'calendar_document_pdf' : 'calendar_evidence_image');
+      form.append('file', file);
+      try {
+        API.toast('Đang upload ' + (i + 1) + '/' + files.length + ': ' + file.name, 'info');
+        await API.upload(form);
+        succeeded++;
+      } catch (err) {
+        failed.push(file.name + ': ' + (err.message || 'Lỗi upload'));
+      }
+    }
+    input.value = '';
+    if (succeeded) await loadCalendarMedia(eventId);
+    API.toast(failed.length ? 'Đã upload ' + succeeded + '/' + files.length + '. Lỗi: ' + failed.join('; ') : 'Đã upload ' + succeeded + ' file', failed.length ? 'warn' : 'success');
   }
 
   async function deleteEvent(eventId) {
@@ -295,6 +342,21 @@
   function prevWeek() { state.weekStart = addDays(state.weekStart, -7); load(true); }
   function nextWeek() { state.weekStart = addDays(state.weekStart, 7); load(true); }
   function today() { state.weekStart = startOfWeek(vnToday()); load(true); }
+
+  function jumpToDate(value) {
+    var match = String(value || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (!match) return API.toast('Nhập ngày theo định dạng dd/mm/yyyy', 'warn');
+    var dateStr = match[3] + '-' + pad2(Number(match[2])) + '-' + pad2(Number(match[1]));
+    var date = partsToUtc(dateStr);
+    if (utcDateString(date) !== dateStr) return API.toast('Ngày không hợp lệ', 'warn');
+    state.weekStart = startOfWeek(dateStr);
+    load(true);
+  }
+
+  function updateWeekLabel(days) {
+    var label = document.getElementById('calendarWeekLabel');
+    if (label) label.textContent = fmtDay(days[0]) + ' - ' + fmtDay(days[6]);
+  }
 
   function timeSlots() {
     var out = [];
@@ -367,7 +429,7 @@
   }
 
   function tint(color) {
-    return 'color-mix(in srgb, ' + color + ' 12%, white)';
+    return 'color-mix(in srgb, ' + color + ' 16%, white)';
   }
 
   function pad2(n) { return String(n).padStart(2, '0'); }
@@ -383,5 +445,7 @@
     prevWeek: prevWeek,
     nextWeek: nextWeek,
     today: today,
+    jumpToDate: jumpToDate,
+    uploadAttachments: uploadAttachments,
   };
 })();

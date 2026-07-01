@@ -35,7 +35,7 @@
         <button data-screen="rfqs" data-title="Gói thầu (RFQ)"><span>□</span>Gói thầu (RFQ)</button>
         <button data-screen="items" data-title="Dòng vật tư"><span>◇</span>Dòng vật tư</button>
         <button data-screen="tasks" data-title="Task"><span>☑</span>Task</button>
-        <button data-screen="calendar" data-title="Calendar">Calendar</button>
+        <button data-screen="calendar" data-title="Calendar"><span aria-hidden="true">▣</span>Calendar</button>
         <button data-screen="clients" data-title="Khách hàng / CĐT"><span>◎</span>Khách hàng / CĐT</button>
         <button data-screen="suppliers" data-title="Nhà cung cấp"><span>◌</span>Nhà cung cấp</button>
         <button data-screen="quotes" data-title="Báo giá NCC"><span>◈</span>Báo giá NCC</button>
@@ -340,7 +340,7 @@
       rfqs:      '<button data-write onclick="OcrModule.openRfqOcr()">OCR từ thư viện</button><button class="primary" data-write onclick="RfqsModule.openCreate()">+ Tạo mới RFQ</button>',
       items:     '<button onclick="RfqItemsModule.downloadTemplate()">Tải template CSV</button><button data-large-export class="btn-green" onclick="RfqItemsModule.openExportMenu(this)">Xuất CSV ▾</button><button data-large-export class="btn-green" onclick="RfqItemsModule.openExcelMenu(this)">Xuất Excel ▾</button><button data-large-export class="btn-green" onclick="RfqItemsModule.openDonMenu(this)">Đơn ▾</button><button data-large-export onclick="RfqItemsModule.toggleExportColPanel()">Chọn cột ▼</button><button data-write onclick="RfqItemsModule.openImportMapping({defaultMode:\'update_changed\'})">Upload DS vật tư</button><button data-write onclick="RfqItemsModule.openImportMapping({defaultMode:\'selective_update\'})">Cập nhật DS vật tư</button><button data-write onclick="OcrModule.openItemOcr()">OCR từ thư viện</button><button class="primary" data-write onclick="RfqItemsModule.openCreate()">+ Thêm dòng</button>',
       tasks:     '<button class="primary" data-write onclick="TasksModule.openCreate()">+ Thêm task</button>',
-      calendar:  '<button class="primary" data-write onclick="CalendarModule.openCreate()">+ Thêm lịch</button>',
+      calendar:  '<button type="button" onclick="CalendarModule.prevWeek()">‹</button><button type="button" onclick="CalendarModule.today()">Hôm nay</button><button type="button" onclick="CalendarModule.nextWeek()">›</button><strong id="calendarWeekLabel" class="calendar-week-label"></strong><input id="calendarDateJump" class="calendar-date-jump" inputmode="numeric" placeholder="dd/mm/yyyy" aria-label="Chuyển đến ngày" onkeydown="if(event.key===\'Enter\'){event.preventDefault();CalendarModule.jumpToDate(this.value)}"><button type="button" onclick="CalendarModule.jumpToDate(document.getElementById(\'calendarDateJump\').value)">Đi đến</button><button class="primary" data-write onclick="CalendarModule.openCreate()">+ Thêm lịch</button>',
       clients:   '<button onclick="ClientsModule.downloadClientTemplate()">Tải template CSV</button><button data-write onclick="ClientsModule.importClientsCsv()">Import CSV/XLSX</button><button onclick="ClientsModule.exportClientsCsv()">Xuất CSV</button><button class="primary" data-write onclick="ClientsModule.openCreate()">+ Thêm khách hàng</button>',
       suppliers: '<button data-write onclick="OcrModule.openSupplierOcr()">OCR danh thiếp</button><button class="primary" data-write onclick="SuppliersModule.openCreate()">+ Thêm NCC</button>',
       quotes:    '',

@@ -13,6 +13,9 @@ export async function mediaOwnerExistsSQL(db, ownerType, ownerId) {
   if (ownerType === 'rfq_item') {
     return Boolean(await db.prepare('SELECT 1 FROM rfq_items WHERE rfq_item_id = ? LIMIT 1').bind(ownerId).first());
   }
+  if (ownerType === 'calendar_event') {
+    return Boolean(await db.prepare('SELECT 1 FROM calendar_events WHERE event_id = ? AND deleted_at IS NULL LIMIT 1').bind(ownerId).first());
+  }
   return false;
 }
 
@@ -30,7 +33,7 @@ export async function listMediaFilesSQL(db, { ownerType, ownerId, limit }) {
 // Report media_files rows whose owner no longer exists in D1.
 // D1-side only — no R2 listing, no R2 delete, no D1 delete.
 export async function getOrphanMediaReportSQL(db) {
-  const [quoteRow, rfqItemRow, samplesRes] = await Promise.all([
+  const [quoteRow, rfqItemRow, calendarEventRow, samplesRes] = await Promise.all([
     db.prepare(
       `SELECT COUNT(*) AS n FROM media_files mf
        WHERE mf.owner_type = 'quote'
@@ -46,6 +49,13 @@ export async function getOrphanMediaReportSQL(db) {
          )`
     ).first(),
     db.prepare(
+      `SELECT COUNT(*) AS n FROM media_files mf
+       WHERE mf.owner_type = 'calendar_event'
+         AND NOT EXISTS (
+           SELECT 1 FROM calendar_events ce WHERE ce.event_id = mf.owner_id AND ce.deleted_at IS NULL
+         )`
+    ).first(),
+    db.prepare(
       `SELECT mf.file_id, mf.owner_type, mf.owner_id, mf.file_kind, mf.r2_key, mf.created_at
        FROM media_files mf
        WHERE
@@ -53,15 +63,20 @@ export async function getOrphanMediaReportSQL(db) {
            SELECT 1 FROM supplier_quotes sq WHERE sq.quote_id = mf.owner_id
          ))
          OR
-         (mf.owner_type = 'rfq_item' AND NOT EXISTS (
-           SELECT 1 FROM rfq_items ri WHERE ri.rfq_item_id = mf.owner_id
-         ))
+          (mf.owner_type = 'rfq_item' AND NOT EXISTS (
+            SELECT 1 FROM rfq_items ri WHERE ri.rfq_item_id = mf.owner_id
+          ))
+          OR
+          (mf.owner_type = 'calendar_event' AND NOT EXISTS (
+            SELECT 1 FROM calendar_events ce WHERE ce.event_id = mf.owner_id AND ce.deleted_at IS NULL
+          ))
        ORDER BY mf.created_at ASC LIMIT 20`
     ).all(),
   ]);
   return {
     quote_orphan_count:    quoteRow?.n || 0,
     rfq_item_orphan_count: rfqItemRow?.n || 0,
+    calendar_event_orphan_count: calendarEventRow?.n || 0,
     samples:               samplesRes.results || [],
   };
 }

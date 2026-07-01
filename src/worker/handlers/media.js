@@ -12,9 +12,11 @@ const ALLOWED_UPLOADS = new Set([
   'quote:quote_evidence_image',
   'rfq_item:document_pdf',
   'rfq_item:item_image',
+  'calendar_event:calendar_evidence_image',
+  'calendar_event:calendar_document_pdf',
 ]);
-const PDF_KINDS = new Set(['quote_pdf', 'document_pdf']);
-const IMAGE_KINDS = new Set(['item_image', 'quote_evidence_image']);
+const PDF_KINDS = new Set(['quote_pdf', 'document_pdf', 'calendar_document_pdf']);
+const IMAGE_KINDS = new Set(['item_image', 'quote_evidence_image', 'calendar_evidence_image']);
 
 export async function handleMedia(action, request, env, ctx, actor) {
   if (action === 'getMediaFiles') return listMedia(request, env, actor);
