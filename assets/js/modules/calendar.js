@@ -10,6 +10,14 @@
   var _calendarLightboxImages = [];
   var _calendarLightboxIndex = 0;
   var _calendarLightboxEl = null;
+  var _calendarMediaSummary = {};
+  var _hoveredSlot = null;
+  var _nowTimer = null;
+  var _selectedEventId = '';
+  var _tooltipEl = null;
+  var _tooltipTimer = null;
+  var _contextMenuEl = null;
+  var _contextEventId = '';
 
   var COLLAPSED_START = 7 * 60;
   var COLLAPSED_END = 19 * 60;
@@ -17,7 +25,6 @@
   var EXPANDED_END = 24 * 60;
   var SLOT = 30;
   var SLOT_HEIGHT = 34;
-  var OWNER_COLORS = ['#6f8fbf', '#6f9d83', '#bd8b62', '#679b99', '#8c7fb2', '#b57d7d', '#6f91a8', '#a48868'];
 
   function setupOnce() {
     if (_setupDone) return;
@@ -26,6 +33,11 @@
     document.addEventListener('pointerup', onPointerUp);
     document.addEventListener('pointercancel', onPointerUp);
     document.addEventListener('keydown', onCalendarLightboxKeydown);
+    document.addEventListener('click', closeEventContextMenu);
+    window.addEventListener('resize', hideEventTooltip);
+    window.addEventListener('scroll', hideEventTooltip, true);
+    window.addEventListener('scroll', closeEventContextMenu, true);
+    _nowTimer = window.setInterval(updateCurrentTimeLine, 60000);
   }
 
   function init() { load(true); }
@@ -45,6 +57,8 @@
   }
 
   function renderGrid() {
+    hideEventTooltip();
+    closeEventContextMenu();
     var root = document.getElementById('calendarRoot');
     if (!root) return;
     var days = weekDays(state.weekStart);
@@ -53,15 +67,18 @@
         '<div class="calendar-grid">' +
           '<div class="calendar-time-head"></div>' +
           days.map(function (d) {
-            return '<div class="calendar-day-head">' + dayName(d) + '<span>' + fmtDay(d) + '</span></div>';
+            return '<div class="calendar-day-head ' + dayColumnClasses(d) + '" data-date="' + API.esc(d) + '">' + dayName(d) + '<span>' + fmtDay(d) + '</span></div>';
           }).join('') +
           '<div class="calendar-time-col">' + timeSlots().map(function (m) {
-            return '<div class="calendar-time-slot">' + timeLabel(m) + '</div>';
+            return '<div class="calendar-time-slot" data-minute="' + m + '">' + timeLabel(m) + '</div>';
           }).join('') + '</div>' +
           days.map(renderDayColumn).join('') +
         '</div>' +
       '</div>';
+    bindGridHover(root);
+    bindEventInteractions(root);
     updateWeekLabel(days);
+    updateCurrentTimeLine();
     Auth.applyRoleUI();
   }
 
@@ -76,9 +93,12 @@
       return '<button type="button" class="calendar-slot" data-date="' + API.esc(date) + '" data-minute="' + m + '" onclick="CalendarModule.openCreate(\'' + API.esc(date) + '\',' + m + ')"></button>';
     }).join('');
     var eventHtml = events.map(renderEventBlock).join('');
-    return '<div class="calendar-day-col" data-date="' + API.esc(date) + '">' +
+    var nowLine = date === vnToday() && vnNowMinutes() >= activeDayStart() && vnNowMinutes() < activeDayEnd()
+      ? '<div class="calendar-now-line"></div>' : '';
+    return '<div class="calendar-day-col ' + dayColumnClasses(date) + '" data-date="' + API.esc(date) + '">' +
       '<div class="calendar-slots">' + slotHtml + '</div>' +
       '<div class="calendar-events-layer">' + eventHtml + '</div>' +
+      nowLine +
     '</div>';
   }
 
@@ -93,15 +113,18 @@
     var gap = 3;
     var width = 'calc(' + (100 / laneCount) + '% - ' + gap + 'px)';
     var left = 'calc(' + (lane * 100 / laneCount) + '% + ' + Math.max(0, lane * gap / laneCount) + 'px)';
-    var color = ownerColor(ev.owner_id || '');
     var editable = canEdit(ev);
-    var cls = editable ? 'calendar-event can-drag' : 'calendar-event readonly';
-    return '<div class="' + cls + '" data-event-id="' + API.esc(ev.event_id) + '" style="top:' + top + 'px;height:' + height + 'px;left:' + left + ';width:' + width + ';border-color:' + color + ';background:' + tint(color) + '"' +
+    var duration = Math.max(SLOT, Number(ev.duration_minutes || end - start || SLOT));
+    var durationClass = duration <= 30 ? 'cal-duration-short' : duration < 90 ? 'cal-duration-medium' : 'cal-duration-long';
+    var attachmentHtml = duration >= 90 ? renderEventAttachmentSummary(ev) : '';
+    var cls = (editable ? 'calendar-event can-drag' : 'calendar-event readonly') + ' ' + eventStatusClass(ev.status) + ' cal-shade-' + eventShadeIndex(ev.event_id) + ' ' + durationClass + (_selectedEventId === ev.event_id ? ' calendar-event-selected' : '');
+    return '<div class="' + cls + '" data-event-id="' + API.esc(ev.event_id) + '" style="top:' + top + 'px;height:' + height + 'px;left:' + left + ';width:' + width + '"' +
       (editable ? ' onpointerdown="CalendarModule.startDrag(event,\'' + API.esc(ev.event_id) + '\')"' : '') +
-      ' onclick="CalendarModule.openEdit(\'' + API.esc(ev.event_id) + '\',event)">' +
-        '<div class="cal-ev-time">' + API.esc(ev.start_time) + ' - ' + API.esc(ev.end_time) + (Number(ev.media_count || 0) > 0 ? '<span class="cal-media-indicator" title="Có file đính kèm">📎</span>' : '') + '</div>' +
+      ' onclick="CalendarModule.selectEvent(\'' + API.esc(ev.event_id) + '\',event)" ondblclick="CalendarModule.openEdit(\'' + API.esc(ev.event_id) + '\',event)" oncontextmenu="CalendarModule.openEventContextMenu(event,\'' + API.esc(ev.event_id) + '\')">' +
+        '<div class="cal-ev-time">' + API.esc(ev.start_time) + ' - ' + API.esc(ev.end_time) + '</div>' +
         '<div class="cal-ev-title">' + API.esc(ev.title) + '</div>' +
-        '<div class="cal-ev-meta">' + API.esc(ev.owner_name || '') + (ev.company_name ? ' · ' + API.esc(ev.company_name) : '') + '</div>' +
+        (duration >= 60 && ev.company_name ? '<div class="cal-ev-meta">' + API.esc(ev.company_name) + '</div>' : '') +
+        (duration >= 90 ? '<div class="cal-ev-attachments">' + attachmentHtml + '</div>' : '') +
       '</div>';
   }
 
@@ -144,6 +167,7 @@
   }
 
   function startDrag(e, eventId) {
+    if (e.button !== undefined && e.button !== 0) return;
     var ev = findEvent(eventId);
     if (!ev || !canEdit(ev)) return;
     e.preventDefault();
@@ -229,6 +253,16 @@
     openForm(ev);
   }
 
+  function selectEvent(eventId, clickEvent) {
+    if (Date.now() < _suppressClickUntil || (clickEvent && _drag && _drag.moved)) return;
+    var root = document.getElementById('calendarRoot');
+    if (!root) return;
+    root.querySelectorAll('.calendar-event-selected').forEach(function (el) { el.classList.remove('calendar-event-selected'); });
+    _selectedEventId = eventId;
+    var selected = root.querySelector('.calendar-event[data-event-id="' + eventId + '"]');
+    if (selected) selected.classList.add('calendar-event-selected');
+  }
+
   function openForm(row) {
     var isEdit = !!row.event_id;
     var editable = !isEdit || canEdit(row);
@@ -292,6 +326,14 @@
       var rows = data.rows || [];
       _calendarMediaRows = rows;
       _calendarLightboxImages = rows.filter(function (file) { return /^image\//i.test(file.mime_type || ''); });
+      _calendarMediaSummary[eventId] = {
+        images: _calendarLightboxImages.length,
+        documents: rows.length - _calendarLightboxImages.length,
+        total: rows.length,
+      };
+      var eventRow = findEvent(eventId);
+      if (eventRow) eventRow.media_count = rows.length;
+      updateEventAttachmentSummary(eventId);
       var editable = canEdit(findEvent(eventId));
       box.innerHTML = rows.length ? '<div class="calendar-media-grid">' + rows.map(function (file) {
         var name = API.esc(file.file_name || file.file_id);
@@ -410,6 +452,190 @@
     if (event.key === 'ArrowRight') nextMediaPreview();
   }
 
+  function eventStatusClass(status) {
+    var value = String(status || 'scheduled').toLowerCase();
+    if (value === 'in_progress') return 'cal-status-progress';
+    if (value === 'done' || value === 'completed') return 'cal-status-completed';
+    if (value === 'postponed') return 'cal-status-postponed';
+    if (value === 'cancelled') return 'cal-status-cancelled';
+    return 'cal-status-scheduled';
+  }
+
+  function eventStatusLabel(status) {
+    var value = String(status || 'scheduled').toLowerCase();
+    if (value === 'in_progress') return 'Đang thực hiện';
+    if (value === 'done' || value === 'completed') return 'Hoàn thành';
+    if (value === 'postponed') return 'Tạm hoãn';
+    if (value === 'cancelled') return 'Đã hủy';
+    return 'Đã lên lịch';
+  }
+
+  function eventShadeIndex(eventId) {
+    var hash = 0;
+    String(eventId || 'event').split('').forEach(function (ch) { hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0; });
+    return Math.abs(hash) % 3;
+  }
+
+  function renderEventAttachmentSummary(ev) {
+    var summary = _calendarMediaSummary[ev.event_id];
+    var parts = [];
+    if (summary) {
+      if (summary.images > 0) parts.push('<span title="Ảnh">📷' + summary.images + '</span>');
+      if (summary.documents > 0) parts.push('<span title="Tài liệu">📄' + summary.documents + '</span>');
+    } else if (Number(ev.media_count || 0) > 0) {
+      parts.push('<span title="File đính kèm">📎' + Number(ev.media_count) + '</span>');
+    }
+    if (ev.external_url) parts.push('<span title="Link tài liệu">🔗</span>');
+    return parts.join('');
+  }
+
+  function updateEventAttachmentSummary(eventId) {
+    var eventRow = findEvent(eventId);
+    var block = document.querySelector('#calendarRoot .calendar-event[data-event-id="' + eventId + '"] .cal-ev-attachments');
+    if (block && eventRow) block.innerHTML = renderEventAttachmentSummary(eventRow);
+  }
+
+  function bindEventInteractions(root) {
+    if (root.dataset.eventInteractionsBound === '1') return;
+    root.dataset.eventInteractionsBound = '1';
+    root.addEventListener('mouseover', function (event) {
+      var block = event.target.closest && event.target.closest('.calendar-event');
+      if (!block || !root.contains(block) || (event.relatedTarget && block.contains(event.relatedTarget))) return;
+      clearTimeout(_tooltipTimer);
+      _tooltipTimer = setTimeout(function () {
+        var row = findEvent(block.getAttribute('data-event-id'));
+        if (row && document.body.contains(block)) showEventTooltip(row, block);
+      }, 275);
+    });
+    root.addEventListener('mouseout', function (event) {
+      var block = event.target.closest && event.target.closest('.calendar-event');
+      if (!block || (event.relatedTarget && block.contains(event.relatedTarget))) return;
+      hideEventTooltip();
+    });
+  }
+
+  function ensureEventTooltip() {
+    if (_tooltipEl) return;
+    _tooltipEl = document.createElement('div');
+    _tooltipEl.className = 'calendar-event-tooltip hidden';
+    document.body.appendChild(_tooltipEl);
+  }
+
+  function showEventTooltip(ev, block) {
+    ensureEventTooltip();
+    var attachmentText = attachmentSummaryText(ev);
+    var rows = [
+      '<strong>' + API.esc(ev.title || '') + '</strong>',
+      '<div><span>Ngày</span>' + API.esc(formatFullDate(ev.event_date)) + '</div>',
+      '<div><span>Giờ</span>' + API.esc(ev.start_time || '') + ' – ' + API.esc(ev.end_time || '') + '</div>',
+      ev.company_name ? '<div><span>Công ty</span>' + API.esc(ev.company_name) + '</div>' : '',
+      ev.owner_name ? '<div><span>Phụ trách</span>' + API.esc(ev.owner_name) + '</div>' : '',
+      '<div><span>Trạng thái</span>' + API.esc(eventStatusLabel(ev.status)) + '</div>',
+      attachmentText ? '<div><span>Đính kèm</span>' + API.esc(attachmentText) + '</div>' : '',
+    ].filter(Boolean);
+    _tooltipEl.innerHTML = rows.join('');
+    _tooltipEl.classList.remove('hidden');
+    var rect = block.getBoundingClientRect();
+    var tipRect = _tooltipEl.getBoundingClientRect();
+    var gap = 8;
+    var left = rect.right + gap;
+    if (left + tipRect.width > window.innerWidth - gap) left = rect.left - tipRect.width - gap;
+    left = Math.max(gap, Math.min(left, window.innerWidth - tipRect.width - gap));
+    var top = Math.max(gap, Math.min(rect.top, window.innerHeight - tipRect.height - gap));
+    _tooltipEl.style.left = left + 'px';
+    _tooltipEl.style.top = top + 'px';
+  }
+
+  function hideEventTooltip() {
+    clearTimeout(_tooltipTimer);
+    if (_tooltipEl) _tooltipEl.classList.add('hidden');
+  }
+
+  function attachmentSummaryText(ev) {
+    var summary = _calendarMediaSummary[ev.event_id];
+    var parts = [];
+    if (summary) {
+      if (summary.images) parts.push('📷 ' + summary.images);
+      if (summary.documents) parts.push('📄 ' + summary.documents);
+    } else if (Number(ev.media_count || 0) > 0) {
+      parts.push('📎 ' + Number(ev.media_count));
+    }
+    if (ev.external_url) parts.push('🔗 Drive');
+    return parts.join('  ');
+  }
+
+  function formatFullDate(dateStr) {
+    var parts = String(dateStr || '').split('-');
+    return parts.length === 3 ? parts[2] + '/' + parts[1] + '/' + parts[0] : dateStr || '';
+  }
+
+  function ensureEventContextMenu() {
+    if (_contextMenuEl) return;
+    _contextMenuEl = document.createElement('div');
+    _contextMenuEl.className = 'calendar-context-menu hidden';
+    _contextMenuEl.innerHTML = '<button type="button" data-action="edit">Edit</button>' +
+      '<button type="button" data-action="duplicate">Duplicate</button>' +
+      '<button type="button" data-action="move">Move</button>' +
+      '<button type="button" data-action="delete" class="danger">Delete</button>';
+    _contextMenuEl.addEventListener('click', function (event) {
+      var button = event.target.closest('button[data-action]');
+      if (!button) return;
+      event.stopPropagation();
+      var eventId = _contextEventId;
+      closeEventContextMenu();
+      if (button.dataset.action === 'edit') openEdit(eventId);
+      if (button.dataset.action === 'duplicate') duplicateEvent(eventId);
+      if (button.dataset.action === 'move') moveEvent(eventId);
+      if (button.dataset.action === 'delete') deleteEvent(eventId);
+    });
+    document.body.appendChild(_contextMenuEl);
+  }
+
+  function openEventContextMenu(event, eventId) {
+    if (!window.matchMedia('(hover: hover) and (pointer: fine)').matches) return;
+    var row = findEvent(eventId);
+    if (!row || !canEdit(row)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    hideEventTooltip();
+    selectEvent(eventId);
+    ensureEventContextMenu();
+    _contextEventId = eventId;
+    _contextMenuEl.classList.remove('hidden');
+    var rect = _contextMenuEl.getBoundingClientRect();
+    _contextMenuEl.style.left = Math.max(8, Math.min(event.clientX, window.innerWidth - rect.width - 8)) + 'px';
+    _contextMenuEl.style.top = Math.max(8, Math.min(event.clientY, window.innerHeight - rect.height - 8)) + 'px';
+  }
+
+  function closeEventContextMenu() {
+    if (_contextMenuEl) _contextMenuEl.classList.add('hidden');
+  }
+
+  function duplicateEvent(eventId) {
+    var row = findEvent(eventId);
+    if (!row || !canEdit(row)) return;
+    openForm({
+      title: row.title,
+      company_name: row.company_name,
+      event_date: row.event_date,
+      start_time: row.start_time,
+      end_time: row.end_time,
+      note: row.note,
+      status: row.status,
+      external_url: row.external_url,
+    });
+  }
+
+  function moveEvent(eventId) {
+    var row = findEvent(eventId);
+    if (!row || !canEdit(row)) return;
+    openEdit(eventId);
+    window.setTimeout(function () {
+      var input = document.querySelector('#modalBody [name="eventDate"]');
+      if (input) input.focus();
+    }, 0);
+  }
+
   async function deleteEvent(eventId) {
     var ev = findEvent(eventId);
     if (!ev || !canEdit(ev)) return;
@@ -514,6 +740,63 @@
     return map.year + '-' + map.month + '-' + map.day;
   }
 
+  function vnNowMinutes() {
+    var parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Ho_Chi_Minh', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(new Date());
+    var map = {};
+    parts.forEach(function (part) { map[part.type] = part.value; });
+    return Number(map.hour || 0) * 60 + Number(map.minute || 0);
+  }
+
+  function dayColumnClasses(date) {
+    var day = partsToUtc(date).getUTCDay();
+    var classes = day === 6 ? 'calendar-saturday' : day === 0 ? 'calendar-sunday' : '';
+    if (date === vnToday()) classes += (classes ? ' ' : '') + 'calendar-today';
+    return classes;
+  }
+
+  function bindGridHover(root) {
+    if (root.dataset.crosshairBound === '1') return;
+    root.dataset.crosshairBound = '1';
+    root.addEventListener('mouseover', function (event) {
+      var slot = event.target.closest && event.target.closest('.calendar-slot');
+      if (!slot || !root.contains(slot) || slot === _hoveredSlot) return;
+      clearGridHover(root);
+      _hoveredSlot = slot;
+      var minute = slot.getAttribute('data-minute');
+      var dayCol = slot.closest('.calendar-day-col');
+      var date = dayCol && dayCol.getAttribute('data-date');
+      root.querySelectorAll('.calendar-slot[data-minute="' + minute + '"]').forEach(function (rowSlot) { rowSlot.classList.add('calendar-crosshair-row'); });
+      var timeLabel = root.querySelector('.calendar-time-slot[data-minute="' + minute + '"]');
+      if (timeLabel) timeLabel.classList.add('calendar-crosshair-row');
+      if (dayCol) dayCol.classList.add('calendar-crosshair-column');
+      var head = date ? root.querySelector('.calendar-day-head[data-date="' + date + '"]') : null;
+      if (head) head.classList.add('calendar-crosshair-column');
+      slot.classList.add('calendar-crosshair-intersection');
+    });
+    root.addEventListener('mouseleave', function () { clearGridHover(root); });
+  }
+
+  function clearGridHover(root) {
+    root.querySelectorAll('.calendar-crosshair-row').forEach(function (slot) { slot.classList.remove('calendar-crosshair-row'); });
+    root.querySelectorAll('.calendar-crosshair-column').forEach(function (column) { column.classList.remove('calendar-crosshair-column'); });
+    root.querySelectorAll('.calendar-crosshair-intersection').forEach(function (slot) { slot.classList.remove('calendar-crosshair-intersection'); });
+    _hoveredSlot = null;
+  }
+
+  function updateCurrentTimeLine() {
+    var line = document.querySelector('#calendarRoot .calendar-now-line');
+    if (!line) return;
+    var minute = vnNowMinutes();
+    if (minute < activeDayStart() || minute >= activeDayEnd()) {
+      line.classList.add('hidden');
+      return;
+    }
+    line.classList.remove('hidden');
+    line.style.top = ((minute - activeDayStart()) / SLOT * SLOT_HEIGHT) + 'px';
+  }
+
   function fmtDay(dateStr) {
     var p = String(dateStr || '').split('-');
     return (p[2] || '') + '/' + (p[1] || '');
@@ -532,16 +815,6 @@
     return Math.max(activeDayStart(), Math.min(activeScheduleEnd() - SLOT, minutes));
   }
 
-  function ownerColor(ownerId) {
-    var hash = 0;
-    String(ownerId || 'owner').split('').forEach(function (ch) { hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0; });
-    return OWNER_COLORS[Math.abs(hash) % OWNER_COLORS.length];
-  }
-
-  function tint(color) {
-    return 'color-mix(in srgb, ' + color + ' 16%, white)';
-  }
-
   function pad2(n) { return String(n).padStart(2, '0'); }
 
   window.CalendarModule = {
@@ -549,6 +822,8 @@
     load: load,
     openCreate: openCreate,
     openEdit: openEdit,
+    selectEvent: selectEvent,
+    openEventContextMenu: openEventContextMenu,
     deleteEvent: deleteEvent,
     renderGrid: renderGrid,
     startDrag: startDrag,
