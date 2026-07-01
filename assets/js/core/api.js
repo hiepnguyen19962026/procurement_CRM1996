@@ -141,8 +141,10 @@
     });
   }
 
-  function mediaUrl(fileId) {
-    return '/api/media?fileId=' + encodeURIComponent(fileId || '');
+  function mediaUrl(fileId, ownerType, ownerId) {
+    return '/api/media?fileId=' + encodeURIComponent(fileId || '')
+      + '&ownerType=' + encodeURIComponent(ownerType || '')
+      + '&ownerId=' + encodeURIComponent(ownerId || '');
   }
 
   function esc(value) {

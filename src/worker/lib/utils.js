@@ -1,4 +1,4 @@
-import { getLastEntityIdSQL } from '../db/system-queries.js';
+import { getLastEntityIdSQL, nextEntitySequenceSQL } from '../db/system-queries.js';
 
 export function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
@@ -35,9 +35,11 @@ export function clampLimit(value, fallback = 50, max = 200) {
 
 export async function nextEntityId(db, table, idCol, prefix) {
   const year = new Date().getUTCFullYear();
-  const row = await getLastEntityIdSQL(db, table, idCol, `${prefix}-${year}-%`);
-  const last = row?.id ? Number(String(row.id).split('-').pop()) : 0;
-  return `${prefix}-${year}-${String((Number.isFinite(last) ? last : 0) + 1).padStart(5, '0')}`;
+  const key = `${prefix}-${year}`;
+  const seedRow = await getLastEntityIdSQL(db, table, idCol, `${prefix}-${year}-%`);
+  const seed = seedRow?.id ? Number(String(seedRow.id).split('-').pop()) : 0;
+  const row = await nextEntitySequenceSQL(db, key, Number.isFinite(seed) ? seed : 0);
+  return `${prefix}-${year}-${String(Number(row?.last_value || 1)).padStart(5, '0')}`;
 }
 
 export function makeId(prefix) {

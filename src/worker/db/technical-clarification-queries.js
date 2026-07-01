@@ -1,3 +1,5 @@
+import { nextEntitySequenceSQL } from './system-queries.js';
+
 export async function listTechnicalClarificationsSQL(db, rfqItemId) {
   const res = await db.prepare(
     `SELECT tc.*, mf.file_name AS attachment_file_name
@@ -21,11 +23,12 @@ export async function nextClarificationId(db) {
   const yyyy = d.toISOString().slice(0, 4);
   const mmdd = d.toISOString().slice(5, 10).replace('-', '');
   const prefix = `Cla-${yyyy}-${mmdd}`;
-  const row = await db.prepare(
+  const seedRow = await db.prepare(
     `SELECT clarification_id FROM technical_clarifications WHERE clarification_id LIKE ? ORDER BY clarification_id DESC LIMIT 1`
   ).bind(`${prefix}-%`).first();
-  const last = row?.clarification_id ? Number(row.clarification_id.split('-').pop()) : 0;
-  const seq  = (Number.isFinite(last) ? last : 0) + 1;
+  const last = seedRow?.clarification_id ? Number(seedRow.clarification_id.split('-').pop()) : 0;
+  const row = await nextEntitySequenceSQL(db, prefix, Number.isFinite(last) ? last : 0);
+  const seq = Number(row?.last_value || 1);
   return `${prefix}-${String(seq).padStart(2, '0')}`;
 }
 

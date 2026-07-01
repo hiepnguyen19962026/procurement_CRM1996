@@ -13,8 +13,11 @@ export default async function handler(request) {
     if (!actor) return json({ ok: false, error: 'Chua dang nhap' }, 401);
     if (!ACCESS_ROLES.has(actor.role)) return json({ ok: false, error: 'Khong co quyen' }, 403);
 
-    const fileId = new URL(request.url).searchParams.get('fileId') || '';
-    if (!fileId) return json({ ok: false, error: 'Thieu fileId' }, 400);
+    const params = new URL(request.url).searchParams;
+    const fileId = params.get('fileId') || '';
+    const ownerType = params.get('ownerType') || params.get('owner_type') || '';
+    const ownerId = params.get('ownerId') || params.get('owner_id') || '';
+    if (!fileId || !ownerType || !ownerId) return json({ ok: false, error: 'Thieu ownerType, ownerId hoac fileId' }, 400);
 
     const url = process.env.WORKER_URL;
     if (!url || !process.env.WORKER_SECRET) throw new Error('Missing WORKER_URL or WORKER_SECRET');
@@ -26,7 +29,7 @@ export default async function handler(request) {
         'X-Worker-Secret': process.env.WORKER_SECRET,
         'X-App-Actor': encodeActor(actor),
       },
-      body: JSON.stringify({ action: 'getMediaFileContent', fileId }),
+      body: JSON.stringify({ action: 'getMediaFileContent', fileId, ownerType, ownerId }),
       signal: AbortSignal.timeout(30000),
     });
 

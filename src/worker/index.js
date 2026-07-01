@@ -25,7 +25,7 @@ import { actorFromRequest, validateActorSession, validateSecret } from './lib/au
 import { json, readJson } from './lib/utils.js';
 import { runScheduledTasks } from './handlers/scheduled.js';
 
-const ACCOUNT_ACTIONS = ['authLogin', 'initSetup', 'logout', 'getSession', 'changePassword', 'getAccounts', 'createAccount', 'updateAccount'];
+const ACCOUNT_ACTIONS = ['authLogin', 'initSetup', 'logout', 'getSession', 'changePassword', 'getAccounts', 'createAccount', 'updateAccount', 'logPermissionDenied'];
 const CLIENT_ACTIONS = ['getClients', 'createClient', 'updateClient', 'archiveClient'];
 const CLIENT_EQUIPMENT_ACTIONS    = ['getClientEquipment', 'createClientEquipment', 'updateClientEquipment', 'archiveClientEquipment', 'importClientEquipment'];
 const CLIENT_CONTACT_ACTIONS      = ['getClientContacts', 'createClientContact', 'updateClientContact', 'archiveClientContact', 'importClientContacts'];
@@ -70,30 +70,39 @@ export default {
       }
     }
     let res;
-    if (ACCOUNT_ACTIONS.includes(action)) res = await handleAccounts(action, request, env, ctx, actor);
-    else if (CLIENT_ACTIONS.includes(action)) res = await handleClients(action, request, env, ctx, actor, parsedBody);
-    else if (CLIENT_EQUIPMENT_ACTIONS.includes(action))    res = await handleClientEquipment(action, request, env, ctx, actor);
-    else if (CLIENT_CONTACT_ACTIONS.includes(action))      res = await handleClientContacts(action, request, env, ctx, actor);
-    else if (CLIENT_BANK_ACCOUNT_ACTIONS.includes(action)) res = await handleClientBankAccounts(action, request, env, ctx, actor);
-    else if (CLIENT_LEGAL_HISTORY_ACTIONS.includes(action))res = await handleClientLegalHistory(action, request, env, ctx, actor);
-    else if (RFQ_CONTACT_ACTIONS.includes(action))         res = await handleRfqContacts(action, request, env, ctx, actor);
-    else if (SUPPLIER_ACTIONS.includes(action)) res = await handleSuppliers(action, request, env, ctx, actor);
-    else if (RFQ_ACTIONS.includes(action)) res = await handleRfqs(action, request, env, ctx, actor);
-    else if (RFQ_ITEM_ACTIONS.includes(action)) res = await handleRfqItems(action, request, env, ctx, actor);
-    else if (TECHNICAL_CLARIFICATION_ACTIONS.includes(action)) res = await handleTechnicalClarifications(action, request, env, ctx, actor);
-    else if (SUPPLIER_QUOTE_ACTIONS.includes(action)) res = await handleSupplierQuotes(action, request, env, ctx, actor);
-    else if (PRICING_DECISION_ACTIONS.includes(action)) res = await handlePricingDecisions(action, request, env, ctx, actor);
-    else if (AUDIT_ACTIONS.includes(action)) res = await handleAudit(action, request, env, ctx, actor);
-    else if (MEDIA_ACTIONS.includes(action)) res = await handleMedia(action, request, env, ctx, actor);
-    else if (IMPORT_ACTIONS.includes(action)) res = await handleImports(action, request, env, ctx, actor);
-    else if (ITEM_ACTIONS.includes(action)) res = await handleItems(action, request, env, ctx, actor);
-    else if (PRICE_HISTORY_ACTIONS.includes(action)) res = await handlePriceHistory(action, request, env, ctx, actor);
-    else if (CONTRACT_ACTIONS.includes(action)) res = await handleContracts(action, request, env, ctx, actor);
-    else if (DELIVERY_ACTIONS.includes(action)) res = await handleDelivery(action, request, env, ctx, actor);
-    else if (DASHBOARD_V2_ACTIONS.includes(action)) res = await handleDashboard(action, request, env, ctx, actor);
-    else if (OCR_ACTIONS.includes(action)) res = await handleOcr(action, request, env, ctx, actor);
-    else if (TASK_ACTIONS.includes(action)) res = await handleTasks(action, request, env, ctx, actor);
-    else res = json({ ok: false, error: 'Unknown action' }, 400);
+    try {
+      if (ACCOUNT_ACTIONS.includes(action)) res = await handleAccounts(action, request, env, ctx, actor);
+      else if (CLIENT_ACTIONS.includes(action)) res = await handleClients(action, request, env, ctx, actor, parsedBody);
+      else if (CLIENT_EQUIPMENT_ACTIONS.includes(action))    res = await handleClientEquipment(action, request, env, ctx, actor);
+      else if (CLIENT_CONTACT_ACTIONS.includes(action))      res = await handleClientContacts(action, request, env, ctx, actor);
+      else if (CLIENT_BANK_ACCOUNT_ACTIONS.includes(action)) res = await handleClientBankAccounts(action, request, env, ctx, actor);
+      else if (CLIENT_LEGAL_HISTORY_ACTIONS.includes(action))res = await handleClientLegalHistory(action, request, env, ctx, actor);
+      else if (RFQ_CONTACT_ACTIONS.includes(action))         res = await handleRfqContacts(action, request, env, ctx, actor);
+      else if (SUPPLIER_ACTIONS.includes(action)) res = await handleSuppliers(action, request, env, ctx, actor);
+      else if (RFQ_ACTIONS.includes(action)) res = await handleRfqs(action, request, env, ctx, actor);
+      else if (RFQ_ITEM_ACTIONS.includes(action)) res = await handleRfqItems(action, request, env, ctx, actor);
+      else if (TECHNICAL_CLARIFICATION_ACTIONS.includes(action)) res = await handleTechnicalClarifications(action, request, env, ctx, actor);
+      else if (SUPPLIER_QUOTE_ACTIONS.includes(action)) res = await handleSupplierQuotes(action, request, env, ctx, actor);
+      else if (PRICING_DECISION_ACTIONS.includes(action)) res = await handlePricingDecisions(action, request, env, ctx, actor);
+      else if (AUDIT_ACTIONS.includes(action)) res = await handleAudit(action, request, env, ctx, actor);
+      else if (MEDIA_ACTIONS.includes(action)) res = await handleMedia(action, request, env, ctx, actor);
+      else if (IMPORT_ACTIONS.includes(action)) res = await handleImports(action, request, env, ctx, actor);
+      else if (ITEM_ACTIONS.includes(action)) res = await handleItems(action, request, env, ctx, actor);
+      else if (PRICE_HISTORY_ACTIONS.includes(action)) res = await handlePriceHistory(action, request, env, ctx, actor);
+      else if (CONTRACT_ACTIONS.includes(action)) res = await handleContracts(action, request, env, ctx, actor);
+      else if (DELIVERY_ACTIONS.includes(action)) res = await handleDelivery(action, request, env, ctx, actor);
+      else if (DASHBOARD_V2_ACTIONS.includes(action)) res = await handleDashboard(action, request, env, ctx, actor);
+      else if (OCR_ACTIONS.includes(action)) res = await handleOcr(action, request, env, ctx, actor);
+      else if (TASK_ACTIONS.includes(action)) res = await handleTasks(action, request, env, ctx, actor);
+      else res = json({ ok: false, error: 'Unknown action' }, 400);
+    } catch (err) {
+      const message = String(err?.message || err);
+      if (message.startsWith('Migration required:')) {
+        res = json({ ok: false, error: message }, 500);
+      } else {
+        throw err;
+      }
+    }
     return cors(res, allowedOrigin);
   },
 

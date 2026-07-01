@@ -3,19 +3,20 @@ import {
   getPriceHistorySummarySQL,
   searchPriceHistorySQL,
 } from '../db/price-history-queries.js';
-import { ALL_ROLES, requireRole } from '../lib/auth.js';
+import { ALL_ROLES, canExportLargeData, requireRole } from '../lib/auth.js';
+import { writeActionLog } from '../lib/action-log.js';
 import { cleanNumber, cleanString } from '../lib/normalize.js';
 import { clampLimit, json, readJson } from '../lib/utils.js';
 import { consumeKvRateLimit } from '../lib/cache.js';
 
 const VALID_SOURCE_CHANNEL = new Set(['', 'zalo', 'wechat', 'email', 'phone', 'direct', 'other']);
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MAX_EXPORT_ROWS = 5000;
+const MAX_EXPORT_ROWS = 25000;
 
-export async function handlePriceHistory(action, request, env, _ctx, actor) {
+export async function handlePriceHistory(action, request, env, ctx, actor) {
   if (action === 'searchPriceHistory')    return searchHistory(request, env, actor);
   if (action === 'getPriceHistorySummary') return summaryHistory(request, env, actor);
-  if (action === 'exportPriceHistoryCsv') return exportHistoryCsv(request, env, actor);
+  if (action === 'exportPriceHistoryCsv') return exportHistoryCsv(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown price history action' }, 400);
 }
 
@@ -69,7 +70,7 @@ async function summaryHistory(request, env, actor) {
   return json({ ok: true, summary });
 }
 
-async function exportHistoryCsv(request, env, actor) {
+async function exportHistoryCsv(request, env, ctx, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
   const rate = await consumeKvRateLimit(env, `s2b1:exports:actor:${actor.id}`, 5, 600);
@@ -80,6 +81,17 @@ async function exportHistoryCsv(request, env, actor) {
   if (err) return json({ ok: false, error: err }, 400);
 
   const rows = await exportPriceHistorySQL(env.DB, { ...filters, limit: MAX_EXPORT_ROWS });
+  if (rows.length > 1000 && !canExportLargeData(actor)) {
+    ctx.waitUntil(writeActionLog(env, {
+      action: 'permissionDenied',
+      entityType: 'export',
+      entityId: 'exportPriceHistoryCsv',
+      message: `${actor.displayName || actor.username || actor.id} denied price history CSV export over 1000 rows`,
+      newJson: { row_count: rows.length, filters: safeAuditFilters(filters) },
+      actor,
+    }));
+    return json({ ok: false, error: 'Chi Admin hoac Manager moi duoc xuat tai tep du lieu tren 1000 dong', row_count: rows.length }, 403);
+  }
   const csv = buildCsv(rows);
 
   // Filename includes date and a filter hint.
@@ -87,8 +99,30 @@ async function exportHistoryCsv(request, env, actor) {
   const hint = filters.rfqItemId || filters.itemId || filters.rfqId || filters.maVatTu || 'all';
   const safeHint = String(hint).replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 40);
   const filename = `price-history-${safeHint}-${today}.csv`;
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'exportPriceHistoryCsv',
+    entityType: 'price_history',
+    entityId: safeHint,
+    message: `${actor.displayName || actor.username || actor.id} exported price history CSV (${rows.length} rows)`,
+    newJson: { row_count: rows.length, filters: safeAuditFilters(filters) },
+    actor,
+  }));
 
   return json({ ok: true, filename, csv, row_count: rows.length });
+}
+
+function safeAuditFilters(filters) {
+  return {
+    rfqItemId: filters.rfqItemId,
+    itemId: filters.itemId,
+    maVatTu: filters.maVatTu,
+    supplierId: filters.supplierId,
+    rfqId: filters.rfqId,
+    clientId: filters.clientId,
+    sourceChannel: filters.sourceChannel,
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+  };
 }
 
 // Parse + sanitize all filter params from request body.

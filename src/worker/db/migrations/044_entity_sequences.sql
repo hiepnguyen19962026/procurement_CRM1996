@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS entity_sequences (
+  sequence_key TEXT PRIMARY KEY,
+  last_value   INTEGER NOT NULL DEFAULT 0,
+  updated_at   TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

@@ -12,7 +12,10 @@ const LOGIN_WINDOW_SECONDS = 15 * 60;
 export async function handleAccounts(action, request, env, ctx, actor) {
   if (action === 'authLogin') return authLogin(request, env);
   if (action === 'initSetup') return initSetup(request, env);
-  if (action === 'logout') return json({ ok: true });
+  if (action === 'logout') {
+    if (actor) ctx.waitUntil(writeActionLog(env, { action: 'logout', entityType: 'user', entityId: actor.id, actor }));
+    return json({ ok: true });
+  }
   if (action === 'getSession') {
     const denied = requireRole(actor, ALL_ROLES);
     if (denied) return denied;
@@ -22,6 +25,7 @@ export async function handleAccounts(action, request, env, ctx, actor) {
   if (action === 'getAccounts') return listAccounts(request, env, actor);
   if (action === 'createAccount') return createAccount(request, env, ctx, actor);
   if (action === 'updateAccount') return updateAccount(request, env, ctx, actor);
+  if (action === 'logPermissionDenied') return logPermissionDenied(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown account action' }, 400);
 }
 
@@ -71,10 +75,50 @@ async function authLogin(request, env) {
     );
   }
   const row = await getUserByUsernameSQL(env.DB, username);
-  if (!row || row.status !== 'active') return json({ ok: false, error: 'Sai tai khoan hoac mat khau' }, 401);
+  if (!row || row.status !== 'active') {
+    await writeLoginLog(env, username, false, 'invalid_user_or_inactive');
+    return json({ ok: false, error: 'Sai tai khoan hoac mat khau' }, 401);
+  }
   const ok = await verifyPassword(password, row.password_hash);
-  if (!ok) return json({ ok: false, error: 'Sai tai khoan hoac mat khau' }, 401);
+  if (!ok) {
+    await writeLoginLog(env, username, false, 'bad_password');
+    return json({ ok: false, error: 'Sai tai khoan hoac mat khau' }, 401);
+  }
+  await writeActionLog(env, {
+    action: 'loginSuccess',
+    entityType: 'user',
+    entityId: row.user_id,
+    message: `${row.display_name || row.username || row.user_id} logged in`,
+    actor: safeUser(row),
+  });
   return json({ ok: true, user: safeUser(row) });
+}
+
+async function writeLoginLog(env, username, success, reason) {
+  await writeActionLog(env, {
+    action: success ? 'loginSuccess' : 'loginFailure',
+    entityType: 'auth',
+    entityId: '',
+    message: `${success ? 'Successful' : 'Failed'} login for ${username}`,
+    newJson: { username, reason },
+    actor: { id: '', username, displayName: username },
+  });
+}
+
+async function logPermissionDenied(request, env, ctx, actor) {
+  const denied = requireRole(actor, ALL_ROLES);
+  if (denied) return denied;
+  const body = await readJson(request);
+  const deniedAction = cleanString(body.deniedAction || body.denied_action, 100);
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'permissionDenied',
+    entityType: 'permission',
+    entityId: deniedAction,
+    message: `${actor.displayName || actor.username || actor.id} denied action ${deniedAction}`,
+    newJson: { denied_action: deniedAction },
+    actor,
+  }));
+  return json({ ok: true });
 }
 
 async function hashRateLimitValue(value, secret) {

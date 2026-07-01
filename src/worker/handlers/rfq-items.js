@@ -1,6 +1,7 @@
 import { archiveRfqItemSQL, exportRfqItemsSQL, getRfqItemSQL, insertRfqItemSQL, listRfqItemsSQL, updateRfqItemSQL } from '../db/rfq-item-queries.js';
 import { getRfqSQL } from '../db/rfq-queries.js';
-import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
+import { deleteMediaFilesByOwnersStmt, getMediaKeysByOwnersSQL } from '../db/media-queries.js';
+import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, canExportLargeData, requireRole } from '../lib/auth.js';
 import { consumeKvRateLimit, invalidateKv } from '../lib/cache.js';
 import { writeActionLog } from '../lib/action-log.js';
 import { buildSearchText, cleanMoney, cleanNumber, cleanString, normalizeText } from '../lib/normalize.js';
@@ -15,8 +16,8 @@ export async function handleRfqItems(action, request, env, ctx, actor) {
   if (action === 'hardDeleteRfqItems') return hardDelete(request, env, ctx, actor);
   if (action === 'hardDeleteAllRfqItems') return hardDeleteAll(request, env, ctx, actor);
   if (action === 'logRfqItemImportSummary') return logImportSummary(request, env, ctx, actor);
-  if (action === 'exportRfqItemsCsv') return exportItems(request, env, actor);
-  if (action === 'exportRfqItemsJson') return exportItemsJson(request, env, actor);
+  if (action === 'exportRfqItemsCsv') return exportItems(request, env, ctx, actor);
+  if (action === 'exportRfqItemsJson') return exportItemsJson(request, env, ctx, actor);
   return json({ ok: false, error: 'Unknown RFQ item action' }, 400);
 }
 
@@ -46,7 +47,7 @@ async function listItems(request, env, actor) {
     cursor: p.cursor || '',
     sortBy: p.sortBy || '',
     sortDir: p.sortDir || '',
-    limit: clampLimit(p.limit, 500, 10000),
+    limit: clampLimit(p.limit, 500, 25000),
   });
   return json({ ok: true, ...data });
 }
@@ -254,19 +255,25 @@ async function hardDelete(request, env, ctx, actor) {
   if (ids.length > 500) return json({ ok: false, error: 'Toi da 500 dong moi lan xoa' }, 400);
   const ph = ids.map(() => '?').join(',');
   const childCounts = await getRfqItemChildCounts(env.DB, ids);
-  if (hasBusinessChildren(childCounts)) {
+  if (hasBlockingBusinessChildren(childCounts)) {
     return json({
       ok: false,
-      error: 'Khong the xoa vinh vien dong da co bao gia, can gia, hop dong, lam ro ky thuat, revision hoac media. Hay luu tru dong nay thay vi xoa.',
+      error: 'Khong the xoa vinh vien dong da co bao gia, can gia, hop dong, lam ro ky thuat hoac revision. Hay luu tru dong nay thay vi xoa.',
       counts: childCounts,
     }, 409);
   }
+  const mediaRows = await getMediaKeysByOwnersSQL(env.DB, 'rfq_item', ids);
+  if (mediaRows.length && !env.MEDIA) {
+    return json({ ok: false, error: 'R2 MEDIA binding chua cau hinh nen khong the xoa sach media' }, 500);
+  }
+  await deleteR2Objects(env, mediaRows);
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM technical_clarifications WHERE rfq_item_id IN (${ph})`).bind(...ids),
     env.DB.prepare(`DELETE FROM supplier_quotes WHERE rfq_item_id IN (${ph})`).bind(...ids),
     env.DB.prepare(`DELETE FROM pricing_decisions WHERE rfq_item_id IN (${ph})`).bind(...ids),
     env.DB.prepare(`DELETE FROM contract_items WHERE rfq_item_id IN (${ph})`).bind(...ids),
     env.DB.prepare(`DELETE FROM rfq_item_revisions WHERE rfq_item_id IN (${ph})`).bind(...ids),
+    deleteMediaFilesByOwnersStmt(env.DB, 'rfq_item', ids),
     env.DB.prepare(`UPDATE import_job_rows SET rfq_item_id = NULL WHERE rfq_item_id IN (${ph})`).bind(...ids),
     env.DB.prepare(`DELETE FROM rfq_items WHERE rfq_item_id IN (${ph})`).bind(...ids),
   ]);
@@ -275,7 +282,7 @@ async function hardDelete(request, env, ctx, actor) {
     action: 'hardDeleteRfqItems',
     entityType: 'rfq_item',
     entityId: ids.join(','),
-    oldJson: { rfq_item_ids: ids, child_counts: childCounts },
+    oldJson: { rfq_item_ids: ids, child_counts: childCounts, media_files_deleted: mediaRows.map(r => r.file_id) },
     actor,
   }));
   return json({ ok: true, deleted: ids.length });
@@ -356,11 +363,22 @@ function normalizeChildCounts(row = {}) {
   };
 }
 
-function hasBusinessChildren(counts) {
-  return Object.values(counts || {}).some((n) => Number(n || 0) > 0);
+function hasBlockingBusinessChildren(counts) {
+  return ['quote_count', 'pricing_count', 'contract_item_count', 'clarification_count', 'revision_count']
+    .some((key) => Number(counts?.[key] || 0) > 0);
 }
 
-const EXPORT_MAX_ROWS = 5000;
+async function deleteR2Objects(env, mediaRows) {
+  if (!mediaRows.length) return;
+  await Promise.all(mediaRows.map((row) => env.MEDIA.delete(row.r2_key)));
+}
+
+function enforceExportRowPolicy(actor, rowCount) {
+  if (rowCount <= 1000 || canExportLargeData(actor)) return null;
+  return json({ ok: false, error: 'Chi Admin hoac Manager moi duoc xuat tai tep du lieu tren 1000 dong', row_count: rowCount }, 403);
+}
+
+const EXPORT_MAX_ROWS = 25000;
 
 const EXPORT_COL_HEADERS = [
   'Mã gói', 'Tên gói',
@@ -542,7 +560,7 @@ function buildExportCsv(rows, opts) {
   return '﻿' + lines.join('\r\n') + '\r\n';
 }
 
-async function exportItems(request, env, actor) {
+async function exportItems(request, env, ctx, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
   const rate = await consumeKvRateLimit(env, `s2b1:exports:actor:${actor.id}`, 5, 600);
@@ -570,8 +588,28 @@ async function exportItems(request, env, actor) {
     selectedIds,
   });
   const rfqId = cleanString(p.rfqId || p.rfq_id || 'all', 80);
+  const exportDenied = enforceExportRowPolicy(actor, rows.length);
+  if (exportDenied) {
+    ctx.waitUntil(writeActionLog(env, {
+      action: 'permissionDenied',
+      entityType: 'export',
+      entityId: 'exportRfqItemsCsv',
+      message: `${actor.displayName || actor.username || actor.id} denied RFQ item CSV export over 1000 rows`,
+      newJson: { row_count: rows.length, rfq_id: rfqId },
+      actor,
+    }));
+    return exportDenied;
+  }
   const today = nowIso().slice(0, 10);
   const tplSuffix = template === 'chung' ? '' : '-' + template.replace(/_/g, '-');
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'exportRfqItemsCsv',
+    entityType: 'rfq_item',
+    entityId: rfqId,
+    message: `${actor.displayName || actor.username || actor.id} exported RFQ items CSV (${rows.length} rows)`,
+    newJson: { row_count: rows.length, template, rfq_id: rfqId },
+    actor,
+  }));
   return json({
     ok: true,
     filename: `rfq-items${tplSuffix}-${rfqId}-${today}.csv`,
@@ -648,7 +686,7 @@ function buildExportJson(rows, opts) {
   };
 }
 
-async function exportItemsJson(request, env, actor) {
+async function exportItemsJson(request, env, ctx, actor) {
   const denied = requireRole(actor, ALL_ROLES);
   if (denied) return denied;
   const rate = await consumeKvRateLimit(env, `s2b1:exports:actor:${actor.id}`, 5, 600);
@@ -674,9 +712,29 @@ async function exportItemsJson(request, env, actor) {
     selectedIds,
   });
   const rfqId = cleanString(p.rfqId || p.rfq_id || 'all', 80);
+  const exportDenied = enforceExportRowPolicy(actor, rows.length);
+  if (exportDenied) {
+    ctx.waitUntil(writeActionLog(env, {
+      action: 'permissionDenied',
+      entityType: 'export',
+      entityId: 'exportRfqItemsJson',
+      message: `${actor.displayName || actor.username || actor.id} denied RFQ item Excel export over 1000 rows`,
+      newJson: { row_count: rows.length, rfq_id: rfqId },
+      actor,
+    }));
+    return exportDenied;
+  }
   const today = nowIso().slice(0, 10);
   const tplSuffix = template === 'chung' ? '' : '-' + template.replace(/_/g, '-');
   const { headers, rows: dataRows, textCols, longTextCols, leftAlignCols, preface } = buildExportJson(rows, { template, colMask });
+  ctx.waitUntil(writeActionLog(env, {
+    action: 'exportRfqItemsJson',
+    entityType: 'rfq_item',
+    entityId: rfqId,
+    message: `${actor.displayName || actor.username || actor.id} exported RFQ items Excel data (${rows.length} rows)`,
+    newJson: { row_count: rows.length, template, rfq_id: rfqId },
+    actor,
+  }));
   return json({
     ok: true,
     filename: `rfq-items${tplSuffix}-${rfqId}-${today}.xlsx`,
@@ -704,19 +762,27 @@ async function hardDeleteAll(request, env, ctx, actor) {
   const totalCount = countRow?.n || 0;
   if (!totalCount) return json({ ok: true, deleted: 0 });
   const childCounts = await getRfqChildCounts(env.DB, rfqId);
-  if (hasBusinessChildren(childCounts)) {
+  if (hasBlockingBusinessChildren(childCounts)) {
     return json({
       ok: false,
-      error: 'Khong the xoa vinh vien cac dong RFQ da co bao gia, can gia, hop dong, lam ro ky thuat, revision hoac media. Hay luu tru dong thay vi xoa.',
+      error: 'Khong the xoa vinh vien cac dong RFQ da co bao gia, can gia, hop dong, lam ro ky thuat hoac revision. Hay luu tru dong thay vi xoa.',
       counts: childCounts,
     }, 409);
   }
+  const idRows = await env.DB.prepare('SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?').bind(rfqId).all();
+  const ids = (idRows.results || []).map(r => r.rfq_item_id).filter(Boolean);
+  const mediaRows = await getMediaKeysByOwnersSQL(env.DB, 'rfq_item', ids);
+  if (mediaRows.length && !env.MEDIA) {
+    return json({ ok: false, error: 'R2 MEDIA binding chua cau hinh nen khong the xoa sach media' }, 500);
+  }
+  await deleteR2Objects(env, mediaRows);
   await env.DB.batch([
     env.DB.prepare(`DELETE FROM technical_clarifications WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
     env.DB.prepare(`DELETE FROM supplier_quotes WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
     env.DB.prepare(`DELETE FROM pricing_decisions WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
     env.DB.prepare(`DELETE FROM contract_items WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
     env.DB.prepare(`DELETE FROM rfq_item_revisions WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
+    deleteMediaFilesByOwnersStmt(env.DB, 'rfq_item', ids),
     env.DB.prepare(`UPDATE import_job_rows SET rfq_item_id = NULL WHERE rfq_item_id IN (SELECT rfq_item_id FROM rfq_items WHERE rfq_id = ?)`).bind(rfqId),
     env.DB.prepare(`DELETE FROM rfq_items WHERE rfq_id = ?`).bind(rfqId),
   ]);
@@ -725,7 +791,7 @@ async function hardDeleteAll(request, env, ctx, actor) {
     action: 'hardDeleteAllRfqItems',
     entityType: 'rfq',
     entityId: rfqId,
-    oldJson: { rfq_id: rfqId, item_count: totalCount, child_counts: childCounts },
+    oldJson: { rfq_id: rfqId, item_count: totalCount, child_counts: childCounts, media_files_deleted: mediaRows.map(r => r.file_id) },
     actor,
   }));
   return json({ ok: true, deleted: totalCount });

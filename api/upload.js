@@ -13,7 +13,10 @@ export default async function handler(request) {
 
     const actor = await readSession(request);
     if (!actor) return json({ ok: false, error: 'Chua dang nhap' }, 401);
-    if (!UPLOAD_ROLES.has(actor.role)) return json({ ok: false, error: 'Khong co quyen' }, 403);
+    if (!UPLOAD_ROLES.has(actor.role)) {
+      await logPermissionDenied(actor, 'uploadMedia').catch(() => null);
+      return json({ ok: false, error: 'Khong co quyen' }, 403);
+    }
 
     const contentLength = request.headers.get('content-length');
     if (!contentLength) return json({ ok: false, error: 'Missing Content-Length' }, 411);
@@ -44,6 +47,21 @@ export default async function handler(request) {
   } catch {
     return json({ ok: false, error: 'Lỗi hệ thống. Vui lòng thử lại sau.', status: 500 }, 500);
   }
+}
+
+async function logPermissionDenied(actor, deniedAction) {
+  const url = process.env.WORKER_URL;
+  if (!url || !process.env.WORKER_SECRET) return;
+  await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      'X-Worker-Secret': process.env.WORKER_SECRET,
+      'X-App-Actor': encodeActor(actor),
+    },
+    body: JSON.stringify({ action: 'logPermissionDenied', deniedAction }),
+    signal: AbortSignal.timeout(5000),
+  });
 }
 
 function safeGatewayBody(data, status) {

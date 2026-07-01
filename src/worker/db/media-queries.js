@@ -74,18 +74,38 @@ export async function getMediaKeysByOwnerSQL(db, ownerType, ownerId) {
   return res.results || [];
 }
 
+export async function getMediaKeysByOwnersSQL(db, ownerType, ownerIds) {
+  if (!Array.isArray(ownerIds) || !ownerIds.length) return [];
+  const ph = ownerIds.map(() => '?').join(',');
+  const res = await db.prepare(
+    `SELECT file_id, owner_id, r2_key FROM media_files
+     WHERE owner_type = ? AND owner_id IN (${ph})`
+  ).bind(ownerType, ...ownerIds).all();
+  return res.results || [];
+}
+
 export async function deleteMediaFilesByOwnerSQL(db, ownerType, ownerId) {
   return db.prepare(
     `DELETE FROM media_files WHERE owner_type = ? AND owner_id = ?`
   ).bind(ownerType, ownerId).run();
 }
 
-export async function getMediaFileSQL(db, fileId) {
+export function deleteMediaFilesByOwnersStmt(db, ownerType, ownerIds) {
+  if (!Array.isArray(ownerIds) || !ownerIds.length) {
+    return db.prepare('DELETE FROM media_files WHERE 1 = 0');
+  }
+  const ph = ownerIds.map(() => '?').join(',');
+  return db.prepare(`DELETE FROM media_files WHERE owner_type = ? AND owner_id IN (${ph})`).bind(ownerType, ...ownerIds);
+}
+
+export async function getMediaFileSQL(db, fileId, ownerType = '', ownerId = '') {
+  const ownerWhere = ownerType && ownerId ? 'AND owner_type = ? AND owner_id = ?' : '';
+  const binds = ownerType && ownerId ? [fileId, ownerType, ownerId] : [fileId];
   const res = await db.prepare(
     `SELECT file_id, owner_type, owner_id, file_kind, r2_key, file_name, mime_type, size_bytes,
       width, height, variant, is_primary, created_by, created_at
      FROM media_files
-     WHERE file_id = ?`
-  ).bind(fileId).first();
+     WHERE file_id = ? ${ownerWhere}`
+  ).bind(...binds).first();
   return res || null;
 }

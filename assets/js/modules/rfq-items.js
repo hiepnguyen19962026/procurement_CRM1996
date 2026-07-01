@@ -264,7 +264,7 @@
           );
           if (!ok) return;
         }
-        limit = known > 0 ? Math.min(known + 50, 2000) : 2000;
+        limit = known > 0 ? known + 50 : 25000;
       } else {
         limit = Number(pageSizeVal) || 500;
       }
@@ -1948,7 +1948,7 @@
     if (!files || !files.length) return '<div class="empty-state small">' + API.esc(emptyText || 'Chưa có file.') + '</div>';
     return '<ul class="media-list" style="margin:0;padding-left:18px;font-size:12px">'
       + files.map(function (f) {
-        return '<li><a href="' + API.esc(API.mediaUrl(f.file_id)) + '" target="_blank" rel="noopener"><strong>' + API.esc(f.file_name || f.file_id) + '</strong></a>'
+        return '<li><a href="' + API.esc(API.mediaUrl(f.file_id, f.owner_type, f.owner_id)) + '" target="_blank" rel="noopener"><strong>' + API.esc(f.file_name || f.file_id) + '</strong></a>'
           + ' <span class="muted">(' + API.esc(formatSize(f.size_bytes)) + ', ' + API.esc(formatDate(f.created_at)) + ')</span></li>';
       }).join('')
       + '</ul>';
@@ -1957,10 +1957,10 @@
   function imageGallery(files) {
     if (!files || !files.length) return '<div class="empty-state small">Chưa có ảnh.</div>';
     var gId = 'g' + (++_gallerySeq);
-    _galleryRegistry[gId] = files.map(function (f) { return f.file_id; });
+    _galleryRegistry[gId] = files.map(function (f) { return { fileId: f.file_id, ownerType: f.owner_type, ownerId: f.owner_id }; });
     return '<div class="media-gallery">'
       + files.map(function (f, i) {
-        var src = API.mediaUrl(f.file_id);
+        var src = API.mediaUrl(f.file_id, f.owner_type, f.owner_id);
         return '<button type="button" class="media-thumb" onclick="RfqItemsModule.openMediaPreviewAt(\'' + gId + '\',' + i + ')" title="' + API.esc(f.file_name || f.file_id) + '">'
           + '<img src="' + API.esc(src) + '" alt="' + API.esc(f.file_name || 'Ảnh upload') + '" loading="lazy">'
           + '<span>' + API.esc(f.file_name || f.file_id) + '</span>'
@@ -2045,10 +2045,11 @@
   }
 
   function _refreshLightbox() {
-    var fileId = _lightboxGroup[_lightboxIndex];
-    if (!fileId) return;
+    var entry = _lightboxGroup[_lightboxIndex];
+    if (!entry) return;
+    var fileId = typeof entry === 'string' ? entry : entry.fileId;
     _ensureLightbox();
-    var src = API.mediaUrl(fileId);
+    var src = API.mediaUrl(fileId, entry.ownerType, entry.ownerId);
     _lightboxEl.querySelector('.media-lightbox-img').src = src;
     _lightboxEl.querySelector('.media-lightbox-link').href = src;
     var total = _lightboxGroup.length;
@@ -2063,8 +2064,8 @@
     _lightboxEl.classList.add('active');
   }
 
-  function openMediaPreview(fileId) {
-    _lightboxGroup = [fileId];
+  function openMediaPreview(fileId, ownerType, ownerId) {
+    _lightboxGroup = [{ fileId: fileId, ownerType: ownerType, ownerId: ownerId }];
     _lightboxIndex = 0;
     _refreshLightbox();
   }
@@ -2738,7 +2739,7 @@
       + '<div class="section-head"><h4>L&#7883;ch s&#7917; gi&#225;</h4>'
       + '<div style="display:flex;gap:6px;flex-wrap:wrap">'
       + '<button type="button" onclick="RfqItemsModule.loadPriceHistory(\'' + API.esc(item.rfq_item_id) + '\')">Xem l&#7883;ch s&#7917; gi&#225;</button>'
-      + '<button type="button" onclick="RfqItemsModule.exportPriceHistory(\'' + API.esc(item.rfq_item_id) + '\')">Xu&#7845;t CSV</button>'
+      + (Utils.roleCanLargeExport() ? '<button type="button" onclick="RfqItemsModule.exportPriceHistory(\'' + API.esc(item.rfq_item_id) + '\')">Xu&#7845;t CSV</button>' : '')
       + '</div></div>'
       + '<div id="' + containerId + '" class="empty-state small">Nh&#7845;n &#8220;Xem l&#7883;ch s&#7917; gi&#225;&#8221; &#273;&#7875; t&#7843;i d&#7919; li&#7879;u.</div>'
       + '</section>';

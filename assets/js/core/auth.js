@@ -59,6 +59,9 @@
     document.querySelectorAll('[data-write]').forEach(function (el) {
       el.classList.toggle('hidden', !Utils.roleCanWrite());
     });
+    document.querySelectorAll('[data-large-export]').forEach(function (el) {
+      el.classList.toggle('hidden', !Utils.roleCanLargeExport());
+    });
   }
 
   async function restoreSession() {

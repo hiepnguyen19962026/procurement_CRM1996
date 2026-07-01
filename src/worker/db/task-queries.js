@@ -1,14 +1,17 @@
+import { nextEntitySequenceSQL } from './system-queries.js';
+
 // VN date-based task ID: Task-YYYY-MMDD-NN, resets per date, collision-safe.
 export async function nextTaskId(db) {
   const d    = new Date(Date.now() + 7 * 60 * 60 * 1000); // UTC+7
   const yyyy = d.toISOString().slice(0, 4);
   const mmdd = d.toISOString().slice(5, 10).replace('-', '');
   const prefix = `Task-${yyyy}-${mmdd}`;
-  const row = await db.prepare(
+  const seedRow = await db.prepare(
     `SELECT task_id FROM tasks WHERE task_id LIKE ? ORDER BY task_id DESC LIMIT 1`
   ).bind(`${prefix}-%`).first();
-  const last = row?.task_id ? Number(row.task_id.split('-').pop()) : 0;
-  const seq  = (Number.isFinite(last) ? last : 0) + 1;
+  const last = seedRow?.task_id ? Number(seedRow.task_id.split('-').pop()) : 0;
+  const row = await nextEntitySequenceSQL(db, prefix, Number.isFinite(last) ? last : 0);
+  const seq = Number(row?.last_value || 1);
   return `${prefix}-${String(seq).padStart(2, '0')}`;
 }
 

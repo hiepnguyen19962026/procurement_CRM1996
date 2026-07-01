@@ -49,6 +49,11 @@
     return ['admin', 'manager', 'purchasing'].indexOf(role) >= 0;
   }
 
+  function roleCanLargeExport() {
+    var role = AppState.get('user') && AppState.get('user').role;
+    return ['admin', 'manager'].indexOf(role) >= 0;
+  }
+
   function _esc(s) {
     return String(s == null ? '' : s)
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -98,5 +103,5 @@
     });
   }
 
-  window.Utils = { formToObject: formToObject, openModal: openModal, closeModal: closeModal, bindModal: bindModal, roleCanWrite: roleCanWrite, confirmDanger: confirmDanger, confirmTyping: confirmTyping };
+  window.Utils = { formToObject: formToObject, openModal: openModal, closeModal: closeModal, bindModal: bindModal, roleCanWrite: roleCanWrite, roleCanLargeExport: roleCanLargeExport, confirmDanger: confirmDanger, confirmTyping: confirmTyping };
 })();

@@ -1,6 +1,5 @@
 import {
   archiveSupplierQuoteSQL,
-  deleteSupplierQuoteSQL,
   getSupplierQuoteSQL,
   getSupplierQuoteUsageCountsSQL,
   insertSupplierQuoteSQL,
@@ -8,7 +7,7 @@ import {
   searchSupplierQuotesSQL,
   updateSupplierQuoteSQL,
 } from '../db/supplier-quote-queries.js';
-import { deleteMediaFilesByOwnerSQL, getMediaKeysByOwnerSQL } from '../db/media-queries.js';
+import { getMediaKeysByOwnerSQL } from '../db/media-queries.js';
 import { getRfqItemSQL } from '../db/rfq-item-queries.js';
 import { ALL_ROLES, MANAGE_ROLES, WRITE_ROLES, requireRole } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
@@ -206,33 +205,29 @@ async function deleteQuote(request, env, ctx, actor) {
       counts: usage,
     }, 409);
   }
-  await deleteSupplierQuoteSQL(env.DB, quoteId);
+  const mediaRows = await getMediaKeysByOwnerSQL(env.DB, 'quote', quoteId);
+  if (mediaRows.length && !env.MEDIA) {
+    return json({ ok: false, error: 'R2 MEDIA binding chua cau hinh nen khong the xoa sach media' }, 500);
+  }
+  await deleteQuoteR2Objects(env, mediaRows);
+  await env.DB.batch([
+    env.DB.prepare('DELETE FROM media_files WHERE owner_type = ? AND owner_id = ?').bind('quote', quoteId),
+    env.DB.prepare('DELETE FROM supplier_quotes WHERE quote_id = ?').bind(quoteId),
+  ]);
   ctx.waitUntil(writeActionLog(env, {
     action: 'deleteSupplierQuote',
     entityType: 'supplier_quote',
     entityId: quoteId,
     oldJson: oldRow,
-    newJson: null,
+    newJson: { media_files_deleted: mediaRows.map(r => r.file_id) },
     actor,
   }));
-  ctx.waitUntil(cleanupQuoteMedia(env, quoteId));
   return json({ ok: true });
 }
 
-async function cleanupQuoteMedia(env, quoteId) {
-  try {
-    const files = await getMediaKeysByOwnerSQL(env.DB, 'quote', quoteId);
-    if (!files.length) return;
-    await Promise.allSettled(
-      files
-        .filter((f) => f && f.r2_key)
-        .map((f) => env.MEDIA?.delete(f.r2_key))
-    );
-    await deleteMediaFilesByOwnerSQL(env.DB, 'quote', quoteId);
-    console.log(`[cleanup] quote ${quoteId}: removed ${files.length} media file(s)`);
-  } catch (err) {
-    console.error(`[cleanup] quote ${quoteId} media cleanup failed:`, err);
-  }
+async function deleteQuoteR2Objects(env, mediaRows) {
+  if (!mediaRows.length) return;
+  await Promise.all(mediaRows.map((row) => env.MEDIA.delete(row.r2_key)));
 }
 
 function normalizeQuote(body, base) {

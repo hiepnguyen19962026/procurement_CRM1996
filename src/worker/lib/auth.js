@@ -6,6 +6,7 @@ export const ALL_ROLES = new Set(ROLES);
 export const WRITE_ROLES = new Set(['admin', 'manager', 'purchasing']);
 export const MANAGE_ROLES = new Set(['admin', 'manager']);
 export const ADMIN_ROLES = new Set(['admin']);
+export const EXPORT_ROLES = new Set(['admin', 'manager']);
 const enc = new TextEncoder();
 
 export function validateSecret(request, env) {
@@ -45,6 +46,10 @@ export function requireRole(actor, allowed) {
     return json({ ok: false, error: 'Khong co quyen' }, 403);
   }
   return null;
+}
+
+export function canExportLargeData(actor) {
+  return Boolean(actor?.role && EXPORT_ROLES.has(actor.role));
 }
 
 export function safeUser(row) {

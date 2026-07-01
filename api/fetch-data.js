@@ -3,8 +3,10 @@ export const config = { runtime: 'edge' };
 const COOKIE_NAME = 'procurement_sess';
 const JWT_EXPIRES = 7 * 24 * 60 * 60;
 const PUBLIC_ACTIONS = new Set(['authLogin', 'initSetup', 'logout']);
-const VIEW_ACTIONS = ['ping', 'logout', 'getSession', 'changePassword', 'getDashboard', 'getClients', 'getSuppliers', 'getRfqs', 'getRfq', 'getRfqItems', 'getRfqItem', 'exportRfqItemsCsv', 'exportRfqItemsJson', 'getMediaFiles', 'listAllClarifications', 'getTechnicalClarifications', 'getItemRevisions', 'getSupplierQuotes', 'searchSupplierQuotes', 'getImportTemplates', 'getImportJob', 'getImportJobRows', 'searchMasterItems', 'getMasterItemDetail', 'suggestMasterItemsForRfqItem', 'searchPriceHistory', 'getPriceHistorySummary', 'exportPriceHistoryCsv', 'getContracts', 'getContractDetail', 'getContractItemsForRfqItem', 'getContractAddendums', 'getContractAddendumItems', 'searchContractAddendumItems', 'getDeliveryNotes', 'getDeliveryNoteDetail', 'getDeliveryItemsForRfqItem', 'getDashboardV2', 'getClientEquipment', 'getClientContacts', 'getClientBankAccounts', 'getClientLegalHistory', 'getRfqContacts', 'getTasks', 'getTask', 'suggestTaskCompanies', 'previewDeliveryNoteNo'];
-const PURCHASING_ACTIONS = [...VIEW_ACTIONS, 'createClient', 'updateClient', 'createSupplier', 'updateSupplier', 'createRfq', 'updateRfq', 'quickUpdateRfqStatus', 'createRfqItem', 'updateRfqItem', 'createTechnicalClarification', 'quickUpdateClarification', 'createSupplierQuote', 'updateSupplierQuote', 'getPricingDecisions', 'saveImportTemplate', 'checkRfqImportSafety', 'commitImportRows', 'previewImportRows', 'createMasterItem', 'linkRfqItemToMaster', 'unlinkRfqItemFromMaster', 'createContract', 'updateContract', 'addContractItem', 'updateContractItem', 'createContractFromRfqItem', 'createContractAddendum', 'updateContractAddendum', 'createContractAddendumItem', 'updateContractAddendumItem', 'createDeliveryNote', 'updateDeliveryNote', 'addDeliveryNoteItem', 'updateDeliveryNoteItem', 'recordDeliveryAcceptance', 'createClientEquipment', 'updateClientEquipment', 'archiveClientEquipment', 'importClientEquipment', 'createClientContact', 'updateClientContact', 'archiveClientContact', 'importClientContacts', 'createClientBankAccount', 'updateClientBankAccount', 'archiveClientBankAccount', 'addClientLegalHistory', 'addRfqContact', 'archiveRfqContact', 'createTask', 'updateTask', 'quickUpdateTaskStatus', 'quickUpdateTaskPriority'];
+const VIEW_ACTIONS = ['ping', 'logout', 'getSession', 'changePassword', 'getDashboard', 'getClients', 'getSuppliers', 'getRfqs', 'getRfq', 'getRfqItems', 'getRfqItem', 'getMediaFiles', 'listAllClarifications', 'getTechnicalClarifications', 'getItemRevisions', 'getSupplierQuotes', 'searchSupplierQuotes', 'getImportTemplates', 'getImportJob', 'getImportJobRows', 'searchMasterItems', 'getMasterItemDetail', 'suggestMasterItemsForRfqItem', 'searchPriceHistory', 'getPriceHistorySummary', 'getContracts', 'getContractDetail', 'getContractItemsForRfqItem', 'getContractAddendums', 'getContractAddendumItems', 'searchContractAddendumItems', 'getDeliveryNotes', 'getDeliveryNoteDetail', 'getDeliveryItemsForRfqItem', 'getDashboardV2', 'getClientEquipment', 'getClientContacts', 'getClientBankAccounts', 'getClientLegalHistory', 'getRfqContacts', 'getTasks', 'getTask', 'suggestTaskCompanies', 'previewDeliveryNoteNo'];
+const SMALL_EXPORT_ACTIONS = ['exportRfqItemsCsv', 'exportRfqItemsJson', 'exportPriceHistoryCsv'];
+const VIEWER_ACTIONS = [...VIEW_ACTIONS, ...SMALL_EXPORT_ACTIONS];
+const PURCHASING_ACTIONS = [...VIEWER_ACTIONS, 'createClient', 'updateClient', 'createSupplier', 'updateSupplier', 'createRfq', 'updateRfq', 'quickUpdateRfqStatus', 'createRfqItem', 'updateRfqItem', 'createTechnicalClarification', 'quickUpdateClarification', 'createSupplierQuote', 'updateSupplierQuote', 'getPricingDecisions', 'saveImportTemplate', 'checkRfqImportSafety', 'commitImportRows', 'previewImportRows', 'createMasterItem', 'linkRfqItemToMaster', 'unlinkRfqItemFromMaster', 'createContract', 'updateContract', 'addContractItem', 'updateContractItem', 'createContractFromRfqItem', 'createContractAddendum', 'updateContractAddendum', 'createContractAddendumItem', 'updateContractAddendumItem', 'createDeliveryNote', 'updateDeliveryNote', 'addDeliveryNoteItem', 'updateDeliveryNoteItem', 'recordDeliveryAcceptance', 'createClientEquipment', 'updateClientEquipment', 'archiveClientEquipment', 'importClientEquipment', 'createClientContact', 'updateClientContact', 'archiveClientContact', 'importClientContacts', 'createClientBankAccount', 'updateClientBankAccount', 'archiveClientBankAccount', 'addClientLegalHistory', 'addRfqContact', 'archiveRfqContact', 'createTask', 'updateTask', 'quickUpdateTaskStatus', 'quickUpdateTaskPriority'];
 const MANAGER_ACTIONS = [...PURCHASING_ACTIONS, 'updateTechnicalClarification', 'deleteTechnicalClarification', 'archiveSupplierQuote', 'deleteSupplierQuote', 'createPricingDecision', 'updateMasterItem', 'archiveContract', 'archiveContractItem', 'archiveContractAddendum', 'archiveContractAddendumItem', 'archiveDeliveryNote', 'archiveDeliveryNoteItem', 'archiveRfq', 'archiveRfqItem', 'archiveClient', 'archiveSupplier', 'hardDeleteRfqItems', 'hardDeleteAllRfqItems', 'deleteTask'];
 const ADMIN_ACTIONS = [...MANAGER_ACTIONS, 'getAuditLogs', 'getAccounts', 'createAccount', 'updateAccount', 'deleteDeliveryNote'];
 
@@ -16,7 +18,6 @@ export default async function handler(request) {
     const body = request.method === 'GET' ? Object.fromEntries(new URL(request.url).searchParams.entries()) : await request.json().catch(() => ({}));
     const action = body.action || '';
     if (action === 'ping') return json({ ok: true, pong: true });
-    if (action === 'logout') return clearSession();
     if (!action) return json({ ok: false, error: 'Missing action' }, 400);
 
     if (action === 'initSetup') {
@@ -37,8 +38,19 @@ export default async function handler(request) {
     }
 
     const actor = await readSession(request);
+    if (action === 'logout') {
+      if (actor) await callWorker(action, body, actor).catch(() => null);
+      return clearSession();
+    }
     if (!actor) return json({ ok: false, error: 'Chua dang nhap' }, 401);
-    if (!isAllowed(actor.role, action)) return json({ ok: false, error: 'Khong co quyen' }, 403);
+    if (!isAllowed(actor.role, action)) {
+      await callWorker('logPermissionDenied', { deniedAction: action }, actor).catch(() => null);
+      return json({ ok: false, error: 'Khong co quyen' }, 403);
+    }
+    if (isExportAction(action) && !canBypassExportLimit(actor.role) && requestedExportLimit(body) > 1000) {
+      await callWorker('logPermissionDenied', { deniedAction: action }, actor).catch(() => null);
+      return json({ ok: false, error: 'Chi Admin hoac Manager moi duoc xuat tai tep du lieu tren 1000 dong' }, 403);
+    }
 
     const data = await callWorker(action, body, actor);
     const status = data.status || (data.ok === false ? 400 : 200);
@@ -52,7 +64,7 @@ function isAllowed(role, action) {
   if (role === 'admin') return ADMIN_ACTIONS.includes(action);
   if (role === 'manager') return MANAGER_ACTIONS.includes(action);
   if (role === 'purchasing') return PURCHASING_ACTIONS.includes(action);
-  if (role === 'viewer') return VIEW_ACTIONS.includes(action);
+  if (role === 'viewer') return VIEWER_ACTIONS.includes(action);
   return PUBLIC_ACTIONS.has(action);
 }
 
@@ -75,11 +87,29 @@ async function callWorker(action, body, actor, extraHeaders = {}) {
   return { ...data, status: res.status, retryAfter: res.headers.get('retry-after') || data.retryAfter };
 }
 
+function isExportAction(action) {
+  return SMALL_EXPORT_ACTIONS.includes(action);
+}
+
+function canBypassExportLimit(role) {
+  return role === 'admin' || role === 'manager';
+}
+
+function requestedExportLimit(body) {
+  const selected = Array.isArray(body?.selectedIds) ? body.selectedIds.length : 0;
+  if (selected > 0) return selected;
+  const limit = Number(body?.limit || body?.requestedRows || body?.requested_rows || 0);
+  return Number.isFinite(limit) && limit > 0 ? limit : 0;
+}
+
 function retryAfterHeaders(data) {
   return data?.retryAfter ? { 'retry-after': String(data.retryAfter) } : {};
 }
 
 function safeGatewayBody(data, status) {
+  if (status >= 500 && String(data?.error || '').startsWith('Migration required:')) {
+    return data;
+  }
   if (status >= 500) {
     return { ok: false, error: 'Lỗi hệ thống. Vui lòng thử lại sau.', status };
   }

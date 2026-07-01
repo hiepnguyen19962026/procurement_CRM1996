@@ -115,8 +115,10 @@ async function getMediaContent(request, env, ctx, actor) {
   if (!env.MEDIA) return json({ ok: false, error: 'R2 MEDIA binding chua cau hinh' }, 500);
   const p = await readJson(request);
   const fileId = cleanString(p.fileId || p.file_id, 80);
-  if (!fileId) return json({ ok: false, error: 'Thieu fileId' }, 400);
-  const row = await getMediaFileSQL(env.DB, fileId);
+  const ownerType = cleanString(p.ownerType || p.owner_type, 40);
+  const ownerId = cleanString(p.ownerId || p.owner_id, 120);
+  if (!fileId || !ownerType || !ownerId) return json({ ok: false, error: 'Thieu ownerType, ownerId hoac fileId' }, 400);
+  const row = await getMediaFileSQL(env.DB, fileId, ownerType, ownerId);
   if (!row) return json({ ok: false, error: 'Khong tim thay file' }, 404);
   const object = await env.MEDIA.get(row.r2_key);
   if (!object) return json({ ok: false, error: 'File khong con trong R2' }, 404);
