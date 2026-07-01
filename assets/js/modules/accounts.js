@@ -57,6 +57,29 @@
       } catch (err) { API.error(err); }
     });
   }
+  function openChangePassword() {
+    Utils.openModal('Đổi mật khẩu',
+      '<label class="span-12">Mật khẩu hiện tại<input name="currentPassword" type="password" autocomplete="current-password" required></label>'
+      + '<label class="span-12">Mật khẩu mới<input name="newPassword" type="password" autocomplete="new-password" minlength="8" required></label>'
+      + '<label class="span-12">Nhập lại mật khẩu mới<input name="confirmPassword" type="password" autocomplete="new-password" minlength="8" required></label>',
+      async function (data) {
+        try {
+          var currentPassword = String(data.currentPassword || '');
+          var newPassword = String(data.newPassword || '');
+          var confirmPassword = String(data.confirmPassword || '');
+          if (!currentPassword) throw new Error('Vui lòng nhập mật khẩu hiện tại');
+          if (newPassword.length < 8) throw new Error('Mật khẩu mới tối thiểu 8 ký tự');
+          if (newPassword !== confirmPassword) throw new Error('Mật khẩu nhập lại không khớp');
+          await API.call('changePassword', {
+            currentPassword: currentPassword,
+            newPassword: newPassword,
+          });
+          document.querySelectorAll('#modalBody input[type="password"]').forEach(function (input) { input.value = ''; });
+          Utils.closeModal();
+          API.toast('Đã đổi mật khẩu. Vui lòng đăng nhập lại nếu phiên hiện tại hết hạn.', 'success');
+        } catch (err) { API.error(err); }
+      });
+  }
   function fields(r) {
     var role = r.role || 'viewer';
     var status = r.status || 'active';
@@ -89,5 +112,5 @@
   function statusLabel(value) {
     return { active: 'Hoạt động', inactive: 'Không hoạt động', frozen: 'Tạm khóa', archived: 'Lưu trữ' }[value] || value || '';
   }
-  window.AccountsModule = { load: load, openCreate: openCreate, openEdit: openEdit };
+  window.AccountsModule = { load: load, openCreate: openCreate, openEdit: openEdit, openChangePassword: openChangePassword };
 })();
