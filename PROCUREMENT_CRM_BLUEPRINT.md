@@ -139,7 +139,7 @@ Màn hình RFQ list hiện cần giữ các thông tin nghiệp vụ chính:
 
 ```text
 15 dòng
-50 dòng
+500 dòng
 ```
 
 Không cần migration riêng chỉ để hiển thị `item_count` nếu đã có thể tính bằng query.
@@ -195,10 +195,12 @@ raw_row_json
 
 Danh sách RFQ Item bắt buộc theo performance rule:
 
-- pagination mặc định 50 dòng;
-- search/filter tại D1;
-- không filter toàn bộ ở frontend;
-- không load timeline/báo giá/ảnh/file trong list;
+- pagination mặc định 500 dòng;
+- user chọn được 500, 1000, 2000 hoặc All;
+- All nghĩa là tải toàn bộ bản ghi khớp điều kiện hiện tại;
+- filtering/searching/sorting luôn chạy tại D1/backend;
+- không filter/sort toàn bộ ở frontend;
+- không preload media, quotations, contracts, timelines hoặc price history trong list;
 - detail/modal mới load dữ liệu phụ.
 
 ---
@@ -232,7 +234,7 @@ deleteTechnicalClarification
 
 Quyền:
 
-- `viewer`: xem.
+- `viewer`: xem dashboard, search/filter, xem RFQ/RFQ Item/quotations/thông tin liên quan, tải CSV template, tải media nhỏ thuộc record được phép xem; không export dataset lớn, không hard delete, không xem audit log.
 - `purchasing`: tạo mới.
 - `manager`/`admin`: tạo, sửa, soft delete.
 
@@ -288,7 +290,7 @@ deleteSupplierQuote
 
 Quyền:
 
-- `viewer`: xem.
+- `viewer`: xem dashboard, search/filter, xem RFQ/RFQ Item/quotations/thông tin liên quan, tải CSV template, tải media nhỏ thuộc record được phép xem; không export dataset lớn, không hard delete, không xem audit log.
 - `purchasing`: tạo mới.
 - `manager`/`admin`: tạo, sửa, archive, hard delete.
 
@@ -1667,15 +1669,15 @@ Hiện tại chưa có thumbnail/resize pipeline. Không lưu nhiều variant ch
 
 ## 9. Search và performance
 
-Không load toàn bộ 30.000 dòng lên frontend.
 
 Rules:
 
-- Mặc định list 50 dòng.
-- Có nút load more 100/200.
-- Không render 5000 dòng một lần.
+- Mặc định list 500 dòng.
+- User chọn được 500, 1000, 2000 hoặc All.
+- All nghĩa là tải toàn bộ bản ghi khớp điều kiện hiện tại.
 - Dùng cursor pagination, không dùng OFFSET cho bảng lớn.
-- Search ở D1, không filter toàn bộ trên frontend.
+- Filtering/searching/sorting luôn chạy tại D1/backend.
+- Frontend list không preload media, quotations, contracts, timelines hoặc price history.
 - Dashboard dùng summary query hoặc snapshot.
 - Data ít đổi dùng KV cache.
 
@@ -1721,7 +1723,7 @@ CREATE INDEX IF NOT EXISTS idx_media_owner ON media_files(owner_type, owner_id);
 - `admin`: toàn quyền, tài khoản, migration/debug, audit, hard delete dữ liệu nhầm/test.
 - `manager`: quản lý RFQ, quotes, pricing, contracts, import/export. Có thể hard delete báo giá nhầm/test (`deleteSupplierQuote`). Có thể archive RFQ/quote thật.
 - `purchasing`: nhập/sửa RFQ, dòng vật tư, quotes, upload file bằng chứng, xem giá.
-- `viewer`: chỉ xem/search, không sửa.
+- `viewer`: xem dashboard, search/filter, xem RFQ/RFQ Item/quotations/thông tin liên quan, tải CSV template, tải media nhỏ thuộc record được phép xem; không export dataset lớn, không hard delete, không xem audit log.
 
 Không chặn máy móc. Quyền phải theo vận hành thực tế.
 
@@ -2146,7 +2148,10 @@ Bắt buộc:
 - Frontend gọi API qua assets/js/core/api.js.
 - UI label/toast tiếng Việt, code biến/hàm tiếng Anh.
 - Không dùng window.alert/confirm/prompt.
-- List mặc định pagination 50 dòng.
+- List mặc định pagination 500 dòng; user chọn được 500, 1000, 2000 hoặc All.
+- All nghĩa là tải toàn bộ bản ghi khớp điều kiện hiện tại.
+- Filtering/searching/sorting luôn chạy tại D1/backend.
+- Frontend list không preload media, quotations, contracts, timelines hoặc price history.
 - Không load toàn bộ lịch sử lên frontend.
 - Mutation phải ghi audit log.
 - Sau mutation phải invalidate KV liên quan nếu có cache.
@@ -2184,7 +2189,7 @@ Cách làm việc:
 - Với lỗi chưa rõ, phải tìm root cause trước, không code mù.
 - Ưu tiên targeted edit, không refactor rộng.
 - Reuse trước, không tạo function/table/component trùng.
-- Performance là bắt buộc: list mặc định 50 dòng, search ở D1, không load toàn bộ lịch sử lên frontend.
+- Performance là bắt buộc: list mặc định 500 dòng; user chọn được 500, 1000, 2000 hoặc All; All nghĩa là toàn bộ bản ghi khớp điều kiện; filtering/searching/sorting luôn chạy tại D1/backend; frontend list không preload media, quotations, contracts, timelines hoặc price history.
 - UI phải như phần mềm nghiệp vụ: bảng, filter, modal rõ ràng, không dùng alert/confirm/prompt.
 
 Tài liệu bắt buộc dùng:
