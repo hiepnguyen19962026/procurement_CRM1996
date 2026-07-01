@@ -29,6 +29,7 @@ const VALID_NOTE_TYPES = new Set(['delivery', 'return']);
 const VALID_ACCEPTANCE_STATUSES      = new Set(['pending', 'accepted', 'partial', 'rejected']);
 const VALID_ACCEPTANCE_ITEM_STATUSES = new Set(['pending', 'accepted', 'rejected']);
 const VALID_PAYMENT_STATUSES         = new Set(['not_ready', 'ready', 'requested', 'paid']);
+const IMMUTABLE_DELIVERY_MESSAGE = 'Phiếu giao hàng đã được nghiệm thu. Không thể chỉnh sửa.';
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const DASHBOARD_KEYS = ['dashboard:v1', 'dashboard:v2'];
 
@@ -118,6 +119,7 @@ async function saveNote(request, env, ctx, actor, isUpdate) {
   const oldNote = isUpdate ? await getDeliveryNoteSQL(env.DB, deliveryNoteId) : null;
   if (isUpdate && !oldNote) return json({ ok: false, error: 'Khong tim thay phieu giao hang' }, 404);
   if (isUpdate && oldNote.status === 'archived') return json({ ok: false, error: 'Phieu da luu tru, khong sua duoc' }, 400);
+  if (isUpdate && isImmutableDeliveryNote(oldNote)) return json({ ok: false, error: IMMUTABLE_DELIVERY_MESSAGE }, 409);
 
   const deliveryDate = validateDate(body.deliveryDate || body.delivery_date || oldNote?.delivery_date || '');
   if (!deliveryDate) return json({ ok: false, error: 'Ngay giao hang khong hop le' }, 400);
@@ -242,6 +244,7 @@ async function saveItem(request, env, ctx, actor, isUpdate) {
   const deliveryNote = await getDeliveryNoteSQL(env.DB, deliveryNoteId);
   if (!deliveryNote) return json({ ok: false, error: 'Khong tim thay phieu giao hang' }, 404);
   if (deliveryNote.status === 'archived') return json({ ok: false, error: 'Phieu da luu tru, khong sua duoc' }, 400);
+  if (isImmutableDeliveryNote(deliveryNote)) return json({ ok: false, error: IMMUTABLE_DELIVERY_MESSAGE }, 409);
 
   const item = await buildDeliveryItem(env.DB, { ...body, deliveryNoteId, oldItem }, now, oldItem);
   if (!item) return json({ ok: false, error: 'Dong giao hang khong hop le' }, 400);
@@ -402,6 +405,13 @@ async function previewNoteNo(request, env, actor) {
 function validateDate(value) {
   const s = cleanString(value || '', 20);
   return DATE_RE.test(s) ? s : '';
+}
+
+function isImmutableDeliveryNote(note) {
+  return !!note && (
+    (note.acceptance_status && note.acceptance_status !== 'pending')
+    || (note.payment_request_status && note.payment_request_status !== 'not_ready')
+  );
 }
 
 function addDays(isoDate, days) {
