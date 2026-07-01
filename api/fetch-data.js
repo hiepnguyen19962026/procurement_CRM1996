@@ -10,6 +10,9 @@ const ADMIN_ACTIONS = [...MANAGER_ACTIONS, 'getAuditLogs', 'getAccounts', 'creat
 
 export default async function handler(request) {
   try {
+    if (!['GET', 'POST'].includes(request.method)) {
+      return json({ ok: false, error: 'Method not allowed' }, 405, { allow: 'GET, POST' });
+    }
     const body = request.method === 'GET' ? Object.fromEntries(new URL(request.url).searchParams.entries()) : await request.json().catch(() => ({}));
     const action = body.action || '';
     if (action === 'ping') return json({ ok: true, pong: true });

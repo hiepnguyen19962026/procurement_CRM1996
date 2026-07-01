@@ -1,4 +1,4 @@
-import { getUserByUsernameSQL, insertUserSQL, listUsersSQL, updatePasswordSQL, updateUserSQL } from '../db/account-queries.js';
+import { getUserByIdSQL, getUserByUsernameSQL, insertUserSQL, listUsersSQL, updatePasswordSQL, updateUserSQL } from '../db/account-queries.js';
 import { ADMIN_ROLES, ALL_ROLES, hashPassword, requireRole, safeUser, verifyPassword } from '../lib/auth.js';
 import { writeActionLog } from '../lib/action-log.js';
 import { cleanString } from '../lib/normalize.js';
@@ -97,9 +97,11 @@ async function createAccount(request, env, ctx, actor) {
   const body = await readJson(request);
   const username = cleanString(body.username, 80).toLowerCase();
   const role = cleanString(body.role, 20);
-  if (!username || !body.password || !['admin', 'manager', 'purchasing', 'viewer'].includes(role)) {
+  const password = String(body.password || '');
+  if (!username || !password || !['admin', 'manager', 'purchasing', 'viewer'].includes(role)) {
     return json({ ok: false, error: 'Thong tin tai khoan khong hop le' }, 400);
   }
+  if (password.length < 8) return json({ ok: false, error: 'Mat khau toi thieu 8 ky tu' }, 400);
   const exists = await getUserByUsernameSQL(env.DB, username);
   if (exists) return json({ ok: false, error: 'Username da ton tai' }, 409);
   const now = nowIso();
@@ -107,7 +109,7 @@ async function createAccount(request, env, ctx, actor) {
     user_id: makeId('USR'),
     username,
     display_name: cleanString(body.displayName || body.display_name || username, 120),
-    password_hash: await hashPassword(String(body.password)),
+    password_hash: await hashPassword(password),
     role,
     status: cleanString(body.status || 'active', 20),
     session_version: 1,
@@ -147,8 +149,15 @@ async function changePassword(request, env, ctx, actor) {
   if (denied) return denied;
   if (!actor?.id) return json({ ok: false, error: 'Chua dang nhap' }, 401);
   const body = await readJson(request);
+  if (!body.currentPassword) {
+    return json({ ok: false, error: 'Thieu mat khau hien tai' }, 400);
+  }
   if (!body.newPassword || String(body.newPassword).length < 8) {
     return json({ ok: false, error: 'Mat khau moi toi thieu 8 ky tu' }, 400);
+  }
+  const row = await getUserByIdSQL(env.DB, actor.id);
+  if (!row || !(await verifyPassword(String(body.currentPassword), row.password_hash))) {
+    return json({ ok: false, error: 'Mat khau hien tai khong dung' }, 401);
   }
   await updatePasswordSQL(env.DB, actor.id, await hashPassword(String(body.newPassword)), nowIso());
   ctx.waitUntil(writeActionLog(env, { action: 'changePassword', entityType: 'user', entityId: actor.id, actor }));
