@@ -4,6 +4,13 @@ const COOKIE_NAME = 'procurement_sess';
 const JWT_EXPIRES = 7 * 24 * 60 * 60;
 const UPLOAD_ROLES = new Set(['purchasing', 'manager', 'admin']);
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+// Per-action role whitelist, mirroring api/fetch-data.js for JSON actions.
+// Only these actions may reach the Worker through the multipart gateway;
+// anything else is rejected here even though Worker handlers re-check roles.
+const UPLOAD_ACTION_ROLES = {
+  uploadMedia: new Set(['purchasing', 'manager', 'admin']),
+  ocrImage: new Set(['purchasing', 'manager', 'admin']),
+};
 
 export default async function handler(request) {
   try {
@@ -29,6 +36,16 @@ export default async function handler(request) {
       return json({ ok: false, error: 'Content-Type phai la multipart/form-data' }, 400);
     }
 
+    // Peek at the multipart action on a clone; the original body streams to the
+    // Worker untouched. Missing action defaults to uploadMedia, matching the
+    // Worker's getActionAndBody fallback.
+    const action = (await readMultipartAction(request)) || 'uploadMedia';
+    const allowedRoles = UPLOAD_ACTION_ROLES[action];
+    if (!allowedRoles || !allowedRoles.has(actor.role)) {
+      await logPermissionDenied(actor, action).catch(() => null);
+      return json({ ok: false, error: 'Khong co quyen' }, 403);
+    }
+
     const url = process.env.WORKER_URL;
     if (!url || !process.env.WORKER_SECRET) throw new Error('Missing WORKER_URL or WORKER_SECRET');
 
@@ -47,6 +64,12 @@ export default async function handler(request) {
   } catch {
     return json({ ok: false, error: 'Lỗi hệ thống. Vui lòng thử lại sau.', status: 500 }, 500);
   }
+}
+
+async function readMultipartAction(request) {
+  const form = await request.clone().formData().catch(() => null);
+  const value = form && form.get('action');
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 async function logPermissionDenied(actor, deniedAction) {
