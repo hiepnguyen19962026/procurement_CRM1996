@@ -4746,8 +4746,10 @@
 
     var docHtml = '<style>' + printCss + '</style>'
       + '<div class="don-pa">'
-      + '<div class="don-cn">越南永新一期电力有限公司</div>'
-      + '<div class="don-vn">Công ty TNHH điện lực Vĩnh Tân 1</div>'
+      // Company-name header lines stay blank: the fixed client name was removed
+      // (same as the xlsx templates/fallback). Divs kept so print layout spacing holds.
+      + '<div class="don-cn"></div>'
+      + '<div class="don-vn"></div>'
       + '<div style="position:relative;width:100%;height:' + DOC_H + 'mm">'
       +   svgHtml + ovs.join('')
       + '</div>'
