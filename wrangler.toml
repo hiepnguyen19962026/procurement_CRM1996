@@ -1,21 +1,21 @@
-name = "procurement-crm2"
+name = "procurement-crm"
 main = "src/worker/index.js"
-account_id = "e3976f5953de688292a87211b258720a"
+account_id = "d99b64e1b5002adce82dc4e57f636f08"
 compatibility_date = "2026-06-10"
 compatibility_flags = ["nodejs_compat"]
 
 [[d1_databases]]
 binding = "DB"
-database_name = "procurement-crm2"
-database_id = "f494747b-67ab-4487-aef9-cd62c88f3628"
+database_name = "procurement-crm-db"
+database_id = "d029d2e8-9e07-4179-b866-d4ad9a5e63e4"
 
 [[kv_namespaces]]
 binding = "KV"
-id = "f12fd245526c466bb7527261ec131540"
+id = "675e2e3b7b1c49fbace44ca2331267eb"
 
 [[r2_buckets]]
 binding = "MEDIA"
-bucket_name = "procurement-crm2-media"
+bucket_name = "procurement-crm-r2"
 
 [vars]
 # R2 media bucket must remain private. Do not add a public URL var here.
