@@ -30,3 +30,5 @@ binding = "AI"
 # */4 * * * *  — dashboard warmup every 4 min (keeps KV cache warm within 300s TTL)
 # 0 2 * * *    — daily scan at 02:00 UTC (09:00 VN) for expired quotes, deadlines, orphan media
 crons = ["*/4 * * * *", "0 2 * * *"]
+
+ALLOWED_ORIGIN = "https://procurement-crm-1996.vercel.app"
