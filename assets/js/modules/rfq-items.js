@@ -4371,8 +4371,8 @@
     var leftColSet = new Set(data.leftAlignCols || []);
 
     // Row index constants (0-based)
-    var R_COMP    = 0;   // 越南永新一期电力有限公司
-    var R_COMP_VN = 1;   // Công ty TNHH điện lực Vĩnh Tân 1
+    var R_COMP    = 0;   // company name CN — left blank, filled in template file if needed
+    var R_COMP_VN = 1;   // company name VN — left blank, filled in template file if needed
     var R_BLANK1  = 2;   // narrow blank
     var R_TITLE   = 3;   // 送货单/退货单 title
     var R_INFO1   = 4;   // contract name / contract code
@@ -4393,13 +4393,10 @@
     // ── AoA ──────────────────────────────────────────────────────────────────
     var aoa = [];
 
-    var rComp = blankRow();
-    rComp[0] = '越南永新一期电力有限公司';
-    aoa.push(rComp);
-
-    var rCompVn = blankRow();
-    rCompVn[0] = 'Công ty TNHH điện lực Vĩnh Tân 1';
-    aoa.push(rCompVn);
+    // Company-name header rows stay blank: the fixed client name was removed
+    // (same as cleared cells A1/A2 in the .xlsx templates).
+    aoa.push(blankRow()); // R_COMP
+    aoa.push(blankRow()); // R_COMP_VN
 
     aoa.push(blankRow()); // R_BLANK1
 
