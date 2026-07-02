@@ -10,12 +10,12 @@
 -- rfq_item_revisions.source_clarification_id updated BEFORE step 3.
 --
 -- Verify counts before running:
---   wrangler d1 execute procurement-crm-db --remote --command "SELECT count(*) FROM tasks WHERE task_id LIKE 'TASK-%';"
---   wrangler d1 execute procurement-crm-db --remote --command "SELECT count(*) FROM technical_clarifications WHERE clarification_id LIKE 'TCL-%';"
---   wrangler d1 execute procurement-crm-db --remote --command "SELECT count(*) FROM rfq_item_revisions WHERE source_clarification_id LIKE 'TCL-%';"
+--   wrangler d1 execute procurement-crm2 --remote --command "SELECT count(*) FROM tasks WHERE task_id LIKE 'TASK-%';"
+--   wrangler d1 execute procurement-crm2 --remote --command "SELECT count(*) FROM technical_clarifications WHERE clarification_id LIKE 'TCL-%';"
+--   wrangler d1 execute procurement-crm2 --remote --command "SELECT count(*) FROM rfq_item_revisions WHERE source_clarification_id LIKE 'TCL-%';"
 --
 -- Run:
---   wrangler d1 execute procurement-crm-db --remote --file=backfill_ids_today.sql
+--   wrangler d1 execute procurement-crm2 --remote --file=backfill_ids_today.sql
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ── 1. tasks: TASK-* → Task-YYYY-MMDD-NN (today's VN date) ───────────────

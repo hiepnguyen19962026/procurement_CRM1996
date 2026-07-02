@@ -1905,19 +1905,19 @@ Wrangler mặc định có thể chạy D1 trên local database nếu không th�
 Khi migrate production D1, bắt buộc dùng `--remote`:
 
 ```powershell
-wrangler d1 execute procurement-crm-db --remote --file=src/worker/db/migrations/005_supplier_quotes.sql
+wrangler d1 execute procurement-crm2 --remote --file=src/worker/db/migrations/005_supplier_quotes.sql
 ```
 
 Kiểm tra bảng trên production D1:
 
 ```powershell
-wrangler d1 execute procurement-crm-db --remote --command "SELECT name FROM sqlite_master WHERE type='table' AND name='supplier_quotes';"
+wrangler d1 execute procurement-crm2 --remote --command "SELECT name FROM sqlite_master WHERE type='table' AND name='supplier_quotes';"
 ```
 
 Kiểm tra schema production D1:
 
 ```powershell
-wrangler d1 execute procurement-crm-db --remote --command "PRAGMA table_info(supplier_quotes);"
+wrangler d1 execute procurement-crm2 --remote --command "PRAGMA table_info(supplier_quotes);"
 ```
 
 Nếu quên `--remote`, Wrangler sẽ báo dạng:
@@ -1937,7 +1937,7 @@ Quy trình deploy có migration:
 
 ```powershell
 # 1. Chạy migration production D1 trước nếu Worker cần bảng/cột mới
-wrangler d1 execute procurement-crm-db --remote --file=src/worker/db/migrations/00N_name.sql
+wrangler d1 execute procurement-crm2 --remote --file=src/worker/db/migrations/00N_name.sql
 
 # 2. Deploy Worker
 wrangler deploy

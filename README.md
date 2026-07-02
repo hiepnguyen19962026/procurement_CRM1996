@@ -43,14 +43,14 @@ npm install
 Create Cloudflare resources:
 
 ```powershell
-wrangler d1 create procurement-crm-db
+wrangler d1 create procurement-crm2
 wrangler kv namespace create KV
 ```
 
 Create the R2 bucket in Cloudflare dashboard or with Wrangler:
 
 ```powershell
-wrangler r2 bucket create procurement-crm-media
+wrangler r2 bucket create procurement-crm2-media
 ```
 
 Update `wrangler.toml` with the real D1 database id and KV namespace id.
@@ -65,8 +65,8 @@ wrangler secret put SETUP_SECRET
 Run D1 migrations manually. Do not run these against production until you have reviewed the files:
 
 ```powershell
-wrangler d1 execute procurement-crm-db --file=src/worker/db/migrations/001_initial.sql
-wrangler d1 execute procurement-crm-db --file=src/worker/db/migrations/002_indexes.sql
+wrangler d1 execute procurement-crm2 --file=src/worker/db/migrations/001_initial.sql
+wrangler d1 execute procurement-crm2 --file=src/worker/db/migrations/002_indexes.sql
 ```
 
 Deploy Worker when ready:
